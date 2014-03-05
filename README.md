@@ -1,4 +1,4 @@
-# autonomy_payload : Software for the onboard controller payload
+# autonomy-payload : Software for the onboard controller payload
 
 A collection of ROS nodes for onboard navigation, safety monitoring, etc, and interfaces to the autopilot and other networked devices.
 
@@ -16,6 +16,6 @@ These are the rough steps needed to clone the repo on a computer that already ha
 	echo "source ~/acs_ros_ws/devel/setup.bash" >> ~/.bashrc
 	source ~/acs_ros_ws/devel/setup.bash
 	cd ~/acs_ros_ws/src/
-	git clone git@yoda:aerial-combat-swarms/autonomy_payload.git
+	git clone git@yoda:aerial-combat-swarms/autonomy-payload.git
 	```
 
