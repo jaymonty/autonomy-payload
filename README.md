@@ -16,4 +16,5 @@ These are the rough steps needed to clone the repo on a computer that already ha
 	source ~/acs_ros_ws/devel/setup.bash
 	cd ~/acs_ros_ws/src/
 	git clone git@yoda:aerial-combat-swarms/autonomy-payload.git
-
+	cd ~/acs_ros_ws/
+	catkin_make		# Might be able to do this only once
