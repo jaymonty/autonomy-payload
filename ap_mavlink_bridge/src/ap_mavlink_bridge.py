@@ -27,7 +27,7 @@ from sensor_msgs.msg import NavSatFix
 from sensor_msgs.msg import NavSatStatus
 
 # Import ROS messages specific to this bridge
-import roscopter.msg
+import ap_mavlink_bridge.msg
 
 #-----------------------------------------------------------------------
 # Ugly global data
@@ -95,19 +95,19 @@ def mainloop(opts):
     mavlink_setup(opts.device, opts.baudrate, opts.msgrate)
     
     # ROS initialization
-    rospy.init_node('roscopter')
+    rospy.init_node('ap_mavlink_bridge')
     
     # Set up ROS publishers
     pub_gps = rospy.Publisher('gps', NavSatFix)
-    pub_rc = rospy.Publisher('rc', roscopter.msg.RC)
-    pub_state = rospy.Publisher('state', roscopter.msg.State)
-    pub_vfr_hud = rospy.Publisher('vfr_hud', roscopter.msg.VFR_HUD)
-    pub_attitude = rospy.Publisher('attitude', roscopter.msg.Attitude)
-    pub_raw_imu = rospy.Publisher('raw_imu', roscopter.msg.Mavlink_RAW_IMU)
+    pub_rc = rospy.Publisher('rc', ap_mavlink_bridge.msg.RC)
+    pub_state = rospy.Publisher('state', ap_mavlink_bridge.msg.State)
+    pub_vfr_hud = rospy.Publisher('vfr_hud', ap_mavlink_bridge.msg.VFR_HUD)
+    pub_attitude = rospy.Publisher('attitude', ap_mavlink_bridge.msg.Attitude)
+    pub_raw_imu = rospy.Publisher('raw_imu', ap_mavlink_bridge.msg.Mavlink_RAW_IMU)
     pub_debug = rospy.Publisher('debug', String)
     
     # Set up ROS subscribers
-    rospy.Subscriber("send_rc", roscopter.msg.RC, send_rc)
+    rospy.Subscriber("send_rc", ap_mavlink_bridge.msg.RC, send_rc)
         
     # Set up ROS service callbacks
     arm_service = rospy.Service('arm', Empty, set_arm)
@@ -188,7 +188,7 @@ if __name__ == '__main__':
     mavlink_dir = os.path.expandvars("/home/$USER/virtPlane/mavlink")
     
     # Grok args
-    parser = OptionParser("roscopter.py [options]")
+    parser = OptionParser("ap_mavlink_bridge.py [options]")
     parser.add_option("--device", dest="device", \
                       help="serial device", default="/dev/ttyUSB0")
     parser.add_option("--baudrate", dest="baudrate", type='int', \
