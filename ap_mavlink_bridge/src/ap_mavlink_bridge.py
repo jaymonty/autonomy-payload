@@ -19,7 +19,7 @@ import time
 from optparse import OptionParser
 
 # General ROS imports
-import roslib; roslib.load_manifest('roscopter')
+import roslib; roslib.load_manifest('ap_mavlink_bridge')
 import rospy
 from std_msgs.msg import String, Header
 from std_srvs.srv import *
