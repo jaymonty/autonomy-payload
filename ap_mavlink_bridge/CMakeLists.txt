@@ -3,7 +3,6 @@ project(ap_mavlink_bridge)
 
 find_package(catkin REQUIRED COMPONENTS
     rospy
-    message_generation
     std_msgs
     sensor_msgs
     geometry_msgs
@@ -17,8 +16,16 @@ add_message_files(
   Mavlink_RAW_IMU.msg
   RC.msg
   State.msg
-  VFR_HUD.msg)
+  VFR_HUD.msg
+)
 
-generate_messages(DEPENDENCIES std_msgs sensor_msgs geometry_msgs)
+generate_messages(
+  DEPENDENCIES 
+  std_msgs 
+  sensor_msgs 
+  geometry_msgs
+)
 
-catkin_package()
+catkin_package(
+  CATKIN_DEPENDS message_runtime
+)

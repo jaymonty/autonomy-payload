@@ -19,7 +19,7 @@ import time
 from optparse import OptionParser
 
 # General ROS imports
-import roslib; roslib.load_manifest('ap_mavlink_bridge')
+#import roslib; roslib.load_manifest('ap_mavlink_bridge')
 import rospy
 from std_msgs.msg import String, Header
 from std_srvs.srv import *
@@ -27,6 +27,7 @@ from sensor_msgs.msg import NavSatFix
 from sensor_msgs.msg import NavSatStatus
 
 # Import ROS messages specific to this bridge
+#import ap_mavlink_bridge.msg
 import ap_mavlink_bridge.msg
 
 #-----------------------------------------------------------------------
@@ -103,7 +104,8 @@ def mainloop(opts):
     pub_state = rospy.Publisher('state', ap_mavlink_bridge.msg.State)
     pub_vfr_hud = rospy.Publisher('vfr_hud', ap_mavlink_bridge.msg.VFR_HUD)
     pub_attitude = rospy.Publisher('attitude', ap_mavlink_bridge.msg.Attitude)
-    pub_raw_imu = rospy.Publisher('raw_imu', ap_mavlink_bridge.msg.Mavlink_RAW_IMU)
+    pub_raw_imu = rospy.Publisher('raw_imu', \
+                                  ap_mavlink_bridge.msg.Mavlink_RAW_IMU)
     pub_debug = rospy.Publisher('debug', String)
     
     # Set up ROS subscribers
