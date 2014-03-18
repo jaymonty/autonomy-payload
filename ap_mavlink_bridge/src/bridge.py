@@ -5,8 +5,8 @@
 # Mike Clement, 2014
 #
 # Some general info should go here!!
-# Note: this is currently just a refactored version of roscopter
-#   as cloned from https://github.com/cberzan/roscopter
+# Note: this is loosely based on, but heavily modified and extended
+#   from, https://github.com/cberzan/roscopter
 
 #-----------------------------------------------------------------------
 # Import a bunch of libraries
@@ -31,15 +31,44 @@ from sensor_msgs.msg import NavSatStatus
 import ap_mavlink_bridge.msg
 
 #-----------------------------------------------------------------------
-# Ugly global data
+# Parameters
 
+# Debug output (stdout)
+DEBUG_PRINT = False
+
+# Rate at which we request that mavlink sends its messages to us
+MESSAGE_RATE = 10.0
+
+# Rate at which we run the main loop (should be >= MESSAGE_RATE)
+LOOP_RATE = MESSAGE_RATE
+
+#-----------------------------------------------------------------------
+# Ugly global variables
+
+# Contains the mavlink 'master' object
 master = None
 
+# Dictionary of periodic tasks
+# 'task name' -> (callback, ticks_period, ticks_left)
+# ticks are in increments of 1/LOOP_RATE seconds
+periodic_tasks = {}
+
+#-----------------------------------------------------------------------
+# logging functions
+
+def log_mavlink(data):
+    print "MAVLINK (%s)" % data
+
+def log_periodic(data):
+    print "\t\t\t\tPERIODIC (%s)" % data
+
+def log_ros(data):
+    print "\t\t\t\t\t\t\t\tROS (%s)" % data
 
 #-----------------------------------------------------------------------
 # mavlink utility functions
 
-def mavlink_setup(device, baudrate, msgrate):
+def mavlink_setup(device, baudrate):
     global master
     
     # Create 'master' (mavlink) object
@@ -52,13 +81,32 @@ def mavlink_setup(device, baudrate, msgrate):
           % (master.target_system, master.target_system))
     
     # Set up output stream from master
-    print("Sending all stream request for rate %u" % msgrate)
+    print("Sending all stream request for rate %u" % MESSAGE_RATE)
     master.mav.request_data_stream_send(
         master.target_system,
         master.target_component,
         mavutil.mavlink.MAV_DATA_STREAM_ALL,
-        msgrate,
+        MESSAGE_RATE,
         1)
+
+#-----------------------------------------------------------------------
+# Periodic task management
+
+# Note: can't run a task faster than LOOP_RATE Hz
+def periodic_new(name, callback, hz):
+    ticks = max(1, int(LOOP_RATE / hz))
+    periodic_tasks[name] = (callback, ticks, ticks)
+
+def periodic_run():
+    global periodic_tasks
+    for task in periodic_tasks.keys():
+        (cb, period, left) = periodic_tasks[task]
+        new_left = left - 1
+        if (new_left == 0):
+            log_periodic(task)
+            cb()
+            new_left = period
+        periodic_tasks[task] = (cb, period, new_left)
 
 #-----------------------------------------------------------------------
 # ROS Subscriber callbacks
@@ -75,7 +123,7 @@ def send_rc(data):
         data.channel[5],
         data.channel[6],
         data.channel[7])
-    print "sending rc: %s" % data
+    log_ros('send_rc')
 
 #-----------------------------------------------------------------------
 # ROS services
@@ -89,12 +137,15 @@ def set_disarm(req):
     return []
 
 #-----------------------------------------------------------------------
+# Periodic callbacks
+
+def send_heartbeat():
+    '''Send a heartbeat - look up command!'''
+
+#-----------------------------------------------------------------------
 # Main Loop
 
 def mainloop(opts):
-    # Initialize mavlink connection
-    mavlink_setup(opts.device, opts.baudrate, opts.msgrate)
-    
     # ROS initialization
     rospy.init_node('ap_mavlink_bridge')
     
@@ -109,20 +160,27 @@ def mainloop(opts):
     pub_debug = rospy.Publisher('debug', String)
     
     # Set up ROS subscribers
-    rospy.Subscriber("send_rc", ap_mavlink_bridge.msg.RC, send_rc)
+    #rospy.Subscriber("send_rc", ap_mavlink_bridge.msg.RC, send_rc)
         
     # Set up ROS service callbacks
-    arm_service = rospy.Service('arm', Empty, set_arm)
-    disarm_service = rospy.Service('disarm', Empty, set_disarm)
+    #arm_service = rospy.Service('arm', Empty, set_arm)
+    #disarm_service = rospy.Service('disarm', Empty, set_disarm)
+    
+    # Set up periodic tasks
+    periodic_new("heartbeat", send_heartbeat, 1.0)
+    
+    # Initialize mavlink connection
+    mavlink_setup(opts.device, opts.baudrate)
     
     # <<< BEGIN MAIN LOOP >>>
+    print "\nStarting loop...\n"
     
-    # Try to loop at same rate as we request messages from master
-    r = rospy.Rate(opts.msgrate)
+    # Try to run this loop at LOOP_RATE Hz
+    r = rospy.Rate(LOOP_RATE)
     while not rospy.is_shutdown():
         # Process all new messages from master
-        # (May need to adjust this; if messages come in too fast,
-        #  won't ever get to other parts of the loop!)
+        # (May need to adjust how this section is coded; if messages
+        #  come in too fast, won't leave this part of the loop!)
         while True:
             # Check for messages, break loop if none available
             msg = master.recv_match(blocking=False)
@@ -171,10 +229,14 @@ def mainloop(opts):
                                     msg.xgyro, msg.ygyro, msg.zgyro, \
                                     msg.xmag, msg.ymag, msg.zmag)
             else:
-                if True:
+                if DEBUG_PRINT:
                     print "Unhandled message type %s" % msg_type
-        
+                continue
+            
+            log_mavlink(msg_type)
+            
         # Handle any periodic tasks
+        periodic_run()
         # Should see this message at ~10 Hz, or we're trying to do
         #   too much per big loop iteration
         pub_debug.publish("periodic")
@@ -195,8 +257,6 @@ if __name__ == '__main__':
                       help="serial device", default="/dev/ttyUSB0")
     parser.add_option("--baudrate", dest="baudrate", type='int', \
                       help="master port baud rate", default=57600)
-    parser.add_option("--msgrate", dest="msgrate", type='int', \
-                      help="requested stream rate", default=10)
     parser.add_option("--mavlinkdir", dest="mavlink_dir", \
                       help="path to mavlink folder", \
                       default=mavlink_dir)
@@ -206,7 +266,6 @@ if __name__ == '__main__':
     print "Starting mavlink <-> ROS interface with these parameters:\n" \
         + ("  device:\t\t%s\n" % opts.device) \
         + ("  baudrate:\t\t%s\n" % str(opts.baudrate)) \
-        + ("  message rate:\t\t%s\n" % str(opts.msgrate)) \
         + ("  mavlink path:\t\t%s\n" % str(opts.mavlink_dir))
     
     # Import pymavlink
