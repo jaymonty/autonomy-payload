@@ -53,6 +53,9 @@ master = None
 # ticks are in increments of 1/LOOP_RATE seconds
 periodic_tasks = {}
 
+# Last known custom_mode from AP (from last heartbeat)
+ap_last_custom_mode = -1
+
 #-----------------------------------------------------------------------
 # logging functions
 
@@ -70,15 +73,17 @@ def log_ros(data):
 
 def mavlink_setup(device, baudrate):
     global master
+    global ap_last_custom_mode
     
     # Create 'master' (mavlink) object
     master = mavutil.mavlink_connection(device, baudrate)
     
     # Wait for a heartbeat so we know the target system IDs
     print("Waiting for APM heartbeat")
-    master.wait_heartbeat()
-    print("Heartbeat from APM (system %u component %u)" \
-          % (master.target_system, master.target_system))
+    msg = master.wait_heartbeat()
+    ap_last_custom_mode = msg.custom_mode
+    print("Heartbeat from APM (system %u component %u custom_mode %u)" \
+          % (master.target_system, master.target_system, ap_last_custom_mode))
     
     # Set up output stream from master
     print("Sending all stream request for rate %u" % MESSAGE_RATE)
@@ -98,7 +103,6 @@ def periodic_new(name, callback, hz):
     periodic_tasks[name] = (callback, ticks, ticks)
 
 def periodic_run():
-    global periodic_tasks
     for task in periodic_tasks.keys():
         (cb, period, left) = periodic_tasks[task]
         new_left = left - 1
@@ -140,7 +144,11 @@ def set_disarm(req):
 # Periodic callbacks
 
 def send_heartbeat():
-    '''Send a heartbeat - look up command!'''
+    master.mav.heartbeat_send(mavutil.mavlink.MAV_TYPE_ONBOARD_CONTROLLER, \
+                              mavutil.mavlink.MAV_TYPE_GENERIC, \
+                              0, \
+                              ap_last_custom_mode, \
+                              mavutil.mavlink.MAV_STATE_ACTIVE)
 
 #-----------------------------------------------------------------------
 # Main Loop
