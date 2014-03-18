@@ -265,13 +265,14 @@ if __name__ == '__main__':
     # User-friendly hello message
     print "Starting mavlink <-> ROS interface with these parameters:\n" \
         + ("  device:\t\t%s\n" % opts.device) \
-        + ("  baudrate:\t\t%s\n" % str(opts.baudrate)) \
-        + ("  mavlink path:\t\t%s\n" % str(opts.mavlink_dir))
+        + ("  baudrate:\t\t%s\n" % str(opts.baudrate))
     
-    # Import pymavlink
-    sys.path.insert(0, opts.mavlink_dir)
-    sys.path.insert(0, os.path.join(opts.mavlink_dir, 'pymavlink'))
-    import mavutil
+    # Import mavlink
+    # (Allow adding custom lib path, in case mavlink isn't "installed")
+    if opts.mavlink_dir:
+        print "Adding custom mavlink path: %s\n" % opts.mavlink_dir
+        sys.path.insert(0, opts.mavlink_dir)
+    from pymavlink import mavutil
     
     # Everything else happens in mainloop()
     try:
