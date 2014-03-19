@@ -22,7 +22,7 @@ from optparse import OptionParser
 #import roslib; roslib.load_manifest('ap_mavlink_bridge')
 import rospy
 from std_msgs.msg import String, Header
-from std_srvs.srv import *
+from std_srvs.srv import Empty
 from sensor_msgs.msg import NavSatFix
 from sensor_msgs.msg import NavSatStatus
 
@@ -63,10 +63,10 @@ def log_mavlink(data):
     print "MAVLINK (%s)" % data
 
 def log_periodic(data):
-    print "\t\t\t\tPERIODIC (%s)" % data
+    print "\t\t\tPERIODIC (%s)" % data
 
-def log_ros(data):
-    print "\t\t\t\t\t\t\t\tROS (%s)" % data
+def log_rossub(data):
+    print "\t\t\t\t\t\tROSSUB (%s)" % data
 
 #-----------------------------------------------------------------------
 # mavlink utility functions
@@ -79,11 +79,11 @@ def mavlink_setup(device, baudrate):
     master = mavutil.mavlink_connection(device, baudrate)
     
     # Wait for a heartbeat so we know the target system IDs
-    print("Waiting for APM heartbeat")
+    print("Waiting for AP heartbeat")
     msg = master.wait_heartbeat()
     ap_last_custom_mode = msg.custom_mode
-    print("Heartbeat from APM (system %u component %u custom_mode %u)" \
-          % (master.target_system, master.target_system, ap_last_custom_mode))
+    print("Heartbeat from AP (sys %u comp %u custom_mode %u)" %
+          (master.target_system, master.target_system, ap_last_custom_mode))
     
     # Set up output stream from master
     print("Sending all stream request for rate %u" % MESSAGE_RATE)
@@ -105,12 +105,12 @@ def periodic_new(name, callback, hz):
 def periodic_run():
     for task in periodic_tasks.keys():
         (cb, period, left) = periodic_tasks[task]
-        new_left = left - 1
-        if (new_left == 0):
+        left -= 1
+        if (left == 0):
             log_periodic(task)
             cb()
-            new_left = period
-        periodic_tasks[task] = (cb, period, new_left)
+            left = period
+        periodic_tasks[task] = (cb, period, left)
 
 #-----------------------------------------------------------------------
 # ROS Subscriber callbacks
@@ -144,11 +144,14 @@ def set_disarm(req):
 # Periodic callbacks
 
 def send_heartbeat():
-    master.mav.heartbeat_send(mavutil.mavlink.MAV_TYPE_ONBOARD_CONTROLLER, \
-                              mavutil.mavlink.MAV_TYPE_GENERIC, \
-                              0, \
-                              ap_last_custom_mode, \
-                              mavutil.mavlink.MAV_STATE_ACTIVE)
+    if ap_last_custom_mode == -1:
+        return
+    master.mav.heartbeat_send(
+        mavutil.mavlink.MAV_TYPE_ONBOARD_CONTROLLER, 
+        mavutil.mavlink.MAV_TYPE_GENERIC, 
+        0, 
+        ap_last_custom_mode, 
+        mavutil.mavlink.MAV_STATE_ACTIVE)
 
 #-----------------------------------------------------------------------
 # Main Loop
@@ -162,8 +165,9 @@ def mainloop(opts):
     pub_rc = rospy.Publisher('rc', ap_mavlink_bridge.msg.RC)
     pub_state = rospy.Publisher('state', ap_mavlink_bridge.msg.State)
     pub_vfr_hud = rospy.Publisher('vfr_hud', ap_mavlink_bridge.msg.VFR_HUD)
-    pub_attitude = rospy.Publisher('attitude', ap_mavlink_bridge.msg.Attitude)
-    pub_raw_imu = rospy.Publisher('raw_imu', \
+    pub_attitude = rospy.Publisher('attitude', 
+                                   ap_mavlink_bridge.msg.Attitude)
+    pub_raw_imu = rospy.Publisher('raw_imu', 
                                   ap_mavlink_bridge.msg.Mavlink_RAW_IMU)
     pub_debug = rospy.Publisher('debug', String)
     
@@ -200,41 +204,43 @@ def mainloop(opts):
             if msg_type == "BAD_DATA":
                 continue
             elif msg_type == "RC_CHANNELS_RAW":
-                pub_rc.publish([msg.chan1_raw, msg.chan2_raw, \
-                                msg.chan3_raw, msg.chan4_raw, \
-                                msg.chan5_raw, msg.chan6_raw, \
+                pub_rc.publish([msg.chan1_raw, msg.chan2_raw, 
+                                msg.chan3_raw, msg.chan4_raw, 
+                                msg.chan5_raw, msg.chan6_raw, 
                                 msg.chan7_raw, msg.chan8_raw]) 
             elif msg_type == "HEARTBEAT":
-                pub_state.publish(msg.base_mode & \
-                                  mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED, 
-                                  msg.base_mode & \
-                                 mavutil.mavlink.MAV_MODE_FLAG_GUIDED_ENABLED, 
-                                  mavutil.mode_string_v10(msg))
+                pub_state.publish(
+                    msg.base_mode & \
+                    mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED, 
+                    msg.base_mode & \
+                    mavutil.mavlink.MAV_MODE_FLAG_GUIDED_ENABLED, 
+                    mavutil.mode_string_v10(msg))
             elif msg_type == "VFR_HUD":
-                pub_vfr_hud.publish(msg.airspeed, msg.groundspeed, \
-                                    msg.heading, msg.throttle, \
+                pub_vfr_hud.publish(msg.airspeed, msg.groundspeed, 
+                                    msg.heading, msg.throttle, 
                                     msg.alt, msg.climb)
             elif msg_type == "GPS_RAW_INT":
                 fix = NavSatStatus.STATUS_NO_FIX
                 if msg.fix_type >=3:
                     fix = NavSatStatus.STATUS_FIX
-                ns_status = NavSatStatus(status=fix, \
-                                         service = NavSatStatus.SERVICE_GPS)
-                pub_gps.publish(NavSatFix(latitude = msg.lat/1e07, \
-                                          longitude = msg.lon/1e07, \
-                                          altitude = msg.alt/1e03, \
+                ns_status = NavSatStatus(
+                                status=fix, 
+                                service = NavSatStatus.SERVICE_GPS)
+                pub_gps.publish(NavSatFix(latitude = msg.lat/1e07, 
+                                          longitude = msg.lon/1e07, 
+                                          altitude = msg.alt/1e03, 
                                           status = ns_status))
             elif msg_type == "ATTITUDE" :
-                pub_attitude.publish(msg.roll, msg.pitch, \
-                                     msg.yaw, msg.rollspeed, \
+                pub_attitude.publish(msg.roll, msg.pitch, 
+                                     msg.yaw, msg.rollspeed, 
                                      msg.pitchspeed, msg.yawspeed)
             elif msg_type == "LOCAL_POSITION_NED" :
-                print "Local Pos: (%f %f %f) , (%f %f %f)" \
-                    % (msg.x, msg.y, msg.z, msg.vx, msg.vy, msg.vz)
+                print "Local Pos: (%f %f %f) , (%f %f %f)" % \
+                      (msg.x, msg.y, msg.z, msg.vx, msg.vy, msg.vz)
             elif msg_type == "RAW_IMU" :
-                pub_raw_imu.publish(Header(), msg.time_usec, \
-                                    msg.xacc, msg.yacc, msg.zacc, \
-                                    msg.xgyro, msg.ygyro, msg.zgyro, \
+                pub_raw_imu.publish(Header(), msg.time_usec, 
+                                    msg.xacc, msg.yacc, msg.zacc, 
+                                    msg.xgyro, msg.ygyro, msg.zgyro, 
                                     msg.xmag, msg.ymag, msg.zmag)
             else:
                 if DEBUG_PRINT:
@@ -256,24 +262,21 @@ def mainloop(opts):
 # Start-up
 
 if __name__ == '__main__':
-    # Default path to mavlink (based on where maday puts it)
-    mavlink_dir = os.path.expandvars("/home/$USER/virtPlane/mavlink")
-    
     # Grok args
     parser = OptionParser("ap_mavlink_bridge.py [options]")
-    parser.add_option("--device", dest="device", \
+    parser.add_option("--device", dest="device", 
                       help="serial device", default="/dev/ttyUSB0")
-    parser.add_option("--baudrate", dest="baudrate", type='int', \
+    parser.add_option("--baudrate", dest="baudrate", type='int', 
                       help="master port baud rate", default=57600)
-    parser.add_option("--mavlinkdir", dest="mavlink_dir", \
-                      help="path to mavlink folder", \
-                      default=mavlink_dir)
+    parser.add_option("--mavlinkdir", dest="mavlink_dir", 
+                      help="path to mavlink folder", 
+                      default=None)
     (opts, args) = parser.parse_args()
     
     # User-friendly hello message
-    print "Starting mavlink <-> ROS interface with these parameters:\n" \
-        + ("  device:\t\t%s\n" % opts.device) \
-        + ("  baudrate:\t\t%s\n" % str(opts.baudrate))
+    print "Starting mavlink <-> ROS interface with these parameters:\n" + \
+          ("  device:\t\t%s\n" % opts.device) + \
+          ("  baudrate:\t\t%s\n" % str(opts.baudrate))
     
     # Import mavlink
     # (Allow adding custom lib path, in case mavlink isn't "installed")
