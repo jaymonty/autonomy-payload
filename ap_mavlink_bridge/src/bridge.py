@@ -33,6 +33,9 @@ import ap_mavlink_bridge.msg
 #-----------------------------------------------------------------------
 # Parameters
 
+# Informational output (stdout)
+INFO_PRINT = False
+
 # Debug output (stdout)
 DEBUG_PRINT = False
 
@@ -60,13 +63,16 @@ ap_last_custom_mode = -1
 # logging functions
 
 def log_mavlink(data):
-    print "MAVLINK (%s)" % data
+    if INFO_PRINT:
+        print "MAVLINK (%s)" % data
 
 def log_periodic(data):
-    print "\t\t\tPERIODIC (%s)" % data
+    if INFO_PRINT:
+        print "\t\t\tPERIODIC (%s)" % data
 
 def log_rossub(data):
-    print "\t\t\t\t\t\tROSSUB (%s)" % data
+    if INFO_PRINT:
+        print "\t\t\t\t\t\tROSSUB (%s)" % data
 
 #-----------------------------------------------------------------------
 # mavlink utility functions
