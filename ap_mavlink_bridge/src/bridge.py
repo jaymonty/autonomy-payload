@@ -14,8 +14,6 @@
 # Standard Python imports
 import os
 import sys
-import struct
-import time
 from optparse import OptionParser
 
 # General ROS imports
@@ -27,17 +25,17 @@ from sensor_msgs.msg import NavSatFix
 from sensor_msgs.msg import NavSatStatus
 
 # Import ROS messages specific to this bridge
-#import ap_mavlink_bridge.msg
-import ap_mavlink_bridge.msg
+from ap_mavlink_bridge import msg as mavmsg
 
 #-----------------------------------------------------------------------
 # Parameters
 
-# Informational output (stdout)
-INFO_PRINT = False
+# Base name for node topics and services
+ROS_BASENAME = 'mavlink'
 
-# Debug output (stdout)
-DEBUG_PRINT = False
+# Control printing of messages to stdout
+DBUG_PRINT = False
+WARN_PRINT = False
 
 # Rate at which we request that mavlink sends its messages to us
 MESSAGE_RATE = 10.0
@@ -62,17 +60,15 @@ ap_last_custom_mode = -1
 #-----------------------------------------------------------------------
 # logging functions
 
-def log_mavlink(data):
-    if INFO_PRINT:
-        print "MAVLINK (%s)" % data
+def log_dbug(msg):
+    rospy.logdebug(msg)
+    if DBUG_PRINT:
+        print "..DEBUG.. %s" % msg
 
-def log_periodic(data):
-    if INFO_PRINT:
-        print "\t\t\tPERIODIC (%s)" % data
-
-def log_rossub(data):
-    if INFO_PRINT:
-        print "\t\t\t\t\t\tROSSUB (%s)" % data
+def log_warn(msg):
+    rospy.logwarn(msg)
+    if WARN_PRINT:
+        print "**WARN** %s" % msg
 
 #-----------------------------------------------------------------------
 # mavlink utility functions
@@ -113,7 +109,7 @@ def periodic_run():
         (cb, period, left) = periodic_tasks[task]
         left -= 1
         if (left == 0):
-            log_periodic(task)
+            log_dbug("PERIODIC (%s)" % task)
             cb()
             left = period
         periodic_tasks[task] = (cb, period, left)
@@ -121,6 +117,10 @@ def periodic_run():
 #-----------------------------------------------------------------------
 # ROS Subscriber callbacks
 
+def log_rossub(data):
+    log_dbug("ROSSUB (%s)" % data)
+
+# This is an example left over from roscopter
 def send_rc(data):
     master.mav.rc_channels_override_send(
         master.target_system,
@@ -133,11 +133,12 @@ def send_rc(data):
         data.channel[5],
         data.channel[6],
         data.channel[7])
-    log_ros('send_rc')
+    log_rossub('send_rc')
 
 #-----------------------------------------------------------------------
 # ROS services
 
+# These are examples left over from roscopter
 def set_arm(req):
     master.arducopter_arm()
     return []
@@ -149,6 +150,7 @@ def set_disarm(req):
 #-----------------------------------------------------------------------
 # Periodic callbacks
 
+# Send heartbeat to AP so it doesn't RTL
 def send_heartbeat():
     if ap_last_custom_mode == -1:
         return
@@ -167,15 +169,39 @@ def mainloop(opts):
     rospy.init_node('ap_mavlink_bridge')
     
     # Set up ROS publishers
-    pub_gps = rospy.Publisher('gps', NavSatFix)
-    pub_rc = rospy.Publisher('rc', ap_mavlink_bridge.msg.RC)
-    pub_state = rospy.Publisher('state', ap_mavlink_bridge.msg.State)
-    pub_vfr_hud = rospy.Publisher('vfr_hud', ap_mavlink_bridge.msg.VFR_HUD)
-    pub_attitude = rospy.Publisher('attitude', 
-                                   ap_mavlink_bridge.msg.Attitude)
-    pub_raw_imu = rospy.Publisher('raw_imu', 
-                                  ap_mavlink_bridge.msg.Mavlink_RAW_IMU)
-    pub_debug = rospy.Publisher('debug', String)
+    # TODO: Configure publishers using a list of tuples of
+    #  (mavlink_message_type, ros_topic_name, ros_topic_type)
+    #  and build a dictionary of publishers at startup s.t.
+    #  pub_dict[mavlink_message_type] == configured_publisher
+    pub_ahrs        = None
+    pub_attitude    = rospy.Publisher("%s/attitude"%ROS_BASENAME, 
+                                      mavmsg.Attitude)
+    pub_glo_pos_int = None
+    pub_gps_raw_int = rospy.Publisher("%s/gps_raw"%ROS_BASENAME, 
+                                      NavSatFix)
+    pub_heartbeat   = rospy.Publisher("%s/heartbeat"%ROS_BASENAME, 
+                                      mavmsg.Heartbeat)
+    pub_hwstatus    = None
+    pub_meminfo     = None
+    pub_mis_cur     = None
+    pub_nav_con_out = None
+    pub_radio       = None
+    pub_raw_imu     = rospy.Publisher("%s/raw_imu"%ROS_BASENAME, 
+                                      mavmsg.RawIMU)
+    pub_rc_chan_raw = rospy.Publisher("%s/rc_chan"%ROS_BASENAME, 
+                                      mavmsg.RCRaw)
+    pub_scaled_imu  = None
+    pub_scaled_pres = None
+    pub_sens_off    = None
+    pub_ser_out_raw = None
+    pub_sys_status  = None
+    pub_sys_time    = None
+    pub_vfr_hud     = rospy.Publisher("%s/vfr_hud"%ROS_BASENAME, 
+                                      mavmsg.VFR_HUD)
+    pub_wind        = None
+    # Extra publishers used for debugging, etc
+    pub_ratecheck   = rospy.Publisher("%s/ratecheck"%ROS_BASENAME, 
+                                      String)
     
     # Set up ROS subscribers
     #rospy.Subscriber("send_rc", ap_mavlink_bridge.msg.RC, send_rc)
@@ -196,35 +222,34 @@ def mainloop(opts):
     # Try to run this loop at LOOP_RATE Hz
     r = rospy.Rate(LOOP_RATE)
     while not rospy.is_shutdown():
-        # Process all new messages from master
-        # (May need to adjust how this section is coded; if messages
-        #  come in too fast, won't leave this part of the loop!)
+        # BEGIN - MAVLINK message handling
         while True:
-            # Check for messages, break loop if none available
+            # Process all new messages from master
+            # (May need to adjust how this section is coded; if messages
+            #  come in too fast, won't leave this part of the loop!)
             msg = master.recv_match(blocking=False)
+            
+            # Check for messages, break loop if none available
             if not msg:
                 break
-            msg_type = msg.get_type()
             
-            # Message cases (so far, copied from roscopter)
+            # Look up type, ignore "bad data" messages
+            msg_type = msg.get_type()
             if msg_type == "BAD_DATA":
                 continue
-            elif msg_type == "RC_CHANNELS_RAW":
-                pub_rc.publish([msg.chan1_raw, msg.chan2_raw, 
-                                msg.chan3_raw, msg.chan4_raw, 
-                                msg.chan5_raw, msg.chan6_raw, 
-                                msg.chan7_raw, msg.chan8_raw]) 
-            elif msg_type == "HEARTBEAT":
-                pub_state.publish(
-                    msg.base_mode & \
-                    mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED, 
-                    msg.base_mode & \
-                    mavutil.mavlink.MAV_MODE_FLAG_GUIDED_ENABLED, 
-                    mavutil.mode_string_v10(msg))
-            elif msg_type == "VFR_HUD":
-                pub_vfr_hud.publish(msg.airspeed, msg.groundspeed, 
-                                    msg.heading, msg.throttle, 
-                                    msg.alt, msg.climb)
+            
+            # Message cases (observed from 'current' PX4 firmware)
+            # TODO: Following creation of publisher dictionary,
+            #  replace cases with a single lookup and function call.
+            #  (Note, will need a way to map msg.* to topic elements)
+            if msg_type == "AHRS":
+                pub_ahrs = None
+            elif msg_type == "ATTITUDE" :
+                pub_attitude.publish(msg.roll, msg.pitch, 
+                                     msg.yaw, msg.rollspeed, 
+                                     msg.pitchspeed, msg.yawspeed)
+            elif msg_type == "GLOBAL_POSITION_INT":
+                pub_glo_pos_int = None
             elif msg_type == "GPS_RAW_INT":
                 fix = NavSatStatus.STATUS_NO_FIX
                 if msg.fix_type >=3:
@@ -232,34 +257,70 @@ def mainloop(opts):
                 ns_status = NavSatStatus(
                                 status=fix, 
                                 service = NavSatStatus.SERVICE_GPS)
-                pub_gps.publish(NavSatFix(latitude = msg.lat/1e07, 
-                                          longitude = msg.lon/1e07, 
-                                          altitude = msg.alt/1e03, 
-                                          status = ns_status))
-            elif msg_type == "ATTITUDE" :
-                pub_attitude.publish(msg.roll, msg.pitch, 
-                                     msg.yaw, msg.rollspeed, 
-                                     msg.pitchspeed, msg.yawspeed)
-            elif msg_type == "LOCAL_POSITION_NED" :
-                print "Local Pos: (%f %f %f) , (%f %f %f)" % \
-                      (msg.x, msg.y, msg.z, msg.vx, msg.vy, msg.vz)
+                pub_gps_raw_int.publish(NavSatFix(latitude = msg.lat/1e07,
+                                                  longitude = msg.lon/1e07,
+                                                  altitude = msg.alt/1e03, 
+                                                  status = ns_status))
+            elif msg_type == "HEARTBEAT":
+                pub_heartbeat.publish(
+                    msg.base_mode & \
+                    mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED, 
+                    msg.base_mode & \
+                    mavutil.mavlink.MAV_MODE_FLAG_GUIDED_ENABLED, 
+                    mavutil.mode_string_v10(msg))
+            elif msg_type == "HWSTATUS":
+                pub_hwstatus = None
+            elif msg_type == "MEMINFO":
+                pub_meminfo = None
+            elif msg_type == "MISSION_CURRENT":
+                pub_mis_cur = None
+            elif msg_type == "NAV_CONTROLLER_OUTPUT":
+                pub_nav_con_out = None
+            elif msg_type == "RADIO":
+                pub_raio = None
             elif msg_type == "RAW_IMU" :
                 pub_raw_imu.publish(Header(), msg.time_usec, 
                                     msg.xacc, msg.yacc, msg.zacc, 
                                     msg.xgyro, msg.ygyro, msg.zgyro, 
                                     msg.xmag, msg.ymag, msg.zmag)
+            elif msg_type == "RC_CHANNELS_RAW":
+                pub_rc_chan_raw.publish([msg.chan1_raw, msg.chan2_raw, 
+                                         msg.chan3_raw, msg.chan4_raw, 
+                                         msg.chan5_raw, msg.chan6_raw, 
+                                         msg.chan7_raw, msg.chan8_raw]) 
+            elif msg_type == "SCALED_IMU2":
+                pub_scaled_imu = None
+            elif msg_type == "SCALED_PRESSURE":
+                pub_scaled_pres = None
+            elif msg_type == "SENSOR_OFFSETS":
+                pub_sens_off = None
+            elif msg_type == "SERVO_OUTPUT_RAW":
+                pub_ser_out_raw = None
+            elif msg_type == "SYS_STATUS":
+                pub_sys_status = None
+            elif msg_type == "SYSTEM_TIME":
+                pub_sys_time = None
+            elif msg_type == "VFR_HUD":
+                pub_vfr_hud.publish(msg.airspeed, msg.groundspeed, 
+                                    msg.heading, msg.throttle, 
+                                    msg.alt, msg.climb)
+            elif msg_type == "WIND":
+                pub_wind = None
             else:
-                if DEBUG_PRINT:
-                    print "Unhandled message type %s" % msg_type
+                # Report outliers so we can add them
+                log_debug("Unhandled message type %s" % msg_type)
                 continue
             
-            log_mavlink(msg_type)
+            # Report received message to console
+            log_dbug("MAVLINK (%s)" % msg_type)
+        # END - MAVLINK message handling
             
-        # Handle any periodic tasks
+        # BEGIN - periodic task handling
         periodic_run()
-        # Should see this message at ~10 Hz, or we're trying to do
-        #   too much per big loop iteration
-        pub_debug.publish("periodic")
+        # Should see this message at ~LOOP_RATE Hz, 
+        #  or we're trying to do too much per big-loop iteration
+        pub_ratecheck.publish("rate check")
+        # END - periodic task handling
         
         # Sleep so ROS subscribers and services can run
         r.sleep()

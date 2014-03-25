@@ -12,10 +12,9 @@ find_package(catkin REQUIRED COMPONENTS
 add_message_files(
   FILES
   Attitude.msg
-  Control.msg
-  Mavlink_RAW_IMU.msg
-  RC.msg
-  State.msg
+  Heartbeat.msg
+  RawIMU.msg
+  RCRaw.msg
   VFR_HUD.msg
 )
 
