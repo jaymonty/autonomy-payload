@@ -356,21 +356,30 @@ if __name__ == '__main__':
     # Grok args
     parser = OptionParser("ap_mavlink_bridge.py [options]")
     parser.add_option("--device", dest="device", 
-                      help="serial device", default="/dev/ttyUSB0")
-    parser.add_option("--baudrate", dest="baudrate", type='int', 
-                      help="master port baud rate", default=57600)
+                      help="serial device", default="auto-detect")
+    parser.add_option("--baudrate", dest="baudrate", type='int',
+                      help="serial baud rate", default=57600)
     parser.add_option("--mavlinkdir", dest="mavlink_dir", 
-                      help="path to mavlink folder", 
-                      default=None)
+                      help="path to mavlink folder", default=None)
     (opts, args) = parser.parse_args()
+    
+    # If device/baudrate are "auto-detect", try to figure them out
+    if opts.device == "auto-detect":
+       if os.path.exists("/dev/ttyACM0"):  # Indicates wire
+           opts.device = "/dev/ttyACM0"
+           opts.baudrate = 115200
+       elif os.path.exists("/dev/ttyUSB0"):  # Indicates radio
+           opts.device = "/dev/ttyUSB0"
+       else:
+           print "Error: could not find a suitable device.\n"
+           sys.exit(-1)
     
     # User-friendly hello message
     print "Starting mavlink <-> ROS interface with these parameters:\n" + \
           ("  device:\t\t%s\n" % opts.device) + \
           ("  baudrate:\t\t%s\n" % str(opts.baudrate))
     
-    # Import mavlink
-    # (Allow adding custom lib path, in case mavlink isn't "installed")
+    # Allow adding custom lib path, in case mavlink isn't "installed"
     if opts.mavlink_dir:
         print "Adding custom mavlink path: %s\n" % opts.mavlink_dir
         sys.path.insert(0, opts.mavlink_dir)
