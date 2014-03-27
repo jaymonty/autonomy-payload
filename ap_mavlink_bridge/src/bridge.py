@@ -14,6 +14,7 @@
 # Standard Python imports
 import os
 import sys
+import signal
 from optparse import OptionParser
 
 # General ROS imports
@@ -48,6 +49,9 @@ LOOP_RATE = MESSAGE_RATE
 
 # Contains the mavlink 'master' object
 master = None
+
+# Timer object used for periodic_run
+periodic_timer = None
 
 # Dictionary of periodic tasks
 # 'task name' -> (callback, ticks_period, ticks_left)
@@ -178,9 +182,16 @@ def send_heartbeat():
 #-----------------------------------------------------------------------
 # Main Loop
 
+def on_ros_shutdown():
+    # Turn off periodic tasks
+    global periodic_timer
+    if (periodic_timer):
+        periodic_timer.shutdown()
+
 def mainloop(opts):
     # ROS initialization
     rospy.init_node('ap_mavlink_bridge')
+    rospy.on_shutdown(on_ros_shutdown)
     
     # Set up ROS publishers
     # TODO: Configure publishers using a list of tuples of
@@ -230,7 +241,9 @@ def mainloop(opts):
     mavlink_setup(opts.device, opts.baudrate)
     
     # Start running periodic task scheduler at LOOP_RATE Hz
-    rospy.Timer(rospy.Duration(1.0/float(LOOP_RATE)), periodic_run)
+    global periodic_timer 
+    periodic_timer = \
+        rospy.Timer(rospy.Duration(1.0/float(LOOP_RATE)), periodic_run)
     
     # Try to run this loop at LOOP_RATE Hz, but since we enforce
     #  periodic tasks using a ROS timer, it's okay to lag
