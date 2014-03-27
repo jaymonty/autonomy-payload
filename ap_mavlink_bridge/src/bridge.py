@@ -98,24 +98,37 @@ def mavlink_setup(device, baudrate):
 
 #-----------------------------------------------------------------------
 # Periodic task management
+# (This could all be replaced with rospy.Timer if we wanted,
+#  but it's nice to have some explicit control)
 
+# Create a new task called 'name' to run 'callback' at 'hz' Hz
 # Note: can't run a task faster than LOOP_RATE Hz
 def periodic_new(name, callback, hz):
     ticks = max(1, int(LOOP_RATE / hz))
     periodic_tasks[name] = (callback, ticks, ticks)
 
-def periodic_run():
+# This runs the tasks on schedule, and is called periodically
+#  by a rospy.Timer instance (see main loop)
+def periodic_run(timer_event):
+    # Publish so we can check that rates are being upheld
+    periodic_run.pub.publish("rate check")
+    
+    # Go through periodically-scheduled tasks
     for task in periodic_tasks.keys():
         (cb, period, left) = periodic_tasks[task]
+        # Check if the task is due; if so, run it!
         left -= 1
         if (left == 0):
             log_dbug("PERIODIC (%s)" % task)
             cb()
             left = period
         periodic_tasks[task] = (cb, period, left)
+periodic_run.pub = rospy.Publisher("%s/ratecheck"%ROS_BASENAME, String)
+
 
 #-----------------------------------------------------------------------
 # ROS Subscriber callbacks
+# Just examples from roscopter for now
 
 def log_rossub(data):
     log_dbug("ROSSUB (%s)" % data)
@@ -137,6 +150,7 @@ def send_rc(data):
 
 #-----------------------------------------------------------------------
 # ROS services
+# Just examples from roscopter for now
 
 # These are examples left over from roscopter
 def set_arm(req):
@@ -199,9 +213,6 @@ def mainloop(opts):
     pub_vfr_hud     = rospy.Publisher("%s/vfr_hud"%ROS_BASENAME, 
                                       mavmsg.VFR_HUD)
     pub_wind        = None
-    # Extra publishers used for debugging, etc
-    pub_ratecheck   = rospy.Publisher("%s/ratecheck"%ROS_BASENAME, 
-                                      String)
     
     # Set up ROS subscribers
     #rospy.Subscriber("send_rc", ap_mavlink_bridge.msg.RC, send_rc)
@@ -213,23 +224,26 @@ def mainloop(opts):
     # Set up periodic tasks
     periodic_new("heartbeat", send_heartbeat, 1.0)
     
+    #<<< START LOOP INTERNALS >>>
+    
     # Initialize mavlink connection
     mavlink_setup(opts.device, opts.baudrate)
     
-    # <<< BEGIN MAIN LOOP >>>
-    print "\nStarting loop...\n"
+    # Start running periodic task scheduler at LOOP_RATE Hz
+    rospy.Timer(rospy.Duration(1.0/float(LOOP_RATE)), periodic_run)
     
-    # Try to run this loop at LOOP_RATE Hz
+    # Try to run this loop at LOOP_RATE Hz, but since we enforce
+    #  periodic tasks using a ROS timer, it's okay to lag
     r = rospy.Rate(LOOP_RATE)
+    print "\nStarting loop...\n"
     while not rospy.is_shutdown():
-        # BEGIN - MAVLINK message handling
+        # Process all new messages from master
+        # Note: if too many messages come in, we'll never break
+        #  out of this loop and subscribers/services won't run.
+        #  Adjust loop-break conditions accordingly.
         while True:
-            # Process all new messages from master
-            # (May need to adjust how this section is coded; if messages
-            #  come in too fast, won't leave this part of the loop!)
-            msg = master.recv_match(blocking=False)
-            
             # Check for messages, break loop if none available
+            msg = master.recv_match(blocking=False)
             if not msg:
                 break
             
@@ -239,7 +253,7 @@ def mainloop(opts):
                 continue
             
             # Message cases (observed from 'current' PX4 firmware)
-            # TODO: Following creation of publisher dictionary,
+            # TODO: Following creation of publisher dictionary above,
             #  replace cases with a single lookup and function call.
             #  (Note, will need a way to map msg.* to topic elements)
             if msg_type == "AHRS":
@@ -313,15 +327,7 @@ def mainloop(opts):
             
             # Report received message to console
             log_dbug("MAVLINK (%s)" % msg_type)
-        # END - MAVLINK message handling
             
-        # BEGIN - periodic task handling
-        periodic_run()
-        # Should see this message at ~LOOP_RATE Hz, 
-        #  or we're trying to do too much per big-loop iteration
-        pub_ratecheck.publish("rate check")
-        # END - periodic task handling
-        
         # Sleep so ROS subscribers and services can run
         r.sleep()
 
