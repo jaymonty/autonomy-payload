@@ -9,7 +9,6 @@ These are the rough steps needed to clone the repo on a computer that already ha
 	mkdir -p ~/acs_ros_ws/src/
 	cd ~/acs_ros_ws/src/
 	catkin_init_workspace
-	wstool init		# unsure what this is doing
 	cd ~/acs_ros_ws/
 	catkin_make
 	echo "source ~/acs_ros_ws/devel/setup.bash" >> ~/.bashrc
@@ -17,4 +16,4 @@ These are the rough steps needed to clone the repo on a computer that already ha
 	cd ~/acs_ros_ws/src/
 	git clone git@yoda:aerial-combat-swarms/autonomy-payload.git
 	cd ~/acs_ros_ws/
-	catkin_make		# Might be able to do this only once
+	catkin_make

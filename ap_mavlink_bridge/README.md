@@ -14,9 +14,8 @@ To run the bridge, first start roscore, then run
 
 	rosrun ap_mavlink_bridge bridge.py
 
-If your serial connection is /dev/ttyUSB0 and your mavlink folder is /home/$USER/virtPlane/mavlink (where $USER is your username), the above *should* work. Otherwise, you can use the following command line arguments:
-
---device=/dev/your-serial-device
-
---mavlink=/your/path/to/mavlink
+The following options can be set after "...bridge.py":
+	--device=/dev/your-serial-device
+	--baudrate=<baudrate>
+	--mavlink=/your/path/to/mavlink
 
