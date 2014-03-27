@@ -114,9 +114,6 @@ def periodic_new(name, callback, hz):
 # This runs the tasks on schedule, and is called periodically
 #  by a rospy.Timer instance (see main loop)
 def periodic_run(timer_event):
-    # Publish so we can check that rates are being upheld
-    periodic_run.pub.publish("rate check")
-    
     # Go through periodically-scheduled tasks
     for task in periodic_tasks.keys():
         (cb, period, left) = periodic_tasks[task]
@@ -127,7 +124,6 @@ def periodic_run(timer_event):
             cb()
             left = period
         periodic_tasks[task] = (cb, period, left)
-periodic_run.pub = rospy.Publisher("%s/ratecheck"%ROS_BASENAME, String)
 
 
 #-----------------------------------------------------------------------
@@ -183,12 +179,14 @@ def send_heartbeat():
 # Main Loop
 
 def on_ros_shutdown():
-    # Turn off periodic tasks
     global periodic_timer
+    # Turn off periodic tasks
     if (periodic_timer):
         periodic_timer.shutdown()
 
 def mainloop(opts):
+    global periodic_timer 
+    
     # ROS initialization
     rospy.init_node('ap_mavlink_bridge')
     rospy.on_shutdown(on_ros_shutdown)
@@ -241,7 +239,6 @@ def mainloop(opts):
     mavlink_setup(opts.device, opts.baudrate)
     
     # Start running periodic task scheduler at LOOP_RATE Hz
-    global periodic_timer 
     periodic_timer = \
         rospy.Timer(rospy.Duration(1.0/float(LOOP_RATE)), periodic_run)
     
