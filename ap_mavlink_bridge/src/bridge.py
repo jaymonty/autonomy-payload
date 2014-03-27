@@ -282,12 +282,17 @@ def mainloop(opts):
                 if msg.fix_type >=3:
                     fix = NavSatStatus.STATUS_FIX
                 ns_status = NavSatStatus(
-                                status=fix, 
+                                status = fix, 
                                 service = NavSatStatus.SERVICE_GPS)
-                pub_gps_raw_int.publish(NavSatFix(latitude = msg.lat/1e07,
-                                                  longitude = msg.lon/1e07,
-                                                  altitude = msg.alt/1e03, 
-                                                  status = ns_status))
+                ns_time = rospy.Time(secs = msg.time_usec / 1e07,
+                                     nsecs = (msg.time_usec % 1e07) * 1e03)
+                ns_header = Header(stamp = ns_time)
+                ns_fix = NavSatFix(latitude = msg.lat/1e07,
+                                   longitude = msg.lon/1e07,
+                                   altitude = msg.alt/1e03, 
+                                   status = ns_status,
+                                   header = ns_header)
+                pub_gps_raw_int.publish(ns_fix)
             elif msg_type == "HEARTBEAT":
                 pub_heartbeat.publish(
                     msg.base_mode & \
