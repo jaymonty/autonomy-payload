@@ -308,7 +308,7 @@ def mainloop(opts):
                 pub_wind = None
             else:
                 # Report outliers so we can add them
-                log_debug("Unhandled message type %s" % msg_type)
+                log_warn("Unhandled message type %s" % msg_type)
                 continue
             
             # Report received message to console
