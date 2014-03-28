@@ -351,7 +351,7 @@ def mainloop(opts):
 
 if __name__ == '__main__':
     # Grok args
-    parser = OptionParser("ap_mavlink_bridge.py [options]")
+    parser = OptionParser("bridge.py [options]")
     parser.add_option("--device", dest="device", 
                       help="serial device", default="auto-detect")
     parser.add_option("--baudrate", dest="baudrate", type='int',
