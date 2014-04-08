@@ -12,18 +12,19 @@
 # Import a bunch of libraries
 
 # Standard Python imports
+import datetime
+from optparse import OptionParser
 import os
 import sys
 import signal
-from optparse import OptionParser
 
 # General ROS imports
 #import roslib; roslib.load_manifest('ap_mavlink_bridge')
 import rospy
-from std_msgs.msg import String, Header
-from std_srvs.srv import Empty
 from sensor_msgs.msg import NavSatFix
 from sensor_msgs.msg import NavSatStatus
+from std_msgs.msg import String, Header
+from std_srvs.srv import Empty
 
 # Import ROS messages specific to this bridge
 from ap_mavlink_bridge import msg as mavmsg
@@ -61,6 +62,10 @@ periodic_tasks = {}
 # Last known custom_mode from AP (from last heartbeat)
 ap_last_custom_mode = -1
 
+# Track delta between AP's epoch time and local epoch time (in usec)
+# (stored as GMT)
+ap_time_delta = rospy.Duration(0, 0)
+
 #-----------------------------------------------------------------------
 # logging functions
 
@@ -73,6 +78,22 @@ def log_warn(msg):
     rospy.logwarn(msg)
     if WARN_PRINT:
         print "**WARN** %s" % msg
+
+#-----------------------------------------------------------------------
+# Time functions
+
+# Update delta between local and AP time (provided in usec)
+def set_ap_time(ap_epoch_usec):
+    global ap_time_delta
+    ap_epoch_sec = int(ap_epoch_usec / 1e07)
+    ap_nsec = (ap_epoch_usec % 1e07) * 1e03
+    ap_time = rospy.Time(ap_epoch_sec, ap_nsec)
+    ap_time_delta = rospy.Time.now() - ap_time
+
+# Return projected time of AP (UTC) as rospy.Time object
+def project_ap_time():
+    global ap_time_delta
+    return rospy.Time.now() - ap_time_delta
 
 #-----------------------------------------------------------------------
 # mavlink utility functions
@@ -197,11 +218,14 @@ def mainloop(opts):
     #  and build a dictionary of publishers at startup s.t.
     #  pub_dict[mavlink_message_type] == configured_publisher
     pub_ahrs        = None
+    pub_ahrs2       = None
+    pub_airspd_acal = None
     pub_attitude    = rospy.Publisher("%s/attitude"%ROS_BASENAME, 
                                       mavmsg.Attitude)
-    pub_glo_pos_int = None
-    pub_gps_raw_int = rospy.Publisher("%s/gps_raw"%ROS_BASENAME, 
+    pub_fence_sta   = None
+    pub_glo_pos_int = rospy.Publisher("%s/gps_pos"%ROS_BASENAME, 
                                       NavSatFix)
+    pub_gps_raw_int = None
     pub_heartbeat   = rospy.Publisher("%s/heartbeat"%ROS_BASENAME, 
                                       mavmsg.Heartbeat)
     pub_hwstatus    = None
@@ -209,6 +233,7 @@ def mainloop(opts):
     pub_mis_cur     = None
     pub_nav_con_out = None
     pub_radio       = None
+    pub_radio_sta   = None
     pub_raw_imu     = rospy.Publisher("%s/raw_imu"%ROS_BASENAME, 
                                       mavmsg.RawIMU)
     pub_rc_chan_raw = rospy.Publisher("%s/rc_chan"%ROS_BASENAME, 
@@ -217,6 +242,7 @@ def mainloop(opts):
     pub_scaled_pres = None
     pub_sens_off    = None
     pub_ser_out_raw = None
+    pub_stat_text   = None
     pub_sys_status  = None
     pub_sys_time    = None
     pub_vfr_hud     = rospy.Publisher("%s/vfr_hud"%ROS_BASENAME, 
@@ -234,6 +260,9 @@ def mainloop(opts):
     periodic_new("heartbeat", send_heartbeat, 1.0)
     
     #<<< START LOOP INTERNALS >>>
+    
+    # Store "unknown" message types so we only alert once
+    unknown_message_types = {}
     
     # Initialize mavlink connection
     mavlink_setup(opts.device, opts.baudrate)
@@ -268,28 +297,29 @@ def mainloop(opts):
             #  (Note, will need a way to map msg.* to topic elements)
             if msg_type == "AHRS":
                 pub_ahrs = None
+            elif msg_type == "AHRS2":
+                pub_ahrs2 = None
+            elif msg_type == "AIRSPEED_AUTOCAL":
+                pub_airspd_acal = None
             elif msg_type == "ATTITUDE" :
                 pub_attitude.publish(msg.roll, msg.pitch, 
                                      msg.yaw, msg.rollspeed, 
                                      msg.pitchspeed, msg.yawspeed)
+            elif msg_type == "FENCE_STATUS":
+                pub_fence_sta = None
             elif msg_type == "GLOBAL_POSITION_INT":
-                pub_glo_pos_int = None
-            elif msg_type == "GPS_RAW_INT":
-                fix = NavSatStatus.STATUS_NO_FIX
-                if msg.fix_type >=3:
-                    fix = NavSatStatus.STATUS_FIX
                 ns_status = NavSatStatus(
-                                status = fix, 
+                                status = NavSatStatus.STATUS_FIX, 
                                 service = NavSatStatus.SERVICE_GPS)
-                ns_time = rospy.Time(secs = msg.time_usec / 1e07,
-                                     nsecs = (msg.time_usec % 1e07) * 1e03)
-                ns_header = Header(stamp = ns_time)
+                ns_header = Header(stamp = project_ap_time())
                 ns_fix = NavSatFix(latitude = msg.lat/1e07,
                                    longitude = msg.lon/1e07,
                                    altitude = msg.alt/1e03, 
                                    status = ns_status,
                                    header = ns_header)
-                pub_gps_raw_int.publish(ns_fix)
+                pub_glo_pos_int.publish(ns_fix)
+            elif msg_type == "GPS_RAW_INT":
+                pub_gps_raw_int = None
             elif msg_type == "HEARTBEAT":
                 pub_heartbeat.publish(
                     msg.base_mode & \
@@ -306,7 +336,9 @@ def mainloop(opts):
             elif msg_type == "NAV_CONTROLLER_OUTPUT":
                 pub_nav_con_out = None
             elif msg_type == "RADIO":
-                pub_raio = None
+                pub_radio = None
+            elif msg_type == "RADIO_STATUS":
+                pub_radio_sta = None
             elif msg_type == "RAW_IMU" :
                 pub_raw_imu.publish(Header(), msg.time_usec, 
                                     msg.xacc, msg.yacc, msg.zacc, 
@@ -325,10 +357,12 @@ def mainloop(opts):
                 pub_sens_off = None
             elif msg_type == "SERVO_OUTPUT_RAW":
                 pub_ser_out_raw = None
+            elif msg_type == "STATUS_TEXT":
+                pub_stat_text = None
             elif msg_type == "SYS_STATUS":
                 pub_sys_status = None
             elif msg_type == "SYSTEM_TIME":
-                pub_sys_time = None
+                set_ap_time(msg.time_unix_usec)
             elif msg_type == "VFR_HUD":
                 pub_vfr_hud.publish(msg.airspeed, msg.groundspeed, 
                                     msg.heading, msg.throttle, 
@@ -337,8 +371,10 @@ def mainloop(opts):
                 pub_wind = None
             else:
                 # Report outliers so we can add them
-                log_warn("Unhandled message type %s" % msg_type)
-                continue
+                if msg_type not in unknown_message_types:
+                    unknown_message_types[msg_type] = True
+                    log_warn("Unhandled message type %s" % msg_type)
+                    continue
             
             # Report received message to console
             log_dbug("MAVLINK (%s)" % msg_type)
