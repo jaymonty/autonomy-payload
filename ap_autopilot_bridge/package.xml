@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package>
-  <name>ap_mavlink_bridge</name>
+  <name>ap_autopilot_bridge</name>
   <version>0.0.1</version>
-  <description>ROS package to communicate with mavlink. Refactored spinoff of https://github.com/cberzan/roscopter/</description>
+  <description>ROS package to communicate with autopilots. Originally inspired by https://github.com/cberzan/roscopter/</description>
 
   <maintainer email="mrclemen@nps.edu">mrclemen</maintainer>
 

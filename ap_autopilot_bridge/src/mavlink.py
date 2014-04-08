@@ -33,7 +33,7 @@ from ap_mavlink_bridge import msg as mavmsg
 # Parameters
 
 # Base name for node topics and services
-ROS_BASENAME = 'mavlink'
+ROS_BASENAME = 'autopilot'
 
 # Control printing of messages to stdout
 DBUG_PRINT = False

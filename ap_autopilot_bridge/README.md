@@ -1,4 +1,6 @@
-# ap_mavlink_bridge : ROS package for bridging with mavlink
+# ap_autopilot_bridge : ROS package for bridging with autopilots
+
+Currently only supports mavlink-based autopilots
 
 ## First time use
 
@@ -12,7 +14,7 @@ You will also need a serial link to the aircraft, such as a UART, USB-TTL conver
 
 To run the bridge, first start roscore, then run
 
-	rosrun ap_mavlink_bridge bridge.py
+	rosrun ap_autopilot_bridge mavlink.py
 
 The following options can be set after "...bridge.py":
 	--device=/dev/your-serial-device
