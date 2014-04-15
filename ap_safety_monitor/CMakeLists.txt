@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(ap_health_monitor)
+project(ap_safety_monitor)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
