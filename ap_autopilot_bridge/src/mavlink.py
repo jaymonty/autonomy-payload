@@ -362,6 +362,7 @@ def mainloop(opts):
             elif msg_type == "SYS_STATUS":
                 pub_sys_status = None
             elif msg_type == "SYSTEM_TIME":
+                # Adjust known time offset from autopilot's
                 set_ap_time(msg.time_unix_usec)
             elif msg_type == "VFR_HUD":
                 pub_vfr_hud.publish(msg.airspeed, msg.groundspeed, 
@@ -398,16 +399,19 @@ if __name__ == '__main__':
     
     # If device/baudrate are "auto-detect", try to figure them out
     if opts.device == "auto-detect":
-       if os.path.exists("/dev/ttyACM0"):  # Indicates USB
-           opts.device = "/dev/ttyACM0"
-           opts.baudrate = 115200
-       elif os.path.exists("/dev/ttyUSB0"):  # Indicates radio
-           opts.device = "/dev/ttyUSB0"
-       elif os.path.exists("/dev/ttyAMA0"):  # Indicates serial
-           opts.device = "/dev/ttyAMA0"
-       else:
-           print "Error: could not find a suitable device.\n"
-           sys.exit(-1)
+        if os.path.exists("/dev/ttyACM0"):  # Indicates USB
+            opts.device = "/dev/ttyACM0"
+            opts.baudrate = 115200
+        elif os.path.exists("/dev/ttyUSB0"):  # Indicates radio
+            opts.device = "/dev/ttyUSB0"
+        elif os.path.exists("/dev/ttyAMA0"):  # Indicates serial
+            opts.device = "/dev/ttyAMA0"
+        else:
+            print "Error: could not find a suitable device.\n"
+            sys.exit(-1)
+    elif not os.path.exists(opts.device):
+        print "Specified device doesn't exist.\n"
+        sys.exit(-1)
     
     # User-friendly hello message
     print "Starting mavlink <-> ROS interface with these parameters:\n" + \
