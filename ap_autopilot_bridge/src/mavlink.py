@@ -23,11 +23,10 @@ import signal
 import rospy
 from sensor_msgs.msg import NavSatFix
 from sensor_msgs.msg import NavSatStatus
-from std_msgs.msg import String, Header
-from std_srvs.srv import Empty
+import std_msgs.msg 
 
 # Import ROS messages specific to this bridge
-from ap_mavlink_bridge import msg as mavmsg
+from ap_autopilot_bridge import msg as apmsg
 
 #-----------------------------------------------------------------------
 # Parameters
@@ -59,7 +58,7 @@ periodic_timer = None
 # ticks are in increments of 1/LOOP_RATE seconds
 periodic_tasks = {}
 
-# Last known custom_mode from AP (from last heartbeat)
+# Last known custom_mode from AP (from last mavlink heartbeat msg)
 ap_last_custom_mode = -1
 
 # Track delta between AP's epoch time and local epoch time (in usec)
@@ -149,25 +148,21 @@ def periodic_run(timer_event):
 
 #-----------------------------------------------------------------------
 # ROS Subscriber callbacks
-# Just examples from roscopter for now
 
 def log_rossub(data):
     log_dbug("ROSSUB (%s)" % data)
 
-# This is an example left over from roscopter
-def send_rc(data):
-    master.mav.rc_channels_override_send(
-        master.target_system,
-        master.target_component,
-        data.channel[0],
-        data.channel[1],
-        data.channel[2],
-        data.channel[3],
-        data.channel[4],
-        data.channel[5],
-        data.channel[6],
-        data.channel[7])
-    log_rossub('send_rc')
+# Send an AP heartbeat whenever a heartbeast message comes in
+def sub_heartbeat(data):
+    if ap_last_custom_mode == -1:
+        return
+    master.mav.heartbeat_send(
+        mavutil.mavlink.MAV_TYPE_ONBOARD_CONTROLLER, 
+        mavutil.mavlink.MAV_TYPE_GENERIC, 
+        0, 
+        ap_last_custom_mode, 
+        mavutil.mavlink.MAV_STATE_ACTIVE)
+    log_rossub('heartbeat')
 
 #-----------------------------------------------------------------------
 # ROS services
@@ -184,17 +179,7 @@ def set_disarm(req):
 
 #-----------------------------------------------------------------------
 # Periodic callbacks
-
-# Send heartbeat to AP so it doesn't RTL
-def send_heartbeat():
-    if ap_last_custom_mode == -1:
-        return
-    master.mav.heartbeat_send(
-        mavutil.mavlink.MAV_TYPE_ONBOARD_CONTROLLER, 
-        mavutil.mavlink.MAV_TYPE_GENERIC, 
-        0, 
-        ap_last_custom_mode, 
-        mavutil.mavlink.MAV_STATE_ACTIVE)
+# (None exist right now)
 
 #-----------------------------------------------------------------------
 # Main Loop
@@ -221,13 +206,13 @@ def mainloop(opts):
     pub_ahrs2       = None
     pub_airspd_acal = None
     pub_attitude    = rospy.Publisher("%s/attitude"%ROS_BASENAME, 
-                                      mavmsg.Attitude)
+                                      apmsg.Attitude)
     pub_fence_sta   = None
     pub_glo_pos_int = rospy.Publisher("%s/gps_pos"%ROS_BASENAME, 
                                       NavSatFix)
     pub_gps_raw_int = None
     pub_heartbeat   = rospy.Publisher("%s/heartbeat"%ROS_BASENAME, 
-                                      mavmsg.Heartbeat)
+                                      apmsg.Heartbeat)
     pub_hwstatus    = None
     pub_meminfo     = None
     pub_mis_cur     = None
@@ -235,9 +220,9 @@ def mainloop(opts):
     pub_radio       = None
     pub_radio_sta   = None
     pub_raw_imu     = rospy.Publisher("%s/raw_imu"%ROS_BASENAME, 
-                                      mavmsg.RawIMU)
+                                      apmsg.RawIMU)
     pub_rc_chan_raw = rospy.Publisher("%s/rc_chan"%ROS_BASENAME, 
-                                      mavmsg.RCRaw)
+                                      apmsg.RCRaw)
     pub_scaled_imu  = None
     pub_scaled_pres = None
     pub_sens_off    = None
@@ -246,22 +231,23 @@ def mainloop(opts):
     pub_sys_status  = None
     pub_sys_time    = None
     pub_vfr_hud     = rospy.Publisher("%s/vfr_hud"%ROS_BASENAME, 
-                                      mavmsg.VFR_HUD)
+                                      apmsg.VFR_HUD)
     pub_wind        = None
     
     # Set up ROS subscribers
-    #rospy.Subscriber("send_rc", ap_mavlink_bridge.msg.RC, send_rc)
+    rospy.Subscriber("%s/heartbeat_in"%ROS_BASENAME, 
+                     std_msgs.msg.Empty, sub_heartbeat)
         
     # Set up ROS service callbacks
     #arm_service = rospy.Service('arm', Empty, set_arm)
     #disarm_service = rospy.Service('disarm', Empty, set_disarm)
     
     # Set up periodic tasks
-    periodic_new("heartbeat", send_heartbeat, 1.0)
+    #periodic_new("heartbeat", send_heartbeat, 1.0)
     
     #<<< START LOOP INTERNALS >>>
     
-    # Store "unknown" message types so we only alert once
+    # Store "unknown" message types so we only warn once
     unknown_message_types = {}
     
     # Initialize mavlink connection
@@ -311,7 +297,7 @@ def mainloop(opts):
                 ns_status = NavSatStatus(
                                 status = NavSatStatus.STATUS_FIX, 
                                 service = NavSatStatus.SERVICE_GPS)
-                ns_header = Header(stamp = project_ap_time())
+                ns_header = std_msgs.msg.Header(stamp = project_ap_time())
                 ns_fix = NavSatFix(latitude = msg.lat/1e07,
                                    longitude = msg.lon/1e07,
                                    altitude = msg.alt/1e03, 
@@ -340,7 +326,7 @@ def mainloop(opts):
             elif msg_type == "RADIO_STATUS":
                 pub_radio_sta = None
             elif msg_type == "RAW_IMU" :
-                pub_raw_imu.publish(Header(), msg.time_usec, 
+                pub_raw_imu.publish(std_msgs.msg.Header(), msg.time_usec, 
                                     msg.xacc, msg.yacc, msg.zacc, 
                                     msg.xgyro, msg.ygyro, msg.zgyro, 
                                     msg.xmag, msg.ymag, msg.zmag)
@@ -372,7 +358,9 @@ def mainloop(opts):
                 pub_wind = None
             else:
                 # Report outliers so we can add them
+                log_dbug("Unhandled message type %s" % msg_type)
                 if msg_type not in unknown_message_types:
+                    # Always report to debugging, but only warn once
                     unknown_message_types[msg_type] = True
                     log_warn("Unhandled message type %s" % msg_type)
                     continue
