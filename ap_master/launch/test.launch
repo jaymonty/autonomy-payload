@@ -1,0 +1,4 @@
+<launch>
+  <node name="autopilot" pkg="ap_autopilot_bridge" type="mavlink.py" output="screen" />
+  <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" />
+</launch>
