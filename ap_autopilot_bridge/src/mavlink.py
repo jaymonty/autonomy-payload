@@ -27,6 +27,7 @@ import std_msgs.msg
 
 # Import ROS messages specific to this bridge
 from ap_autopilot_bridge import msg as apmsg
+from ap_safety_monitor import msg as safemsg
 
 #-----------------------------------------------------------------------
 # Parameters
@@ -235,8 +236,8 @@ def mainloop(opts):
     pub_wind        = None
     
     # Set up ROS subscribers
-    rospy.Subscriber("%s/heartbeat_in"%ROS_BASENAME, 
-                     std_msgs.msg.Empty, sub_heartbeat)
+    rospy.Subscriber("safety/heartbeat", 
+                     safemsg.Heartbeat, sub_heartbeat)
         
     # Set up ROS service callbacks
     #arm_service = rospy.Service('arm', Empty, set_arm)
