@@ -52,14 +52,6 @@ LOOP_RATE = MESSAGE_RATE
 # Contains the mavlink 'master' object
 master = None
 
-# Timer object used for periodic_run
-periodic_timer = None
-
-# Dictionary of periodic tasks
-# 'task name' -> (callback, ticks_period, ticks_left)
-# ticks are in increments of 1/LOOP_RATE seconds
-periodic_tasks = {}
-
 # Last known custom_mode from AP (from last mavlink heartbeat msg)
 ap_last_custom_mode = -1
 
@@ -123,32 +115,6 @@ def mavlink_setup(device, baudrate):
         1)
 
 #-----------------------------------------------------------------------
-# Periodic task management
-# (This could all be replaced with rospy.Timer if we wanted,
-#  but it's nice to have some explicit control)
-
-# Create a new task called 'name' to run 'callback' at 'hz' Hz
-# Note: can't run a task faster than LOOP_RATE Hz
-def periodic_new(name, callback, hz):
-    ticks = max(1, int(LOOP_RATE / hz))
-    periodic_tasks[name] = (callback, ticks, ticks)
-
-# This runs the tasks on schedule, and is called periodically
-#  by a rospy.Timer instance (see main loop)
-def periodic_run(timer_event):
-    # Go through periodically-scheduled tasks
-    for task in periodic_tasks.keys():
-        (cb, period, left) = periodic_tasks[task]
-        # Check if the task is due; if so, run it!
-        left -= 1
-        if (left == 0):
-            log_dbug("PERIODIC (%s)" % task)
-            cb()
-            left = period
-        periodic_tasks[task] = (cb, period, left)
-
-
-#-----------------------------------------------------------------------
 # ROS Subscriber callbacks
 
 def log_rossub(data):
@@ -180,24 +146,11 @@ def set_disarm(req):
     return []
 
 #-----------------------------------------------------------------------
-# Periodic callbacks
-# (None exist right now)
-
-#-----------------------------------------------------------------------
 # Main Loop
 
-def on_ros_shutdown():
-    global periodic_timer
-    # Turn off periodic tasks
-    if (periodic_timer):
-        periodic_timer.shutdown()
-
 def mainloop(opts):
-    global periodic_timer 
-    
     # ROS initialization
     rospy.init_node('mavlink')
-    rospy.on_shutdown(on_ros_shutdown)
     
     # Set up ROS publishers
     pub_gps = rospy.Publisher("%s/gps"%ROS_BASENAME, NavSatFix)
@@ -212,9 +165,6 @@ def mainloop(opts):
     #arm_service = rospy.Service('arm', Empty, set_arm)
     #disarm_service = rospy.Service('disarm', Empty, set_disarm)
     
-    # Set up periodic tasks
-    #periodic_new("heartbeat", send_heartbeat, 1.0)
-    
     #<<< START LOOP INTERNALS >>>
     
     # Store "unknown" message types so we only warn once
@@ -223,12 +173,7 @@ def mainloop(opts):
     # Initialize mavlink connection
     mavlink_setup(opts.device, opts.baudrate)
     
-    # Start running periodic task scheduler at LOOP_RATE Hz
-    periodic_timer = \
-        rospy.Timer(rospy.Duration(1.0/float(LOOP_RATE)), periodic_run)
-    
-    # Try to run this loop at LOOP_RATE Hz, but since we enforce
-    #  periodic tasks using a ROS timer, it's okay to lag
+    # Try to run this loop at LOOP_RATE Hz
     r = rospy.Rate(LOOP_RATE)
     print "\nStarting loop...\n"
     while not rospy.is_shutdown():
