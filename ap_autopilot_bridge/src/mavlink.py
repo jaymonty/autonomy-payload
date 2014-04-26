@@ -23,6 +23,7 @@ import signal
 import rospy
 from sensor_msgs.msg import NavSatFix
 from sensor_msgs.msg import NavSatStatus
+from sensor_msgs.msg import Imu
 import std_msgs.msg 
 
 # Import ROS messages specific to this bridge
@@ -195,45 +196,13 @@ def mainloop(opts):
     global periodic_timer 
     
     # ROS initialization
-    rospy.init_node('ap_mavlink_bridge')
+    rospy.init_node('mavlink')
     rospy.on_shutdown(on_ros_shutdown)
     
     # Set up ROS publishers
-    # TODO: Configure publishers using a list of tuples of
-    #  (mavlink_message_type, ros_topic_name, ros_topic_type)
-    #  and build a dictionary of publishers at startup s.t.
-    #  pub_dict[mavlink_message_type] == configured_publisher
-    pub_ahrs        = None
-    pub_ahrs2       = None
-    pub_airspd_acal = None
-    pub_attitude    = rospy.Publisher("%s/attitude"%ROS_BASENAME, 
-                                      apmsg.Attitude)
-    pub_fence_sta   = None
-    pub_glo_pos_int = rospy.Publisher("%s/gps_pos"%ROS_BASENAME, 
-                                      NavSatFix)
-    pub_gps_raw_int = None
-    pub_heartbeat   = rospy.Publisher("%s/heartbeat"%ROS_BASENAME, 
-                                      apmsg.Heartbeat)
-    pub_hwstatus    = None
-    pub_meminfo     = None
-    pub_mis_cur     = None
-    pub_nav_con_out = None
-    pub_radio       = None
-    pub_radio_sta   = None
-    pub_raw_imu     = rospy.Publisher("%s/raw_imu"%ROS_BASENAME, 
-                                      apmsg.RawIMU)
-    pub_rc_chan_raw = rospy.Publisher("%s/rc_chan"%ROS_BASENAME, 
-                                      apmsg.RCRaw)
-    pub_scaled_imu  = None
-    pub_scaled_pres = None
-    pub_sens_off    = None
-    pub_ser_out_raw = None
-    pub_stat_text   = None
-    pub_sys_status  = None
-    pub_sys_time    = None
-    pub_vfr_hud     = rospy.Publisher("%s/vfr_hud"%ROS_BASENAME, 
-                                      apmsg.VFR_HUD)
-    pub_wind        = None
+    pub_gps = rospy.Publisher("%s/gps"%ROS_BASENAME, NavSatFix)
+    pub_imu = rospy.Publisher("%s/imu"%ROS_BASENAME, Imu)
+    pub_sta = rospy.Publisher("%s/status"%ROS_BASENAME, apmsg.Heartbeat)
     
     # Set up ROS subscribers
     rospy.Subscriber("safety/heartbeat", 
@@ -279,21 +248,18 @@ def mainloop(opts):
                 continue
             
             # Message cases (observed from 'current' PX4 firmware)
-            # TODO: Following creation of publisher dictionary above,
-            #  replace cases with a single lookup and function call.
-            #  (Note, will need a way to map msg.* to topic elements)
             if msg_type == "AHRS":
-                pub_ahrs = None
+                True
             elif msg_type == "AHRS2":
-                pub_ahrs2 = None
+                True
             elif msg_type == "AIRSPEED_AUTOCAL":
-                pub_airspd_acal = None
-            elif msg_type == "ATTITUDE" :
-                pub_attitude.publish(msg.roll, msg.pitch, 
-                                     msg.yaw, msg.rollspeed, 
-                                     msg.pitchspeed, msg.yawspeed)
+                True
+            elif msg_type == "ATTITUDE":
+                im_header = std_msgs.msg.Header(stamp = project_ap_time())
+                im_imu = Imu()
+                pub_imu.publish()
             elif msg_type == "FENCE_STATUS":
-                pub_fence_sta = None
+                True
             elif msg_type == "GLOBAL_POSITION_INT":
                 ns_status = NavSatStatus(
                                 status = NavSatStatus.STATUS_FIX, 
@@ -304,61 +270,57 @@ def mainloop(opts):
                                    altitude = msg.alt/1e03, 
                                    status = ns_status,
                                    header = ns_header)
-                pub_glo_pos_int.publish(ns_fix)
+                pub_gps.publish(ns_fix)
             elif msg_type == "GPS_RAW_INT":
-                pub_gps_raw_int = None
+                True
             elif msg_type == "HEARTBEAT":
-                pub_heartbeat.publish(
+                pub_sta.publish(
                     msg.base_mode & \
                     mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED, 
                     msg.base_mode & \
                     mavutil.mavlink.MAV_MODE_FLAG_GUIDED_ENABLED, 
                     mavutil.mode_string_v10(msg))
             elif msg_type == "HWSTATUS":
-                pub_hwstatus = None
+                True
             elif msg_type == "MEMINFO":
-                pub_meminfo = None
+                True
             elif msg_type == "MISSION_CURRENT":
-                pub_mis_cur = None
+                True
             elif msg_type == "NAV_CONTROLLER_OUTPUT":
-                pub_nav_con_out = None
+                True
+            elif msg_type == "PARAM_VALUE":
+                True
             elif msg_type == "RADIO":
-                pub_radio = None
+                True
             elif msg_type == "RADIO_STATUS":
-                pub_radio_sta = None
+                True
             elif msg_type == "RAW_IMU" :
-                pub_raw_imu.publish(std_msgs.msg.Header(), msg.time_usec, 
-                                    msg.xacc, msg.yacc, msg.zacc, 
-                                    msg.xgyro, msg.ygyro, msg.zgyro, 
-                                    msg.xmag, msg.ymag, msg.zmag)
+                True
             elif msg_type == "RC_CHANNELS_RAW":
-                pub_rc_chan_raw.publish([msg.chan1_raw, msg.chan2_raw, 
-                                         msg.chan3_raw, msg.chan4_raw, 
-                                         msg.chan5_raw, msg.chan6_raw, 
-                                         msg.chan7_raw, msg.chan8_raw]) 
+                True
             elif msg_type == "SCALED_IMU2":
-                pub_scaled_imu = None
+                True
             elif msg_type == "SCALED_PRESSURE":
-                pub_scaled_pres = None
+                True
             elif msg_type == "SENSOR_OFFSETS":
-                pub_sens_off = None
+                True
             elif msg_type == "SERVO_OUTPUT_RAW":
-                pub_ser_out_raw = None
+                True
             elif msg_type == "STATUS_TEXT":
-                pub_stat_text = None
+                True
+            elif msg_type == "STATUSTEXT":
+                True
             elif msg_type == "SYS_STATUS":
-                pub_sys_status = None
+                True
             elif msg_type == "SYSTEM_TIME":
                 # Adjust known time offset from autopilot's
                 set_ap_time(msg.time_unix_usec)
             elif msg_type == "VFR_HUD":
-                pub_vfr_hud.publish(msg.airspeed, msg.groundspeed, 
-                                    msg.heading, msg.throttle, 
-                                    msg.alt, msg.climb)
+                True
             elif msg_type == "WIND":
-                pub_wind = None
+                True
             else:
-                # Report outliers so we can add them
+                # Report outliers so we can add them as new cases
                 log_dbug("Unhandled message type %s" % msg_type)
                 if msg_type not in unknown_message_types:
                     # Always report to debugging, but only warn once
