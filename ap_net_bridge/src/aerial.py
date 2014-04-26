@@ -32,7 +32,7 @@ from ap_network_bridge import msg as netmsg
 # Parameters
 
 # Base name for node topics and services
-ROS_BASENAME = 'mavlink'
+ROS_BASENAME = 'aerial'
 
 # Control printing of messages to stdout
 DBUG_PRINT = False
@@ -87,7 +87,7 @@ def sock_recv(max_size=1024):
 #-----------------------------------------------------------------------
 # Byte packing and unpacking
 
-PACKET_FORMAT = ">HHLLlll"
+PACKET_FORMAT = ">HHLLllllll"
 '''
 Packet fields (in network byte order):
  - (16b) Aircraft ID (1..65535)
@@ -97,25 +97,36 @@ Packet fields (in network byte order):
  - (32b) Latitude (deg) * 1e07 (truncated)
  - (32b) Longitude (deg) * 1e07 (truncated)
  - (32b) Altitude (m) * 1e03 (truncated)
+ - (32b) Roll (rads) * 1e07 (truncated)
+ - (32b) Pitch (rads) * 1e07 (truncated)
+ - (32b) Yaw (rads) * 1e07 (truncated)
 '''
 
-def gps_pack(acid, seq, stamp, lat, lon, alt):
+def gps_pack(acid, seq, stamp, lat, lon, alt, rol, pit, yaw):
     sec = int(stamp.secs)
     nsec = int(stamp.nsecs)
     lat = int(lat * 1e07)
     lon = int(lon * 1e07)
     alt = int(alt * 1e03)
-    return struct.pack(PACKET_FORMAT, acid, seq, sec, nsec, lat, lon, alt)
+    rol = int(rol * 1e07)
+    pit = int(pit * 1e07)
+    yaw = int(yaw * 1e07)
+    return struct.pack(PACKET_FORMAT, acid, seq, sec, nsec, 
+                       lat, lon, alt, rol, pit, yaw)
 
 def gps_unpack(data):
-    acid, seq, sec, nsec, lat, lon, alt = struct.unpack(PACKET_FORMAT, data)
+    acid, seq, sec, nsec, lat, lon, alt, rol, pit, yaw \
+        = struct.unpack(PACKET_FORMAT, data)
     stamp = rospy.Time()
     stamp.secs = sec
     stamp.nsecs = nsec
     lat = float(lat) / 1e07
     lon = float(lon) / 1e07
     alt = float(alt) / 1e03
-    return acid, seq, stamp, lat, lon, alt
+    rol = float(rol) / 1e07
+    pit = float(pit) / 1e07
+    yaw = float(yaw) / 1e07
+    return acid, seq, stamp, lat, lon, alt, rol, pit, yaw
 
 #-----------------------------------------------------------------------
 # Subscribers (ROS -> Network)
@@ -176,8 +187,10 @@ if __name__ == '__main__':
                 break
             
             # Convert into ROS message and publish
-            acid, seq, stamp, lat, lon, alt = gps_unpack(dgram)
-            msg = netmsg.shared_lla(acid, seq, stamp, lat, lon, alt)
+            acid, seq, stamp, lat, lon, alt, rol, pit, yaw \
+                = gps_unpack(dgram)
+            msg = netmsg.shared_lla(acid, seq, stamp, 
+                                    lat, lon, alt, rol, pit, yaw)
             pub.publish(msg)
         
         # No more messages, so sleep briefly
