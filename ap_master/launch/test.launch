@@ -1,5 +1,5 @@
 <launch>
-  <node name="autopilot" pkg="ap_autopilot_bridge" type="mavlink.py" output="screen" args="--device 127.0.0.1:14550" />
+  <node name="autopilot" pkg="ap_autopilot_bridge" type="mavlink.py" output="screen" />
   <node name="gps_to_odom" pkg="gps_common" type="utm_odometry_node" output="screen" >
     <remap from="fix" to="autopilot/gps" />
     <remap from="odom" to="gps_to_odom/odom3d" />

@@ -80,8 +80,8 @@ def log_warn(msg):
 # Update delta between local and AP time (provided in usec)
 def set_ap_time(ap_epoch_usec):
     global ap_time_delta
-    ap_epoch_sec = int(ap_epoch_usec / 1e07)
-    ap_nsec = (ap_epoch_usec % 1e07) * 1e03
+    ap_epoch_sec = int(ap_epoch_usec / 1e06)
+    ap_nsec = (ap_epoch_usec % 1e06) * 1e03
     ap_time = rospy.Time(ap_epoch_sec, ap_nsec)
     ap_time_delta = rospy.Time.now() - ap_time
 
