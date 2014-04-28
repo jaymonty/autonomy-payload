@@ -24,7 +24,9 @@ import rospy
 from sensor_msgs.msg import NavSatFix
 from sensor_msgs.msg import NavSatStatus
 from sensor_msgs.msg import Imu
+from geometry_msgs.msg import Quaternion
 import std_msgs.msg 
+from tf.transformations import quaternion_from_euler
 
 # Import ROS messages specific to this bridge
 from ap_autopilot_bridge import msg as apmsg
@@ -201,8 +203,11 @@ def mainloop(opts):
                 True
             elif msg_type == "ATTITUDE":
                 im_header = std_msgs.msg.Header(stamp = project_ap_time())
-                im_imu = Imu()
-                pub_imu.publish()
+                quat = quaternion_from_euler(msg.roll, msg.pitch, msg.yaw)
+                im_quat = Quaternion(*quat)
+                im_imu = Imu(orientation = im_quat,
+                             header = im_header)
+                pub_imu.publish(im_imu)
             elif msg_type == "FENCE_STATUS":
                 True
             elif msg_type == "GLOBAL_POSITION_INT":
@@ -214,7 +219,9 @@ def mainloop(opts):
                                    longitude = msg.lon/1e07,
                                    altitude = msg.alt/1e03, 
                                    status = ns_status,
-                                   header = ns_header)
+                                   header = ns_header,
+                                   position_covariance_type = \
+                                       NavSatFix.COVARIANCE_TYPE_UNKNOWN)
                 pub_gps.publish(ns_fix)
             elif msg_type == "GPS_RAW_INT":
                 True
