@@ -139,19 +139,14 @@ def sub_pose(msg):
                                            msg.pose.pose.orientation.z,
                                            msg.pose.pose.orientation.w],
                                            'sxyz')
-    print "Q: %f, %f, %f, %f"%(msg.pose.pose.orientation.x,
-                               msg.pose.pose.orientation.y,
-                               msg.pose.pose.orientation.z,
-                               msg.pose.pose.orientation.w)
     dgram = gps_pack(aircraft_id, msg.header.seq, msg.header.stamp,
                      msg.pose.pose.position.x, 
                      msg.pose.pose.position.y, 
                      msg.pose.pose.position.z, 
                      rol, pit, yaw)
-    print "X: %f Y: %f Z: %f R: %f P: %f Y: %f"%(msg.pose.pose.position.x,
-                                                 msg.pose.pose.position.y,
-                                                 msg.pose.pose.position.z,
-                                                 rol, pit, yaw)
+    log_dbug("(aerial) X: %f Y: %f Z: %f R: %f P: %f Y: %f" % \
+             (msg.pose.pose.position.x, msg.pose.pose.position.y,
+              msg.pose.pose.position.z, rol, pit, yaw))
     # Send out via network
     sock_send(dgram)
 

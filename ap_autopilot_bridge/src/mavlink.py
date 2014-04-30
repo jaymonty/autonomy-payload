@@ -159,9 +159,9 @@ def mainloop(opts):
     
     # Set up ROS publishers
     pub_gps = rospy.Publisher("%s/gps"%ROS_BASENAME, NavSatFix)
-    pub_odom = rospy.Publisher("%s/odom"%ROS_BASENAME, Odometry)
+    pub_gps_odom = rospy.Publisher("%s/gps_odom"%ROS_BASENAME, Odometry)
     pub_imu = rospy.Publisher("%s/imu"%ROS_BASENAME, Imu)
-    pub_sta = rospy.Publisher("%s/status"%ROS_BASENAME, apmsg.Heartbeat)
+    pub_status = rospy.Publisher("%s/status"%ROS_BASENAME, apmsg.Heartbeat)
     
     # Set up ROS subscribers
     rospy.Subscriber("safety/heartbeat", 
@@ -210,8 +210,8 @@ def mainloop(opts):
                 imu.header.stamp = project_ap_time()
                 imu.header.frame_id = 'base_footprint'
                 quat = quaternion_from_euler(msg.roll, msg.pitch, msg.yaw, 'sxyz')
-                print "R: %f P: %f Y: %f"%(msg.roll, msg.pitch, msg.yaw)
-                print "\t\t\t\tQ: %f, %f, %f, %f"%(quat[0], quat[1], quat[2], quat[3])
+                #print "R: %f P: %f Y: %f"%(msg.roll, msg.pitch, msg.yaw)
+                #print "\t\t\t\tQ: %f, %f, %f, %f"%(quat[0], quat[1], quat[2], quat[3])
                 imu.orientation = Quaternion(quat[0], quat[1], quat[2], quat[3])
                 pub_imu.publish(imu)
             elif msg_type == "FENCE_STATUS":
@@ -246,11 +246,11 @@ def mainloop(opts):
                                          0, 0, 0, 99999, 0, 0,
                                          0, 0, 0, 0, 99999, 0,
                                          0, 0, 0, 0, 0, 99999 )
-                pub_odom.publish(odom)
+                pub_gps_odom.publish(odom)
             elif msg_type == "GPS_RAW_INT":
                 True
             elif msg_type == "HEARTBEAT":
-                pub_sta.publish(
+                pub_status.publish(
                     msg.base_mode & \
                     mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED, 
                     msg.base_mode & \
