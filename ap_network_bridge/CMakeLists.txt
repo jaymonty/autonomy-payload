@@ -11,7 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 add_message_files(
   FILES
-  shared_lla.msg
+  NetPoseStamped.msg
 )
 
 generate_messages(
