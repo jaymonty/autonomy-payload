@@ -24,6 +24,7 @@ import rospy
 from sensor_msgs.msg import NavSatFix
 from sensor_msgs.msg import NavSatStatus
 from sensor_msgs.msg import Imu
+from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Quaternion
 import std_msgs.msg 
 from tf.transformations import quaternion_from_euler
@@ -80,6 +81,8 @@ def log_warn(msg):
 # Update delta between local and AP time (provided in usec)
 def set_ap_time(ap_epoch_usec):
     global ap_time_delta
+    if ap_epoch_usec == 0:  # If no AP time, ignore and use system time
+        return
     ap_epoch_sec = int(ap_epoch_usec / 1e06)
     ap_nsec = (ap_epoch_usec % 1e06) * 1e03
     ap_time = rospy.Time(ap_epoch_sec, ap_nsec)
@@ -156,6 +159,7 @@ def mainloop(opts):
     
     # Set up ROS publishers
     pub_gps = rospy.Publisher("%s/gps"%ROS_BASENAME, NavSatFix)
+    pub_odom = rospy.Publisher("%s/odom"%ROS_BASENAME, Odometry)
     pub_imu = rospy.Publisher("%s/imu"%ROS_BASENAME, Imu)
     pub_sta = rospy.Publisher("%s/status"%ROS_BASENAME, apmsg.Heartbeat)
     
@@ -202,27 +206,47 @@ def mainloop(opts):
             elif msg_type == "AIRSPEED_AUTOCAL":
                 True
             elif msg_type == "ATTITUDE":
-                im_header = std_msgs.msg.Header(stamp = project_ap_time())
-                quat = quaternion_from_euler(msg.roll, msg.pitch, msg.yaw)
-                im_quat = Quaternion(*quat)
-                im_imu = Imu(orientation = im_quat,
-                             header = im_header)
-                pub_imu.publish(im_imu)
+                imu = Imu()
+                imu.header.stamp = project_ap_time()
+                imu.header.frame_id = 'base_footprint'
+                quat = quaternion_from_euler(msg.roll, msg.pitch, msg.yaw, 'sxyz')
+                print "R: %f P: %f Y: %f"%(msg.roll, msg.pitch, msg.yaw)
+                print "\t\t\t\tQ: %f, %f, %f, %f"%(quat[0], quat[1], quat[2], quat[3])
+                imu.orientation = Quaternion(quat[0], quat[1], quat[2], quat[3])
+                pub_imu.publish(imu)
             elif msg_type == "FENCE_STATUS":
                 True
             elif msg_type == "GLOBAL_POSITION_INT":
-                ns_status = NavSatStatus(
-                                status = NavSatStatus.STATUS_FIX, 
-                                service = NavSatStatus.SERVICE_GPS)
-                ns_header = std_msgs.msg.Header(stamp = project_ap_time())
-                ns_fix = NavSatFix(latitude = msg.lat/1e07,
-                                   longitude = msg.lon/1e07,
-                                   altitude = msg.alt/1e03, 
-                                   status = ns_status,
-                                   header = ns_header,
-                                   position_covariance_type = \
-                                       NavSatFix.COVARIANCE_TYPE_UNKNOWN)
-                pub_gps.publish(ns_fix)
+                # Publish a NavSatFix message
+                fix = NavSatFix()
+                fix.header.stamp = project_ap_time()
+                fix.header.frame_id = 'base_footprint'
+                fix.latitude = msg.lat/1e07
+                fix.longitude = msg.lon/1e07
+                fix.altitude = msg.alt/1e03
+                fix.status.status = NavSatStatus.STATUS_FIX
+                fix.status.service = NavSatStatus.SERVICE_GPS
+                fix.position_covariance_type = NavSatFix.COVARIANCE_TYPE_UNKNOWN
+                pub_gps.publish(fix)
+                
+                # Also publish an Odometry message
+                odom = Odometry()
+                odom.header.stamp = project_ap_time()
+                odom.header.frame_id = 'base_footprint'
+                odom.pose.pose.position.x = msg.lat/1e07
+                odom.pose.pose.position.y = msg.lon/1e07
+                odom.pose.pose.position.z = msg.alt/1e03
+                odom.pose.pose.orientation.x = 1
+                odom.pose.pose.orientation.y = 0
+                odom.pose.pose.orientation.z = 0
+                odom.pose.pose.orientation.w = 0
+                odom.pose.covariance = ( 0.1, 0, 0, 0, 0, 0,
+                                         0, 0.1, 0, 0, 0, 0,
+                                         0, 0, 0.1, 0, 0, 0,
+                                         0, 0, 0, 99999, 0, 0,
+                                         0, 0, 0, 0, 99999, 0,
+                                         0, 0, 0, 0, 0, 99999 )
+                pub_odom.publish(odom)
             elif msg_type == "GPS_RAW_INT":
                 True
             elif msg_type == "HEARTBEAT":

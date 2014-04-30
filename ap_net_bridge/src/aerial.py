@@ -18,12 +18,9 @@ import socket
 from optparse import OptionParser
 
 # General ROS imports
-#import roslib; roslib.load_manifest('ap_mavlink_bridge')
 import rospy
-#from std_msgs.msg import String, Header
-#from std_srvs.srv import Empty
-from sensor_msgs.msg import NavSatFix
-from sensor_msgs.msg import NavSatStatus
+from geometry_msgs.msg import PoseWithCovarianceStamped
+from tf.transformations import euler_from_quaternion
 
 # Import ROS messages specific to this bridge
 from ap_network_bridge import msg as netmsg
@@ -69,6 +66,7 @@ def sock_init(remote_ip, port):
     global udp_sock, udp_sock_ip, udp_sock_port
     udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_sock.bind(('', port))
+    udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     udp_sock_ip = remote_ip
     udp_sock_port = port
 
@@ -80,6 +78,7 @@ def sock_recv(max_size=1024):
     data = None
     try:
         data, addr = udp_sock.recvfrom(max_size, socket.MSG_DONTWAIT)
+        # TODO check addr to see if it's me (and then loop?)
     except Exception:
         True
     return data
@@ -131,47 +130,58 @@ def gps_unpack(data):
 #-----------------------------------------------------------------------
 # Subscribers (ROS -> Network)
 
-def sub_mavlink_gpsraw(msg):
+def sub_pose(msg):
     global aircraft_id
     
     # Package contents into a datagram
+    rol, pit, yaw = euler_from_quaternion([msg.pose.pose.orientation.x,
+                                           msg.pose.pose.orientation.y,
+                                           msg.pose.pose.orientation.z,
+                                           msg.pose.pose.orientation.w],
+                                           'sxyz')
+    print "Q: %f, %f, %f, %f"%(msg.pose.pose.orientation.x,
+                               msg.pose.pose.orientation.y,
+                               msg.pose.pose.orientation.z,
+                               msg.pose.pose.orientation.w)
     dgram = gps_pack(aircraft_id, msg.header.seq, msg.header.stamp,
-                     msg.latitude, msg.longitude, msg.altitude)
-    
+                     msg.pose.pose.position.x, 
+                     msg.pose.pose.position.y, 
+                     msg.pose.pose.position.z, 
+                     rol, pit, yaw)
+    print "X: %f Y: %f Z: %f R: %f P: %f Y: %f"%(msg.pose.pose.position.x,
+                                                 msg.pose.pose.position.y,
+                                                 msg.pose.pose.position.z,
+                                                 rol, pit, yaw)
     # Send out via network
     sock_send(dgram)
 
 #-----------------------------------------------------------------------
 # Start-up
 
-def on_ros_shutdown():
-    True
-
 if __name__ == '__main__':
     # Grok args
-    parser = OptionParser("gps_bcast_rxtx.py [options]")
+    parser = OptionParser("aerial.py [options]")
     parser.add_option("--id", dest="acid", type='int',
                       help="Aircraft ID", default=1)
     parser.add_option("--ip", dest="ip", 
-                      help="IP address to send to", default="192.168.1.1")
+                      help="IP address to send to", default="192.168.2.1")
     parser.add_option("--port", dest="port", type='int',
                       help="UDP port", default=5554)
     parser.add_option("--sub", dest="sub",
                       help="ROS topic to subscribe to", 
-                      default="mavlink/gps_raw")
+                      default="estimator/odom")
     parser.add_option("--pub", dest="pub",
                       help="ROS topic to publish to", 
-                      default="net/gps_bcast")
+                      default="net/pose")
     (opts, args) = parser.parse_args()
     
     # Initialize ROS and socket
-    rospy.init_node('ap_network_bridge_gpsbc')
-    rospy.on_shutdown(on_ros_shutdown)
+    rospy.init_node('net_aerial')
     sock_init(opts.ip, opts.port)
     aircraft_id = opts.acid
     
     # Set up subscriber (ROS -> network)
-    rospy.Subscriber(opts.sub, NavSatFix, sub_mavlink_gpsraw)
+    rospy.Subscriber(opts.sub, PoseWithCovarianceStamped, sub_pose)
     
     # Set up publisher (network -> ROS)
     pub = rospy.Publisher(opts.pub, netmsg.shared_lla)
@@ -182,6 +192,8 @@ if __name__ == '__main__':
     while not rospy.is_shutdown():
         # Check for datagrams
         while (True):
+            break # TODO fix self-listening behavior in sock_recv()
+
             dgram = sock_recv()
             if not dgram:
                 break
