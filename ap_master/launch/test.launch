@@ -15,5 +15,5 @@
     <param name="debug" value="false" />
   </node>
   <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" />
-  <node name="aerial" pkg="ap_network_bridge" type="aerial.py" output="screen" args="--device wlan0" />
+  <node name="aerial" pkg="ap_network_bridge" type="aerial.py" output="screen" args="--id 1 --device wlan0" />
 </launch>

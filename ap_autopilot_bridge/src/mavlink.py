@@ -266,6 +266,8 @@ def mainloop(opts):
                 True
             elif msg_type == "PARAM_VALUE":
                 True
+            elif msg_type == "POWER_STATUS":
+                True
             elif msg_type == "RADIO":
                 True
             elif msg_type == "RADIO_STATUS":

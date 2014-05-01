@@ -172,7 +172,7 @@ if __name__ == '__main__':
                       help="UDP port", default=5554)
     parser.add_option("--sub", dest="sub",
                       help="ROS topic to subscribe to", 
-                      default="estimator/odom")
+                      default="estimator/odom_combined")
     parser.add_option("--pub", dest="pub",
                       help="ROS topic to publish to", 
                       default="network/pose")
