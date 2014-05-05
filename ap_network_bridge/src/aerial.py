@@ -191,7 +191,7 @@ if __name__ == '__main__':
     
     # Loop , checking for incoming datagrams and sleeping
     r = rospy.Rate(10)
-    print "\nStarting loop...\n"
+    print "\nStarting aerial comms loop...\n"
     while not rospy.is_shutdown():
         # Check for datagrams
         while (True):

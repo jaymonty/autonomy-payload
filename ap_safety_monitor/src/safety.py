@@ -87,7 +87,7 @@ if __name__ == '__main__':
     
     # Start main loop
     r = rospy.Rate(1.0)
-    print "\nStarting loop...\n"
+    print "\nStarting safety monitor loop...\n"
     while not rospy.is_shutdown():
         # Publish a heartbeat, if all is well
         if all_is_well:

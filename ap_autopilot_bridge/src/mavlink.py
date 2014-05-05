@@ -181,7 +181,7 @@ def mainloop(opts):
     
     # Try to run this loop at LOOP_RATE Hz
     r = rospy.Rate(LOOP_RATE)
-    print "\nStarting loop...\n"
+    print "\nStarting autopilot loop...\n"
     while not rospy.is_shutdown():
         # Process all new messages from master
         # Note: if too many messages come in, we'll never break
