@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package>
+  <name>ap_logging</name>
+  <version>0.0.1</version>
+  <description>ROS package to perform onboard data logging.</description>
+
+  <maintainer email="mrclemen@nps.edu">mrclemen</maintainer>
+
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  
+  <build_depend>rospy</build_depend>
+  <build_depend>ap_network_bridge</build_depend> 
+  <build_depend>ap_autopilot_bridge</build_depend> 
+  
+  <run_depend>rospy</run_depend>
+  <run_depend>ap_network_bridge</run_depend>
+  <run_depend>ap_autopilot_bridge</run_depend>
+  <run_depend>message_runtime</run_depend>
+
+</package>

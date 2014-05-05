@@ -1,12 +1,10 @@
 #!/usr/bin/env python
 
 #-----------------------------------------------------------------------
-# ROS-MAVLink Bridge node
+# Flight safety and aircraft health node
 # Mike Clement, 2014
 #
 # Some general info should go here!!
-# Note: this is loosely based on, but heavily modified and extended
-#   from, https://github.com/cberzan/roscopter
 
 #-----------------------------------------------------------------------
 # Import a bunch of libraries
