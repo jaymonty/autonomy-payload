@@ -68,6 +68,17 @@ def svc_set_health(data):
     return 1
 
 #-----------------------------------------------------------------------
+# Manage heartbeat counter
+
+hb_counter = 0
+
+def next_counter():
+    global hb_counter
+    hb_counter += 1
+    return hb_counter
+
+
+#-----------------------------------------------------------------------
 # Start-up
 
 if __name__ == '__main__':
@@ -86,12 +97,14 @@ if __name__ == '__main__':
                   safesrv.SetHealth, svc_set_health)
     
     # Start main loop
+    hb = safemsg.Heartbeat()
     r = rospy.Rate(1.0)
     print "\nStarting safety monitor loop...\n"
     while not rospy.is_shutdown():
         # Publish a heartbeat, if all is well
         if all_is_well:
-            pub_heartbeat.publish()
+            hb.counter = next_counter()
+            pub_heartbeat.publish(hb)
         
         # Sleep so ROS subscribers and services can run
         r.sleep()

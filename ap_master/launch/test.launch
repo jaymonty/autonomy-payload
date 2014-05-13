@@ -11,9 +11,10 @@
     <param name="vo_used" value="false" />
     <param name="freq" value="30.0" />
     <param name="sensor_timeout" value="2.0" />
-    <!--param name="output_frame" value="odom" /-->
+    <param name="output_frame" value="odom_combined" />
     <param name="debug" value="false" />
   </node>
   <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" />
   <node name="aerial" pkg="ap_network_bridge" type="aerial.py" output="screen" args="--id 1 --device wlan0 --sub estimator/odom_combined" />
+  <!--node name="net_pose_log" pkg="ap_logging" type="net_pose.py" output="screen" args="--file /tmp/net_pose.log" /-->
 </launch>

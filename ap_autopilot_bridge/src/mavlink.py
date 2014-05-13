@@ -78,6 +78,14 @@ def log_warn(msg):
 #-----------------------------------------------------------------------
 # Time functions
 
+# Set system clock to provided epoch usecs
+def set_system_time(epoch_usec):
+    secs = int(epoch_usec / 1e06)
+    nsecs = (epoch_usec % 1e06) * 1e03
+    res = os.system("date -s '@%u.%u'" % (secs, nsecs))
+    if res != 0:
+        log_warn("Could not set system time; timestamps will be for autopilot")
+
 # Update delta between local and AP time (provided in usec)
 def set_ap_time(ap_epoch_usec):
     global ap_time_delta
@@ -118,6 +126,10 @@ def mavlink_setup(device, baudrate):
         mavutil.mavlink.MAV_DATA_STREAM_ALL,
         MESSAGE_RATE,
         1)
+    
+    # Wait for first SYSTEM_TIME message and set local clock
+    msg = master.recv_match(type='SYSTEM_TIME', blocking=True)
+    set_system_time(msg.time_unix_usec)
 
 #-----------------------------------------------------------------------
 # ROS Subscriber callbacks
