@@ -210,6 +210,10 @@ def mainloop(opts):
             if msg_type == "BAD_DATA":
                 continue
             
+            p = project_ap_time().to_sec() 
+            print "Time: %f\tmsg._timestamp: %f\tdelta: %f" % \
+                  (p, msg._timestamp, p - msg._timestamp)
+            
             # Message cases (observed from 'current' PX4 firmware)
             if msg_type == "AHRS":
                 True
