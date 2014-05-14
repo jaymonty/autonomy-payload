@@ -304,7 +304,8 @@ def mainloop(opts):
                 True
             elif msg_type == "SYSTEM_TIME":
                 # Adjust known time offset from autopilot's
-                set_ap_time(msg.time_unix_usec)
+                #set_ap_time(msg.time_unix_usec)
+                True
             elif msg_type == "VFR_HUD":
                 True
             elif msg_type == "WIND":
