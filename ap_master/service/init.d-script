@@ -1,0 +1,17 @@
+#!/bin/sh
+
+# Startup script for autonomy-payload
+# Meant to have stand-ins (e.g. AIRCRAFT_ID, USER) replaced before use
+
+case $1 in
+  start)
+    su -l -c "source /opt/ros/hydro/setup.bash; source ~/acs_ros_ws/devel/setup.bash; roslaunch --pid=~/autonomy-payload.pid ap_master master.launch id:=AIRCRAFT_ID &" USER
+    ;;
+  stop)
+    start-stop-daemon --stop --pidfile ~USER/autonomy-payload.pid
+    ;;
+  *)
+    echo "Please use start or stop."
+    ;;
+esac
+
