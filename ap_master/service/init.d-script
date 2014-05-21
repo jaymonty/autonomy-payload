@@ -9,6 +9,7 @@ case $1 in
     ;;
   stop)
     start-stop-daemon --stop --pidfile ~USER/autonomy-payload.pid
+    rm ~USER/autonomy-payload.pid
     ;;
   *)
     echo "Please use start or stop."
