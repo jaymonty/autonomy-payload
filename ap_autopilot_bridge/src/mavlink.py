@@ -80,11 +80,14 @@ def log_warn(msg):
 
 # Set system clock to provided epoch usecs
 def set_system_time(epoch_usec):
+    if not epoch_usec:
+        log_warn("Requested system time invalid, using saved system time")
+        return
     secs = int(epoch_usec / 1e06)
     nsecs = (epoch_usec % 1e06) * 1e03
     res = os.system("date -s '@%u.%u'" % (secs, nsecs))
     if res != 0:
-        log_warn("Could not set system time; timestamps will be for autopilot")
+        log_warn("Could not set system time, using saved system time")
 
 # Update delta between local and AP time (provided in usec)
 def set_ap_time(ap_epoch_usec):
