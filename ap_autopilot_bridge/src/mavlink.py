@@ -348,7 +348,7 @@ if __name__ == '__main__':
     parser.add_option("--baudrate", dest="baudrate", type='int',
                       help="serial baud rate", default=57600)
     parser.add_option("--skip-time-hack", dest="skip_time_hack", 
-                      action="store_true", default=True)
+                      action="store_true", default=False)
     parser.add_option("--mavlinkdir", dest="mavlink_dir", 
                       help="path to mavlink folder", default=None)
     (opts, args) = parser.parse_args()

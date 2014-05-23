@@ -2,6 +2,7 @@
 
 #------------------------------------------------------------------------------
 # Purpose: Set up companion computer, once Ubuntu is installed
+#          Written for ODroid U3 running "standard" Ubuntu install
 # Author: Mike Clement
 #------------------------------------------------------------------------------
 
