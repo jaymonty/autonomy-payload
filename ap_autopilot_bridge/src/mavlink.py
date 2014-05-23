@@ -220,6 +220,13 @@ def mainloop(opts):
             if msg_type == "BAD_DATA":
                 continue
             
+            # If you *really* want to see what's coming out
+            if opts.spam_mavlink:
+                print msg_type + " @ " + str(msg._timestamp) + ":\n  " \
+                    + "\n  ".join("%s: %s" % (k, v) for (k, v) \
+                                  in sorted(vars(msg).items()) \
+                                  if not k.startswith('_'))
+            
             # Message cases (observed from 'current' PX4 firmware)
             if msg_type == "AHRS":
                 True
@@ -232,8 +239,6 @@ def mainloop(opts):
                 imu.header.stamp = project_ap_time()
                 imu.header.frame_id = 'base_footprint'
                 quat = quaternion_from_euler(msg.roll, msg.pitch, msg.yaw, 'sxyz')
-                #print "R: %f P: %f Y: %f"%(msg.roll, msg.pitch, msg.yaw)
-                #print "\t\t\t\tQ: %f, %f, %f, %f"%(quat[0], quat[1], quat[2], quat[3])
                 imu.orientation = Quaternion(quat[0], quat[1], quat[2], quat[3])
                 pub_imu.publish(imu)
             elif msg_type == "FENCE_STATUS":
@@ -348,6 +353,8 @@ if __name__ == '__main__':
     parser.add_option("--baudrate", dest="baudrate", type='int',
                       help="serial baud rate", default=57600)
     parser.add_option("--skip-time-hack", dest="skip_time_hack", 
+                      action="store_true", default=False)
+    parser.add_option("--spam-mavlink", dest="spam_mavlink", 
                       action="store_true", default=False)
     parser.add_option("--mavlinkdir", dest="mavlink_dir", 
                       help="path to mavlink folder", default=None)
