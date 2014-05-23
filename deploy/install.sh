@@ -43,7 +43,7 @@ fi
 # Disable services we don't plan to use
 for s in bluetooth cups ntp saned spamassassin speech-dispatcher whoopsie; do
   sudo service $s stop
-  sudo update-rc.d $s remove
+  sudo update-rc.d -f $s remove
 done
 
 # Regrettably, we need to disable Git's SSL cert check
