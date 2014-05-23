@@ -40,11 +40,11 @@ else
   sudo sh -c 'echo "UsePAM no" >> /etc/ssh/sshd_config'
 fi
 
-# Disable NTP, user will set date/time
-# (Used by autonomy-payload to set time from GPS)
-#sudo chmod u+s /bin/date
-sudo update-rc.d ntp disable
-sudo service ntp stop
+# Disable services we don't plan to use
+for s in bluetooth cups ntp saned spamassassin speech-dispatcher whoopsie; do
+  sudo service $s stop
+  sudo update-rc.d $s remove
+done
 
 # Regrettably, we need to disable Git's SSL cert check
 git config --global http.sslVerify false
