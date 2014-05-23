@@ -107,7 +107,7 @@ def project_ap_time():
 #-----------------------------------------------------------------------
 # mavlink utility functions
 
-def mavlink_setup(device, baudrate):
+def mavlink_setup(device, baudrate, skip_time_hack):
     global master
     global ap_last_custom_mode
     
@@ -130,9 +130,16 @@ def mavlink_setup(device, baudrate):
         MESSAGE_RATE,
         1)
     
-    # Wait for first SYSTEM_TIME message and set local clock
-    msg = master.recv_match(type='SYSTEM_TIME', blocking=True)
-    set_system_time(msg.time_unix_usec)
+    # Wait for first *valid* SYSTEM_TIME message and set local clock
+    if skip_time_hack:
+        log_warn("Skipping time hack from autopilot, using saved system time")
+        return
+    print "Waiting for non-zero time hack from autopilot..."
+    while True:
+        msg = master.recv_match(type='SYSTEM_TIME', blocking=True)
+        if msg.time_unix_usec:
+            set_system_time(msg.time_unix_usec)
+            break
 
 #-----------------------------------------------------------------------
 # ROS Subscriber callbacks
@@ -192,7 +199,7 @@ def mainloop(opts):
     unknown_message_types = {}
     
     # Initialize mavlink connection
-    mavlink_setup(opts.device, opts.baudrate)
+    mavlink_setup(opts.device, opts.baudrate, opts.skip_time_hack)
     
     # Try to run this loop at LOOP_RATE Hz
     r = rospy.Rate(LOOP_RATE)
@@ -263,6 +270,8 @@ def mainloop(opts):
                                          0, 0, 0, 0, 0, 99999 )
                 pub_gps_odom.publish(odom)
             elif msg_type == "GPS_RAW_INT":
+                True
+            elif msg_type == "GPS2_RAW":
                 True
             elif msg_type == "HEARTBEAT":
                 pub_status.publish(
@@ -338,6 +347,8 @@ if __name__ == '__main__':
                       help="serial device", default="auto-detect")
     parser.add_option("--baudrate", dest="baudrate", type='int',
                       help="serial baud rate", default=57600)
+    parser.add_option("--skip-time-hack", dest="skip_time_hack", 
+                      action="store_true", default=True)
     parser.add_option("--mavlinkdir", dest="mavlink_dir", 
                       help="path to mavlink folder", default=None)
     (opts, args) = parser.parse_args()
