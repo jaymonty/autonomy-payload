@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 #-----------------------------------------------------------------------
-# ROS-Network Bridge (UDP broadcast send/recv of GPS data)
+# ROS-Network Bridge (UDP send/recv of aircraft state and commands)
 # Mike Clement, 2014
 #
 # Some general info should go here!!
@@ -42,6 +42,8 @@ aircraft_id = None
 udp_sock = None
 udp_sock_local_ip = None
 udp_sock_bcast_ip = None
+udp_sock_gcs_ip = None
+udp_sock_arbiter_ip = None
 udp_sock_port = None
 
 #-----------------------------------------------------------------------
@@ -60,23 +62,38 @@ def log_warn(msg):
 #-----------------------------------------------------------------------
 # UDP socket functions
 
-def sock_init(device, port):
+def sock_init(device, port, gcs_ip=None, arbiter_ip=None):
     global udp_sock, udp_sock_local_ip, udp_sock_bcast_ip, udp_sock_port
     
     udp_sock_port = port
-    try:
-        udp_sock_local_ip = netifaces.ifaddresses(device)[2][0]['addr']
-        udp_sock_bcast_ip = netifaces.ifaddresses(device)[2][0]['broadcast']
-    except Exception:
-        print "Could not get address info for device %s!"%device
-        return False
+    udp_sock_gcs_ip = gcs_ip
+    udp_sock_arbiter_ip = arbiter_ip
+    
+    if device == 'lo':
+        udp_sock_local_ip = '127.0.0.1'
+        udp_sock_bcast_ip = '127.0.1.1'
+    else:
+        try:
+            udp_sock_local_ip = netifaces.ifaddresses(device)[2][0]['addr']
+            udp_sock_bcast_ip = netifaces.ifaddresses(device)[2][0]['broadcast']
+        except Exception:
+            log_warn("Could not get address info for device %s!"%device)
+            return False
     
     udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udp_sock.bind(('', udp_sock_port))
     udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    udp_sock.bind((udp_sock_local_ip, udp_sock_port))
     return True
 
-def sock_send(data):
+def sock_send_gcs(data):
+    global udp_sock, udp_sock_bcast_ip, udp_sock_port
+    udp_sock.sendto(data, (udp_sock_gcs_ip, udp_sock_port))
+
+def sock_send_arbiter(data):
+    global udp_sock, udp_sock_bcast_ip, udp_sock_port
+    udp_sock.sendto(data, (udp_sock_arbiter_ip, udp_sock_port))
+
+def sock_send_bcast(data):
     global udp_sock, udp_sock_bcast_ip, udp_sock_port
     udp_sock.sendto(data, (udp_sock_bcast_ip, udp_sock_port))
 
@@ -84,8 +101,8 @@ def sock_recv(max_size=1024):
     data = None
     try:
         data, (ip, port) = udp_sock.recvfrom(max_size, socket.MSG_DONTWAIT)
-        #if ip == udp_sock_local_ip:
-        #    return True
+        if ip == udp_sock_local_ip:
+            return False
     except Exception:
         return None
     return data
@@ -156,7 +173,7 @@ def sub_pose(msg):
                       msg.pose.pose.orientation.z,
                       msg.pose.pose.orientation.w)
     # Send out via network
-    sock_send(dgram)
+    sock_send_bcast(dgram)
 
 #-----------------------------------------------------------------------
 # Start-up
@@ -178,10 +195,13 @@ if __name__ == '__main__':
                       default="network/pose")
     (opts, args) = parser.parse_args()
     
-    # Initialize ROS and socket
+    # Initialize ROS
     rospy.init_node('net_aerial')
-    sock_init(opts.device, opts.port)
     aircraft_id = opts.acid
+    
+    # Initialize socket
+    if not sock_init(opts.device, opts.port):
+        sys.exit(-1)
     
     # Set up subscriber (ROS -> network)
     rospy.Subscriber(opts.sub, PoseWithCovarianceStamped, sub_pose)
@@ -196,10 +216,10 @@ if __name__ == '__main__':
         # Check for datagrams
         while (True):
             dgram = sock_recv()
-            if dgram == None:
-                break
-            elif dgram == True:
+            if dgram == False:  # Got packet, not for us
                 continue
+            if dgram == None:   # No packet to get
+                break
             
             # Convert into ROS message and publish
             acid, seq, secs, nsecs, lat, lon, alt, q_x, q_y, q_z, q_w \

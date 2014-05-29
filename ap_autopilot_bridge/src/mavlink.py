@@ -327,7 +327,7 @@ if __name__ == '__main__':
         else:
             print "Error: could not find a suitable device.\n"
             sys.exit(-1)
-    elif not os.path.exists(opts.device):
+    elif opts.device.find(':') == -1 and not os.path.exists(opts.device):
         print "Specified device doesn't exist.\n"
         sys.exit(-1)
     

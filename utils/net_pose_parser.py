@@ -11,10 +11,10 @@ import time
 # UDP socket and info
 udp_sock = None
 
-def sock_init(port):
+def sock_init(ip, port):
     global udp_sock
     udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udp_sock.bind(('', port))
+    udp_sock.bind((ip, port))
     return True
 
 def sock_recv(max_size=1024):
@@ -63,11 +63,13 @@ def pose_unpack(data):
 if __name__ == '__main__':
     # Grok args
     parser = OptionParser("pose_parser.py [options]")
+    parser.add_option("--ip", dest="ip", 
+                      help="Network address to listen on", default='')
     parser.add_option("--port", dest="port", type="int",
                       help="Network port to listen on", default=5554)
     (opts, args) = parser.parse_args()
     
-    if not sock_init(opts.port):
+    if not sock_init(opts.ip, opts.port):
         print "Sorry, couldn't start up the listening socket"
         sys.exit(1)
     
