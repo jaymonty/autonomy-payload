@@ -11,11 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 add_message_files(
   FILES
-  Attitude.msg
-  Heartbeat.msg
-  RawIMU.msg
-  RCRaw.msg
-  VFR_HUD.msg
+  Status.msg
 )
 
 generate_messages(

@@ -141,6 +141,13 @@ def mavlink_setup(device, baudrate, skip_time_hack):
             set_system_time(msg.time_unix_usec)
             break
 
+def mavlink_sensor_health(bits):
+    present = master.field('SYS_STATUS', 'onboard_control_sensors_enabled', 0)
+    present = ((present & bits) == bits)
+    healthy = master.field('SYS_STATUS', 'onboard_control_sensors_healthy', 0)
+    healthy = ((healthy & bits) == bits)
+    return (present and healthy)
+
 #-----------------------------------------------------------------------
 # ROS Subscriber callbacks
 
@@ -159,18 +166,17 @@ def sub_heartbeat(data):
         mavutil.mavlink.MAV_STATE_ACTIVE)
     log_rossub('heartbeat')
 
-#-----------------------------------------------------------------------
-# ROS services
-# Just examples from roscopter for now
-
-# These are examples left over from roscopter
-def set_arm(req):
-    master.arducopter_arm()
-    return []
-
-def set_disarm(req):
-    master.arducopter_disarm()
-    return []
+def sub_guided_goto(data):
+    if ap_last_custom_mode == -1:
+        return
+    self.master.mav.mission_item_send(self.target_system,
+        self.target_component,
+        0,
+        mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT,
+        mavutil.mavlink.MAV_CMD_NAV_WAYPOINT,
+        2, 0, 0, 0, 0, 0,
+        data.lat, data.lon, data.alt)
+    log_rossub('guided_goto')
 
 #-----------------------------------------------------------------------
 # Main Loop
@@ -183,20 +189,15 @@ def mainloop(opts):
     pub_gps = rospy.Publisher("%s/gps"%ROS_BASENAME, NavSatFix)
     pub_gps_odom = rospy.Publisher("%s/gps_odom"%ROS_BASENAME, Odometry)
     pub_imu = rospy.Publisher("%s/imu"%ROS_BASENAME, Imu)
-    pub_status = rospy.Publisher("%s/status"%ROS_BASENAME, apmsg.Heartbeat)
+    pub_status = rospy.Publisher("%s/status"%ROS_BASENAME, apmsg.Status)
     
     # Set up ROS subscribers
     rospy.Subscriber("safety/heartbeat", 
                      safemsg.Heartbeat, sub_heartbeat)
+    #rospy.Subscriber("%s/guided_goto"%ROS_BASENAME, apmsg.GuidedGoto, 
+    #                 sub_guided_goto)
         
-    # Set up ROS service callbacks
-    #arm_service = rospy.Service('arm', Empty, set_arm)
-    #disarm_service = rospy.Service('disarm', Empty, set_disarm)
-    
     #<<< START LOOP INTERNALS >>>
-    
-    # Store "unknown" message types so we only warn once
-    unknown_message_types = {}
     
     # Initialize mavlink connection
     mavlink_setup(opts.device, opts.baudrate, opts.skip_time_hack)
@@ -220,29 +221,14 @@ def mainloop(opts):
             if msg_type == "BAD_DATA":
                 continue
             
-            # If you *really* want to see what's coming out
-            if opts.spam_mavlink:
-                print msg_type + " @ " + str(msg._timestamp) + ":\n  " \
-                    + "\n  ".join("%s: %s" % (k, v) for (k, v) \
-                                  in sorted(vars(msg).items()) \
-                                  if not k.startswith('_'))
-            
             # Message cases (observed from 'current' PX4 firmware)
-            if msg_type == "AHRS":
-                True
-            elif msg_type == "AHRS2":
-                True
-            elif msg_type == "AIRSPEED_AUTOCAL":
-                True
-            elif msg_type == "ATTITUDE":
+            if msg_type == "ATTITUDE":
                 imu = Imu()
                 imu.header.stamp = project_ap_time()
                 imu.header.frame_id = 'base_footprint'
                 quat = quaternion_from_euler(msg.roll, msg.pitch, msg.yaw, 'sxyz')
                 imu.orientation = Quaternion(quat[0], quat[1], quat[2], quat[3])
                 pub_imu.publish(imu)
-            elif msg_type == "FENCE_STATUS":
-                True
             elif msg_type == "GLOBAL_POSITION_INT":
                 # Publish a NavSatFix message
                 fix = NavSatFix()
@@ -274,70 +260,39 @@ def mainloop(opts):
                                          0, 0, 0, 0, 99999, 0,
                                          0, 0, 0, 0, 0, 99999 )
                 pub_gps_odom.publish(odom)
-            elif msg_type == "GPS_RAW_INT":
-                True
-            elif msg_type == "GPS2_RAW":
-                True
             elif msg_type == "HEARTBEAT":
-                pub_status.publish(
-                    msg.base_mode & \
-                    mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED, 
-                    msg.base_mode & \
-                    mavutil.mavlink.MAV_MODE_FLAG_GUIDED_ENABLED, 
-                    mavutil.mode_string_v10(msg))
-            elif msg_type == "HWSTATUS":
-                True
-            elif msg_type == "MEMINFO":
-                True
-            elif msg_type == "MISSION_CURRENT":
-                True
-            elif msg_type == "NAV_CONTROLLER_OUTPUT":
-                True
-            elif msg_type == "PARAM_VALUE":
-                True
-            elif msg_type == "POWER_STATUS":
-                True
-            elif msg_type == "RADIO":
-                True
-            elif msg_type == "RADIO_STATUS":
-                True
-            elif msg_type == "RAW_IMU" :
-                True
-            elif msg_type == "RC_CHANNELS_RAW":
-                True
-            elif msg_type == "SCALED_IMU2":
-                True
-            elif msg_type == "SCALED_PRESSURE":
-                True
-            elif msg_type == "SENSOR_OFFSETS":
-                True
-            elif msg_type == "SERVO_OUTPUT_RAW":
-                True
-            elif msg_type == "STATUS_TEXT":
-                True
-            elif msg_type == "STATUSTEXT":
-                True
-            elif msg_type == "SYS_STATUS":
-                True
+                sta = apmsg.Status()
+                sta.header.stamp = project_ap_time()
+                sta.mode = master.flightmode
+                sta.armed = msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED
+                sta.ahrs_ok = mavlink_sensor_health(mavutil.mavlink.MAV_SYS_STATUS_AHRS)
+                sta.alt_rel = master.field('GLOBAL_POSITION_INT', 'relative_alt', 0)
+                sta.as_ok = mavlink_sensor_health(mavutil.mavlink.MAV_SYS_STATUS_SENSOR_DIFFERENTIAL_PRESSURE)
+                sta.as_read = master.field('VFR_HUD', 'airspeed', 0)
+                sta.gps_ok = (master.field('GPS_RAW_INT', 'fix_type', 0) == 3)
+                sta.gps_sats = master.field('GPS_RAW_INT', 'satellites_visible', 0)
+                sta.gps_eph = master.field('GPS_RAW_INT', 'eph', 0)
+                sta.ins_ok = mavlink_sensor_health(mavutil.mavlink.MAV_SYS_STATUS_SENSOR_3D_ACCEL | mavutil.mavlink.MAV_SYS_STATUS_SENSOR_3D_GYRO)
+                sta.mag_ok = mavlink_sensor_health(mavutil.mavlink.MAV_SYS_STATUS_SENSOR_3D_MAG)
+                sta.pwr_ok = not (master.field('POWER_STATUS', 'flags', 0) \
+                                & mavutil.mavlink.MAV_POWER_STATUS_CHANGED)
+                sta.pwr_batt_rem = master.field('SYS_STATUS', 'battery_remaining', -1)
+                sta.pwr_batt_vcc = master.field('SYS_STATUS', 'voltage_battery', -1)
+                pub_status.publish(sta)
             elif msg_type == "SYSTEM_TIME":
                 # Adjust known time offset from autopilot's
                 #set_ap_time(msg.time_unix_usec)
                 True
-            elif msg_type == "VFR_HUD":
-                True
-            elif msg_type == "WIND":
-                True
-            else:
-                # Report outliers so we can add them as new cases
-                log_dbug("Unhandled message type %s" % msg_type)
-                if msg_type not in unknown_message_types:
-                    # Always report to debugging, but only warn once
-                    unknown_message_types[msg_type] = True
-                    log_warn("Unhandled message type %s" % msg_type)
-                    continue
             
             # Report received message to console
             log_dbug("MAVLINK (%s)" % msg_type)
+            
+            # If you *really* want to see what's coming out
+            if opts.spam_mavlink:
+                print msg_type + " @ " + str(msg._timestamp) + ":\n  " \
+                    + "\n  ".join("%s: %s" % (k, v) for (k, v) \
+                                  in sorted(vars(msg).items()) \
+                                  if not k.startswith('_'))
             
         # Sleep so ROS subscribers and services can run
         r.sleep()
