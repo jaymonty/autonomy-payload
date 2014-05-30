@@ -15,5 +15,7 @@
     <param name="debug" value="false" />
   </node>
   <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" />
-  <node name="aerial" pkg="ap_network_bridge" type="aerial.py" output="screen" args="--id $(arg id) --device lo --sub estimator/odom_combined" />
+  <node name="aerial" pkg="ap_network_bridge" type="aerial.py" output="screen" args="--id $(arg id) --device lo" >
+    <remap from="aerial/send_pose" to="estimator/odom_combined" />
+  </node>
 </launch>

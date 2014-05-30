@@ -10,10 +10,12 @@
 # Import a bunch of libraries
 
 # Standard Python imports
-import struct
-import socket
+import ctypes
 import netifaces
 from optparse import OptionParser
+import socket
+import struct
+import sys
 
 # General ROS imports
 import rospy
@@ -21,6 +23,7 @@ from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 
 # Import ROS messages specific to this bridge
 from ap_network_bridge import msg as netmsg
+from ap_autopilot_bridge import msg as apmsg
 
 #-----------------------------------------------------------------------
 # Parameters
@@ -37,6 +40,7 @@ WARN_PRINT = False
 
 # Aircraft ID
 aircraft_id = None
+aircraft_bcast = 0xffff
 
 # UDP socket and info
 udp_sock = None
@@ -60,16 +64,19 @@ def log_warn(msg):
         print "**WARN** %s" % msg
 
 #-----------------------------------------------------------------------
-# UDP socket functions
+# UDP messaging functions
 
 def sock_init(device, port, gcs_ip=None, arbiter_ip=None):
-    global udp_sock, udp_sock_local_ip, udp_sock_bcast_ip, udp_sock_port
+    global udp_sock, udp_sock_local_ip, udp_sock_port
+    global udp_sock_gcs_ip, udp_sock_arbiter_ip, udp_sock_bcast_ip
     
     udp_sock_port = port
     udp_sock_gcs_ip = gcs_ip
     udp_sock_arbiter_ip = arbiter_ip
     
     if device == 'lo':
+        # Assumes 'lo' is only used for single-UAV testing with SITL,
+        # broadcast solution doesn't really work with multiple UAS
         udp_sock_local_ip = '127.0.0.1'
         udp_sock_bcast_ip = '127.0.1.1'
     else:
@@ -85,95 +92,128 @@ def sock_init(device, port, gcs_ip=None, arbiter_ip=None):
     udp_sock.bind((udp_sock_local_ip, udp_sock_port))
     return True
 
-def sock_send_gcs(data):
-    global udp_sock, udp_sock_bcast_ip, udp_sock_port
-    udp_sock.sendto(data, (udp_sock_gcs_ip, udp_sock_port))
+'''
+Packet header format (all fields in network byte order):
+ - (8b)  Message type
+ - (8b)  RESERVED
+ - (16b) Aircraft ID
+ - (32b) Seconds since Unix epoch
+ - (32b) Nanoseconds since last second
+'''
+HEADER_FORMAT = ">BBHLL"
+HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 
-def sock_send_arbiter(data):
-    global udp_sock, udp_sock_bcast_ip, udp_sock_port
-    udp_sock.sendto(data, (udp_sock_arbiter_ip, udp_sock_port))
+PACKET_TYPES = {  # Aircraft-originated messages
+                  0x00 : { 'fmt' : '>' },	# Flight system status
+                  0x01 : { 'fmt' : '>lllllll',	# Aircraft Pose
+                           'cb'  : None },
+                  # Ground-originated messages
+                  0x80 : { 'fmt' : '>',		# 
+                           'cb'  : None },
+                  0x81 : { 'fmt' : '>',		# 
+                           'cb'  : None },
+                  0x82 : { 'fmt' : '>',		# 
+                           'cb'  : None },
+                  0x83 : { 'fmt' : '>',		# 
+                           'cb'  : None },
+                  0x84 : { 'fmt' : '>',		# 
+                           'cb'  : None },
+                  0x85 : { 'fmt' : '>',		# 
+                           'cb'  : None },
+                  0xFF : { 'fmt' : '>',		# 
+                           'cb'  : None } }
 
-def sock_send_bcast(data):
-    global udp_sock, udp_sock_bcast_ip, udp_sock_port
-    udp_sock.sendto(data, (udp_sock_bcast_ip, udp_sock_port))
+# Compute size of payload, and cache it for future lookup
+def payload_size(msg_type):
+    if 'sz' not in PACKET_TYPES[msg_type]:
+        PACKET_TYPES[msg_type]['sz'] = \
+            struct.calcsize(PACKET_TYPES[msg_type]['fmt'])
+    return PACKET_TYPES[msg_type]['sz']
 
-def sock_recv(max_size=1024):
-    data = None
+def send(ip, msg_type, msg_id, msg_secs, msg_nsecs, pload_fields):
+    global udp_sock, udp_sock_port
+    
+    if msg_type not in PACKET_TYPES:
+        return False
+    
     try:
-        data, (ip, port) = udp_sock.recvfrom(max_size, socket.MSG_DONTWAIT)
+        pload_size = payload_size(msg_type)
+        msg = struct.pack(HEADER_FORMAT,
+                          msg_type, 0x00, msg_id, msg_secs, msg_nsecs)
+        if pload_size and pload_fields:
+            msg = msg + struct.pack(PACKET_TYPES[msg_type]['fmt'],
+                                    *pload_fields)
+        
+        return udp_sock.sendto(msg, (ip, udp_sock_port))
+    except Exception as ex:
+        log_warn(ex.args)
+        return False
+
+def recv():
+    global udp_sock, udp_sock_local_ip
+    global aircraft_id, aircraft_bcast
+    
+    # Attempt to receive a packet
+    message = None
+    try:
+        message, (ip, port) = udp_sock.recvfrom(1024, socket.MSG_DONTWAIT)
         if ip == udp_sock_local_ip:
             return False
-    except Exception:
+    except Exception as ex:
         return None
-    return data
-
-#-----------------------------------------------------------------------
-# Byte packing and unpacking
-
-PACKET_FORMAT = ">HHLLLlllllll"
-'''
-Packet fields (in network byte order):
- - (16b) Aircraft ID (1..65535)
- - (16b) RESERVED
- - (32b) Message sequence number (1..4Bil)
- - (32b) Seconds since epoch
- - (32b) Nanoseconds since last second
- - (32b) Latitude (deg) * 1e07 (truncated)
- - (32b) Longitude (deg) * 1e07 (truncated)
- - (32b) Altitude (m) * 1e03 (truncated)
- - (32b) Quat X (?) * 1e09 (truncated)
- - (32b) Quat Y (?) * 1e09 (truncated)
- - (32b) Quat Z (?) * 1e09 (truncated)
- - (32b) Quat W (?) * 1e09 (truncated)
-'''
-
-def pose_pack(acid, seq, secs, nsecs, lat, lon, alt, q_x, q_y, q_z, q_w):
-    return struct.pack(PACKET_FORMAT, 
-                       acid, 
-                       0x0000,
-                       seq,
-                       secs,
-                       nsecs,
-                       int(lat * 1e07),
-                       int(lon * 1e07),
-                       int(alt * 1e03),
-                       int(q_x * 1e09),
-                       int(q_y * 1e09),
-                       int(q_z * 1e09),
-                       int(q_w * 1e09))
-
-def pose_unpack(data):
-    acid, unused1, seq, secs, nsecs, lat, lon, alt, q_x, q_y, q_z, q_w \
-        = struct.unpack(PACKET_FORMAT, data)
-    lat = float(lat) / 1e07
-    lon = float(lon) / 1e07
-    alt = float(alt) / 1e03
-    q_x = float(q_x) / 1e09
-    q_y = float(q_y) / 1e09
-    q_z = float(q_z) / 1e09
-    q_w = float(q_w) / 1e09
-    return acid, seq, secs, nsecs, lat, lon, alt, q_x, q_y, q_z, q_w
+    if not message:
+        return None
+    
+    msg_type, _unused, msg_id, msg_secs, msg_nsecs = \
+        struct.unpack_from(HEADER_FORMAT, message, 0)
+    
+    # Is it a recognized message type?
+    if msg_type not in PACKET_TYPES:
+        return False
+    # If ground-originated, is it meant for us?
+    if (msg_type >= 0x80) and (msg_id != aircraft_id) \
+                          and (msg_id != aircraft_bcast):
+        return False
+    
+    # Create tuples of headers, and fields if any
+    headers = (msg_type, msg_id, msg_secs, msg_nsecs)
+    pload_size = payload_size(msg_type)
+    fields = None
+    if pload_size and (len(message) == (HEADER_SIZE + pload_size)):
+        fields = struct.unpack_from(PACKET_TYPES[msg_type]['fmt'],
+                                    message,
+                                    HEADER_SIZE)
+    
+    # If a callback exists, use it; otherwise, return tuples
+    if 'cb' in PACKET_TYPES[msg_type] and PACKET_TYPES[msg_type]['cb']:
+        return PACKET_TYPES[msg_type]['cb'](headers, fields)
+    return (headers, fields)
 
 #-----------------------------------------------------------------------
 # Subscribers (ROS -> Network)
 
+def sub_status(msg):
+    global aircraft_id
+    global udp_sock_gcs_ip
+    
+    True
+
 def sub_pose(msg):
     global aircraft_id
+    global udp_sock_bcast_ip
     
-    # Package contents into a datagram
-    dgram = pose_pack(aircraft_id, 
-                      msg.header.seq, 
-                      msg.header.stamp.secs,
-                      msg.header.stamp.nsecs,
-                      msg.pose.pose.position.x, 
-                      msg.pose.pose.position.y, 
-                      msg.pose.pose.position.z, 
-                      msg.pose.pose.orientation.x,
-                      msg.pose.pose.orientation.y,
-                      msg.pose.pose.orientation.z,
-                      msg.pose.pose.orientation.w)
-    # Send out via network
-    sock_send_bcast(dgram)
+    send(udp_sock_bcast_ip,
+         0x01,
+         aircraft_id, 
+         msg.header.stamp.secs,
+         msg.header.stamp.nsecs,
+         (int(msg.pose.pose.position.x * 1e07), 
+          int(msg.pose.pose.position.y * 1e07), 
+          int(msg.pose.pose.position.z * 1e03), 
+          int(msg.pose.pose.orientation.x * 1e09),
+          int(msg.pose.pose.orientation.y * 1e09),
+          int(msg.pose.pose.orientation.z * 1e09),
+          int(msg.pose.pose.orientation.w * 1e09)))
 
 #-----------------------------------------------------------------------
 # Start-up
@@ -187,12 +227,6 @@ if __name__ == '__main__':
                       help="Network device to use", default="wlan0")
     parser.add_option("--port", dest="port", type='int',
                       help="UDP port", default=5554)
-    parser.add_option("--sub", dest="sub",
-                      help="ROS topic to subscribe to", 
-                      default="estimator/odom_combined")
-    parser.add_option("--pub", dest="pub",
-                      help="ROS topic to publish to", 
-                      default="network/pose")
     (opts, args) = parser.parse_args()
     
     # Initialize ROS
@@ -203,11 +237,15 @@ if __name__ == '__main__':
     if not sock_init(opts.device, opts.port):
         sys.exit(-1)
     
-    # Set up subscriber (ROS -> network)
-    rospy.Subscriber(opts.sub, PoseWithCovarianceStamped, sub_pose)
+    # Set up subscribers (ROS -> network)
+    rospy.Subscriber("%s/send_status"%ROS_BASENAME, 
+                     apmsg.Status, sub_status)
+    rospy.Subscriber("%s/send_pose"%ROS_BASENAME, 
+                     PoseWithCovarianceStamped, sub_pose)
     
-    # Set up publisher (network -> ROS)
-    pub = rospy.Publisher(opts.pub, netmsg.NetPoseStamped)
+    # Set up publishers (network -> ROS)
+    pub_pose = rospy.Publisher("%s/recv_pose"%ROS_BASENAME, 
+                               netmsg.NetPoseStamped)
     
     # Loop , checking for incoming datagrams and sleeping
     r = rospy.Rate(10)
@@ -215,31 +253,51 @@ if __name__ == '__main__':
     while not rospy.is_shutdown():
         # Check for datagrams
         while (True):
-            dgram = sock_recv()
-            if dgram == False:  # Got packet, not for us
+            message = recv()
+            if message == False:  # Got packet, not for us
                 continue
-            if dgram == None:   # No packet to get
+            if message == None:   # No packet to get
                 break
             
-            # Convert into ROS message and publish
-            acid, seq, secs, nsecs, lat, lon, alt, q_x, q_y, q_z, q_w \
-                = pose_unpack(dgram)
-            msg = netmsg.NetPoseStamped()
-            msg.sender_id = acid 
-            msg.pose.header.stamp.secs = secs
-            msg.pose.header.stamp.nsecs = nsecs
-            msg.pose.header.seq = seq 
-            msg.pose.pose.position.x = lat 
-            msg.pose.pose.position.y = lon 
-            msg.pose.pose.position.z = alt 
-            msg.pose.pose.orientation.x = q_x
-            msg.pose.pose.orientation.y = q_y
-            msg.pose.pose.orientation.z = q_z
-            msg.pose.pose.orientation.w = q_w
-            pub.publish(msg)
+            ((msg_type, msg_id, msg_secs, msg_nsecs), fields) = message
+            
+            if msg_type == 0x01:
+                msg = netmsg.NetPoseStamped()
+                msg.sender_id = msg_id 
+                msg.pose.header.stamp.secs = msg_secs
+                msg.pose.header.stamp.nsecs = msg_nsecs
+                msg.pose.header.seq = 0
+                (lat, lon, alt, q_x, q_y, q_z, q_w) = fields
+                msg.pose.pose.position.x = lat / 1e07 
+                msg.pose.pose.position.y = lon / 1e07
+                msg.pose.pose.position.z = alt /1e03
+                msg.pose.pose.orientation.x = q_x / 1e09
+                msg.pose.pose.orientation.y = q_y / 1e09
+                msg.pose.pose.orientation.z = q_z / 1e09
+                msg.pose.pose.orientation.w = q_w / 1e09
+                pub_pose.publish(msg)
+                
+            elif msg_type == 0x80:
+                True
+                
+            elif msg_type == 0x81:
+                True
+                
+            elif msg_type == 0x82:
+                True
+                
+            elif msg_type == 0x83:
+                True
+                
+            elif msg_type == 0x84:
+                True
+                
+            elif msg_type == 0x85:
+                True
+                
+            elif msg_type == 0xFF:
+                True
         
         # No more messages, so sleep briefly
         r.sleep()
-
-
 
