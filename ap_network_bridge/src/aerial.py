@@ -238,7 +238,7 @@ if __name__ == '__main__':
         sys.exit(-1)
     
     # Set up subscribers (ROS -> network)
-    rospy.Subscriber("%s/send_status"%ROS_BASENAME, 
+    rospy.Subscriber("%s/send_flight_status"%ROS_BASENAME, 
                      apmsg.Status, sub_status)
     rospy.Subscriber("%s/send_pose"%ROS_BASENAME, 
                      PoseWithCovarianceStamped, sub_pose)
@@ -248,56 +248,56 @@ if __name__ == '__main__':
                                netmsg.NetPoseStamped)
     
     # Loop , checking for incoming datagrams and sleeping
+    # NOTE: If too many network messages come in, this loop
+    #  might not get around to sleeping (which means subscriber
+    #  callbacks won't run)
     r = rospy.Rate(10)
     print "\nStarting aerial comms loop...\n"
     while not rospy.is_shutdown():
-        # Check for datagrams
-        while (True):
-            message = recv()
-            if message == False:  # Got packet, not for us
-                continue
-            if message == None:   # No packet to get
-                break
-            
-            ((msg_type, msg_id, msg_secs, msg_nsecs), fields) = message
-            
-            if msg_type == 0x01:
-                msg = netmsg.NetPoseStamped()
-                msg.sender_id = msg_id 
-                msg.pose.header.stamp.secs = msg_secs
-                msg.pose.header.stamp.nsecs = msg_nsecs
-                msg.pose.header.seq = 0
-                (lat, lon, alt, q_x, q_y, q_z, q_w) = fields
-                msg.pose.pose.position.x = lat / 1e07 
-                msg.pose.pose.position.y = lon / 1e07
-                msg.pose.pose.position.z = alt /1e03
-                msg.pose.pose.orientation.x = q_x / 1e09
-                msg.pose.pose.orientation.y = q_y / 1e09
-                msg.pose.pose.orientation.z = q_z / 1e09
-                msg.pose.pose.orientation.w = q_w / 1e09
-                pub_pose.publish(msg)
-                
-            elif msg_type == 0x80:
-                True
-                
-            elif msg_type == 0x81:
-                True
-                
-            elif msg_type == 0x82:
-                True
-                
-            elif msg_type == 0x83:
-                True
-                
-            elif msg_type == 0x84:
-                True
-                
-            elif msg_type == 0x85:
-                True
-                
-            elif msg_type == 0xFF:
-                True
+        message = recv()
+        if message == False:  # Got packet, not for us or not valid
+            continue
+        if message == None:   # No packet to get, sleep a bit
+            r.sleep()
+            continue
         
-        # No more messages, so sleep briefly
-        r.sleep()
+        ((msg_type, msg_id, msg_secs, msg_nsecs), fields) = message
+        
+        if msg_type == 0x01:
+            msg = netmsg.NetPoseStamped()
+            msg.sender_id = msg_id 
+            msg.pose.header.stamp.secs = msg_secs
+            msg.pose.header.stamp.nsecs = msg_nsecs
+            msg.pose.header.seq = 0
+            (lat, lon, alt, q_x, q_y, q_z, q_w) = fields
+            msg.pose.pose.position.x = lat / 1e07 
+            msg.pose.pose.position.y = lon / 1e07
+            msg.pose.pose.position.z = alt /1e03
+            msg.pose.pose.orientation.x = q_x / 1e09
+            msg.pose.pose.orientation.y = q_y / 1e09
+            msg.pose.pose.orientation.z = q_z / 1e09
+            msg.pose.pose.orientation.w = q_w / 1e09
+            pub_pose.publish(msg)
+            
+        elif msg_type == 0x80:
+            True
+            
+        elif msg_type == 0x81:
+            True
+            
+        elif msg_type == 0x82:
+            True
+            
+        elif msg_type == 0x83:
+            True
+            
+        elif msg_type == 0x84:
+            True
+            
+        elif msg_type == 0x85:
+            True
+            
+        elif msg_type == 0xFF:
+            True
+        
 
