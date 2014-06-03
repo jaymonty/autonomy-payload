@@ -130,7 +130,6 @@ def recv(buffsize=1024):
     try:
         # Ignore packets we sent
         if ip == udp_sock_local_ip:
-            print "1"
             return False
         
         # Parse header
@@ -142,13 +141,11 @@ def recv(buffsize=1024):
         
         # Is it meant for us?
         if msg_dst not in [id_self, ID_BCAST_ALL]:
-            print "2"
             return False
         
         # Is it a valid type?
         message = acs_messages.generate_message_object(msg_type)
         if message is None:
-            print "3"
             return False
         
         # Populate message object with headers
