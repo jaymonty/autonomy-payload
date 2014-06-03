@@ -9,7 +9,7 @@
 import struct
 
 #-----------------------------------------------------------------------
-# Base class for all messages
+# Base Message class
 
 '''
 Packet header format (all fields in network byte order):
@@ -20,6 +20,13 @@ Packet header format (all fields in network byte order):
  - (32b) Seconds since Unix epoch
  - (32b) Nanoseconds since last second
 '''
+
+# Cache message sizes so we only calculate once each
+_msg_sizes = {}
+def _get_msg_size(fmt):
+    if fmt not in _msg_sizes:
+        _msg_sizes[fmt] = struct.calcsize(fmt)
+    return _msg_sizes[fmt]
 
 class Message():
     # Define header parameters
@@ -39,6 +46,7 @@ class Message():
         
         # Initialize payload component
         self._init_message()
+        self.msg_size = _get_msg_size(self.msg_fmt)
         
     def build_hdr_tuple(self):
         return (self.msg_type,
@@ -47,6 +55,14 @@ class Message():
                 self.msg_dst,
                 self.msg_secs,
                 self.msg_nsecs)
+    
+    def parse_hdr_tuple(self, fields):
+        self.msg_type  = fields[0]
+        # fields[1] is unused
+        self.msg_src   = fields[2]
+        self.msg_dst   = fields[3]
+        self.msg_secs  = fields[4]
+        self.msg_nsecs = fields[5]
 
 #-----------------------------------------------------------------------
 # Message definitions
@@ -61,16 +77,10 @@ def generate_message_object(msg_type):
        return None
 
 class Pose(Message):
-    # Define message type parameters
-    msg_type = 0x01
-    msg_fmt = '>lllllll'
-    msg_size = struct.calcsize(msg_fmt)
-    
     def _init_message(self):
-        # Set instance variables from class variables
-        self.msg_type = Pose.msg_type
-        self.msg_fmt = Pose.msg_fmt
-        self.msg_size = Pose.msg_size
+        # Define message type parameters
+        self.msg_type = 0x01
+        self.msg_fmt = '>lllllll'
         # Define message fields (setting to None helps raise Exceptions later)
         self.lat = None		# Decimal degrees (e.g. 35.123456)
         self.lon = None		# Decimal degrees (e.g. -120.123456)
