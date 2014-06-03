@@ -278,6 +278,7 @@ def mainloop(opts):
                                 & mavutil.mavlink.MAV_POWER_STATUS_CHANGED)
                 sta.pwr_batt_rem = master.field('SYS_STATUS', 'battery_remaining', -1)
                 sta.pwr_batt_vcc = master.field('SYS_STATUS', 'voltage_battery', -1)
+                sta.pwr_batt_cur = master.field('SYS_STATUS', 'current_battery', -1)
                 pub_status.publish(sta)
             elif msg_type == "SYSTEM_TIME":
                 # Adjust known time offset from autopilot's

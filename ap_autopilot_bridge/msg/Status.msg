@@ -14,4 +14,5 @@ bool    mag_ok
 bool    pwr_ok
 int16   pwr_batt_rem
 int16   pwr_batt_vcc
+int16   pwr_batt_cur
 
