@@ -9,7 +9,7 @@
 import struct
 
 #-----------------------------------------------------------------------
-# Base Message class
+# Base Message class and helper functions
 
 '''
 Packet header format (all fields in network byte order):
@@ -27,6 +27,16 @@ def _get_msg_size(fmt):
     if fmt not in _msg_sizes:
         _msg_sizes[fmt] = struct.calcsize(fmt)
     return _msg_sizes[fmt]
+
+# Convert a boolean into an all-0 or all-1 mask
+def _bool8(val):
+    if val:
+        return 0xff
+    return 0x00
+def _bool16(val):
+    if val:
+        return 0xffff
+    return 0x0000
 
 class Message():
     # Define header parameters
@@ -70,11 +80,112 @@ class Message():
 # Must add each new message type here, used for receiving/parsing
 def generate_message_object(msg_type):
     if msg_type == 0x00:
-        return None
+        return FlightStatus()
     elif msg_type == 0x01:
         return Pose()
     else:
        return None
+
+# Example message type follows; copy and modify to need
+'''
+class Example(Message):
+    def _init_message(self):
+        # Define message type parameters
+        self.msg_type = 0x34	# Must be unique
+        self.msg_fmt = '>HH'	# See Python struct package
+        # Define message fields (setting to None helps raise Exceptions later)
+        self.foo = None         # Decimal foo's (e.g., 123.456)
+        self.bar = None		# Integer bar's (e.g., 789)
+        
+    def build_tuple(self):
+        # Convert message elements into pack-able fields and form tuple
+        return (int(self.foo * 1e03),
+                int(self.bar))
+        
+    def parse_tuple(self, fields):
+        # Place unpacked but unconverted fields into message elements
+        self.foo = fields[0] / 1e03
+        self.bar = fields[1]
+'''
+
+class FlightStatus(Message):
+    def _init_message(self):
+        # Define message type parameters
+        self.msg_type = 0x00
+        self.msg_fmt = '>HBBHHhhHH'
+        # Define message fields (setting to None helps raise Exceptions later)
+        self.mode = None	# Aircraft guidance mode (0-15, see enum)
+        self.armed = None	# Boolean: Throttle Armed?
+        self.ok_ahrs = None	# Boolean: AHRS OK?
+        self.ok_as = None	# Boolean: Airspeed Sensor OK?
+        self.ok_gps = None	# Boolean: GPS sensor OK?
+        self.ok_ins = None	# Boolean: INS sensor OK?
+        self.ok_mag = None	# Boolean: Magnetometer OK?
+        self.ok_pwr = None	# Boolean: Power OK?
+        self.gps_sats = None	# Number of satellites (int, 0-255)
+        self.batt_rem = None	# Battery % remaining (int, 0-100)
+        self.batt_vcc = None	# Battery Voltage (int, mV)
+        self.batt_cur = None	# Battery Current (int, mA)
+        self.airspeed = None	# Airspeed (float, m/s)
+        self.alt_rel = None	# AGL (int, millimeters)
+        self.gps_hdop = None	# GPS HDOP (int, 0-65535)
+        # One blank 16-bit field to round to next word
+        
+    def build_tuple(self):
+        # Convert message elements into pack-able fields and form tuple
+        mode_and_flags = self.mode << 12 \
+                       | (0x0800 & _bool16(self.armed)) \
+                       | (0x0400 & _bool16(self.ok_ahrs)) \
+                       | (0x0200 & _bool16(self.ok_as)) \
+                       | (0x0100 & _bool16(self.ok_gps)) \
+                       | (0x0080 & _bool16(self.ok_ins)) \
+                       | (0x0040 & _bool16(self.ok_mag)) \
+                       | (0x0020 & _bool16(self.ok_pwr)) \
+                       & 0xffe0  # Zeroize unused bits
+        batt_rem = 255
+        if 0 <= self.batt_rem <= 100:  # Set invalid values to max unsigned
+            batt_rem = self.batt_rem
+        batt_vcc = 65535
+        if self.batt_vcc >= 0:
+            batt_vcc = self.batt_vcc * 1e02
+        batt_cur = 65535
+        if self.batt_cur >= 0:
+            batt_cur = self.batt_cur * 1e02
+        tupl = (mode_and_flags,
+                int(self.gps_sats),
+                int(batt_rem),
+                int(batt_vcc),
+                int(batt_cur),
+                int(self.airspeed * 1e02),  # TODO: Are these large enough?
+                int(self.alt_rel / 1e02),
+                int(self.gps_hdop),
+                0x0000)
+        #print tupl
+        return tupl
+        
+    def parse_tuple(self, fields):
+        # Place unpacked but unconverted fields into message elements
+        self.mode = fields[0] >> 12
+        self.armed = bool(fields[0] & 0x0800)
+        self.ok_ahrs = bool(fields[0] & 0x0400)
+        self.ok_as = bool(fields[0] & 0x0200)
+        self.ok_gps = bool(fields[0] & 0x0100)
+        self.ok_ins = bool(fields[0] & 0x0080)
+        self.ok_mag = bool(fields[0] & 0x0040)
+        self.ok_pwr = bool(fields[0] & 0x0020)
+        self.gps_sats = fields[1]
+        self.batt_rem = fields[2]
+        if self.batt_rem == 255:  # Account for invalid values
+            self.batt_rem = -1
+        self.batt_vcc = -1
+        if fields[3] != 65535:  # Account for invalid values
+            self.batt_vcc = fields[3] / 1e02
+        self.batt_cur = -1
+        if fields[4] != 65535:  # Account for invalid values
+            self.batt_cur = fields[4] / 1e02
+        self.airspeed = fields[5] / 1e02
+        self.alt_rel = fields[6] * 1e02
+        self.gps_hdop = fields[7]
 
 class Pose(Message):
     def _init_message(self):

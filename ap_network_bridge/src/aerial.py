@@ -41,8 +41,27 @@ ROS_BASENAME = 'aerial'
 #-----------------------------------------------------------------------
 # Subscribers (ROS -> Network)
 
-def sub_status(msg):
-    True
+def sub_flight_status(msg):
+    message = acs_messages.FlightStatus()
+    message.msg_dst = acs_socket.ID_BCAST_ALL  # TODO: Send to Ground only?
+    message.msg_secs = msg.header.stamp.secs
+    message.msg_nsecs = msg.header.stamp.nsecs
+    message.mode = msg.mode
+    message.armed = msg.armed
+    message.ok_ahrs = msg.ahrs_ok
+    message.ok_as = msg.as_ok
+    message.ok_gps = msg.gps_ok
+    message.ok_ins = msg.ins_ok
+    message.ok_mag = msg.mag_ok
+    message.ok_pwr = msg.pwr_ok
+    message.gps_sats = msg.gps_sats
+    message.batt_rem = msg.pwr_batt_rem
+    message.batt_vcc = msg.pwr_batt_vcc
+    message.batt_cur = msg.pwr_batt_cur
+    message.airspeed = msg.as_read
+    message.alt_rel = msg.alt_rel
+    message.gps_hdop = msg.gps_eph
+    acs_socket.send(message)
 
 def sub_pose(msg):
     message = acs_messages.Pose()
@@ -83,7 +102,7 @@ if __name__ == '__main__':
     
     # Set up subscribers (ROS -> network)
     rospy.Subscriber("%s/send_flight_status"%ROS_BASENAME, 
-                     apmsg.Status, sub_status)
+                     apmsg.Status, sub_flight_status)
     rospy.Subscriber("%s/send_pose"%ROS_BASENAME, 
                      PoseWithCovarianceStamped, sub_pose)
     

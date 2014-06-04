@@ -101,7 +101,8 @@ def send(message):
         
         # Send it
         return udp_sock.sendto(msg, (dst_ip, udp_sock_port))
-    except Exception:
+    except Exception as ex:
+        print ex.args
         return False
 
 # Return values:

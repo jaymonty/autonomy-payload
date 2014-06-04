@@ -1,6 +1,12 @@
-Header  header
+uint8 MODE_RALLY=0
+uint8 MODE_MANUAL=1
+uint8 MODE_FBW=2
+uint8 MODE_AUTO=3
+uint8 MODE_LAND=4
+uint8 MODE_UNKNOWN=15
 
-string  mode
+Header  header
+uint8   mode
 bool    armed
 bool    ahrs_ok
 int32   alt_rel

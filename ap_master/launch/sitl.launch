@@ -1,5 +1,7 @@
 <launch>
-  <node name="autopilot" pkg="ap_autopilot_bridge" type="mavlink.py" output="screen" args="--device tcp:127.0.0.1:5762" />
+  <node name="autopilot" pkg="ap_autopilot_bridge" type="mavlink.py" output="screen" args="--device tcp:127.0.0.1:5762" >
+    <remap from="autopilot/status" to="aerial/send_flight_status" />
+  </node>
   <node name="estimator" pkg="robot_pose_ekf" type="robot_pose_ekf" output="screen" >
     <remap from="imu_data" to="autopilot/imu" />
     <remap from="gps" to="autopilot/gps_odom" />

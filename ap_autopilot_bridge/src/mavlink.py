@@ -263,7 +263,18 @@ def mainloop(opts):
             elif msg_type == "HEARTBEAT":
                 sta = apmsg.Status()
                 sta.header.stamp = project_ap_time()
-                sta.mode = master.flightmode
+                if master.flightmode == 'RTL':
+                    sta.mode = sta.MODE_RALLY
+                elif master.flightmode == 'MANUAL':
+                    sta.mode = sta.MODE_MANUAL
+                elif master.flightmode == 'FBWA':
+                    sta.mode = sta.MODE_FBW
+                elif master.flightmode == 'AUTO':
+                    sta.mode = sta.MODE_AUTO
+                elif master.flightmode == '':  # TODO: Define condition for 'landing'
+                    sta.mode = sta.MODE_LAND
+                else:
+                    sta.mode = sta.MODE_UNKNOWN
                 sta.armed = msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED
                 sta.ahrs_ok = mavlink_sensor_health(mavutil.mavlink.MAV_SYS_STATUS_AHRS)
                 sta.alt_rel = master.field('GLOBAL_POSITION_INT', 'relative_alt', 0)
