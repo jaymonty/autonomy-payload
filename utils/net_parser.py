@@ -14,7 +14,7 @@ LIB_ACS_PATH = os.path.realpath(
                            "../lib/acs")))
 sys.path.insert(0, LIB_ACS_PATH)
 import acs_messages
-import acs_socket
+from acs_socket import Socket
 
 #-----------------------------------------------------------------------
 # Main code
@@ -30,12 +30,14 @@ if __name__ == '__main__':
                       action="store_true", default=False)
     (opts, args) = parser.parse_args()
     
-    if not acs_socket.init('lo', opts.port, 0xff, None, opts.ip, '127.0.0.1'):
+    try:
+        sock = Socket(0xff, opts.port, None, opts.ip, '127.0.0.1')
+    except Exception:
         print "Sorry, couldn't start up the listening socket"
         sys.exit(1)
     
     while True:
-        message = acs_socket.recv()
+        message = sock.recv()
         if message == None:  # No packets to receive, wait a bit
             time.sleep(0.1)
             continue
@@ -63,5 +65,5 @@ if __name__ == '__main__':
         
         # Debug code: repeat message (will take on false source ID)
         if opts.repeat:
-            acs_socket.send(message)
+            sock.send(message)
 

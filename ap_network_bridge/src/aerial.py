@@ -22,7 +22,7 @@ LIB_ACS_PATH = os.path.realpath(
                            "../../lib/acs")))
 sys.path.insert(0, LIB_ACS_PATH)
 import acs_messages
-import acs_socket
+from acs_socket import Socket
 
 # General ROS imports
 import rospy
@@ -39,11 +39,17 @@ from ap_autopilot_bridge import msg as apmsg
 ROS_BASENAME = 'aerial'
 
 #-----------------------------------------------------------------------
+# Ugly global data
+
+acs_sock = None  # socket
+
+#-----------------------------------------------------------------------
 # Subscribers (ROS -> Network)
 
 def sub_flight_status(msg):
+    global acs_sock
     message = acs_messages.FlightStatus()
-    message.msg_dst = acs_socket.ID_BCAST_ALL  # TODO: Send to Ground only?
+    message.msg_dst = Socket.ID_BCAST_ALL  # TODO: Send to ground
     message.msg_secs = msg.header.stamp.secs
     message.msg_nsecs = msg.header.stamp.nsecs
     message.mode = msg.mode
@@ -61,11 +67,12 @@ def sub_flight_status(msg):
     message.airspeed = msg.as_read
     message.alt_rel = msg.alt_rel
     message.gps_hdop = msg.gps_eph
-    acs_socket.send(message)
+    acs_sock.send(message)
 
 def sub_pose(msg):
+    global acs_sock
     message = acs_messages.Pose()
-    message.msg_dst = acs_socket.ID_BCAST_ALL
+    message.msg_dst = Socket.ID_BCAST_ALL
     message.msg_secs = msg.header.stamp.secs
     message.msg_nsecs = msg.header.stamp.nsecs
     message.lat = msg.pose.pose.position.x
@@ -75,7 +82,7 @@ def sub_pose(msg):
     message.q_y = msg.pose.pose.orientation.y
     message.q_z = msg.pose.pose.orientation.z
     message.q_w = msg.pose.pose.orientation.w
-    acs_socket.send(message)
+    acs_sock.send(message)
 
 #-----------------------------------------------------------------------
 # Start-up
@@ -95,8 +102,10 @@ if __name__ == '__main__':
     rospy.init_node('net_aerial')
     
     # Initialize socket
-    # TODO: Create dictionary of IDs->IPs in place of 'None'
-    if not acs_socket.init(opts.device, opts.port, opts.acid, None):
+    # TODO: Create dictionary of IDs->IPs 
+    try:
+        acs_sock = Socket(opts.acid, opts.port, opts.device, None, None, None)
+    except Exception:
         rospy.logfatal("Could not initialize network socket")
         sys.exit(-1)
     
@@ -117,7 +126,7 @@ if __name__ == '__main__':
     r = rospy.Rate(10)
     print "\nStarting aerial comms loop...\n"
     while not rospy.is_shutdown():
-        message = acs_socket.recv()
+        message = acs_sock.recv()
         if message == False:  # Got packet, not for us or not valid
             continue
         if message == None:   # No packet to get, sleep a bit
