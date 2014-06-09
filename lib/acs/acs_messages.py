@@ -129,7 +129,7 @@ class FlightStatus(Message):
         self.airspeed = None	# Airspeed (float, m/s)
         self.alt_rel = None	# AGL (int, millimeters)
         self.gps_hdop = None	# GPS HDOP (int, 0-65535)
-        # One blank 16-bit field to round to next word
+        self.mis_cur = None	# Current mission (waypoint) index (0-65535)
         
     def build_tuple(self):
         # Convert message elements into pack-able fields and form tuple
@@ -159,7 +159,7 @@ class FlightStatus(Message):
                 int(self.airspeed * 1e02),  # TODO: Are these large enough?
                 int(self.alt_rel / 1e02),
                 int(self.gps_hdop),
-                0x0000)
+                int(self.mis_cur))
         #print tupl
         return tupl
         
@@ -186,6 +186,7 @@ class FlightStatus(Message):
         self.airspeed = fields[5] / 1e02
         self.alt_rel = fields[6] * 1e02
         self.gps_hdop = fields[7]
+        self.mis_cur = fields[8]
 
 class Pose(Message):
     def _init_message(self):

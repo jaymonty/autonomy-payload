@@ -17,6 +17,7 @@ uint8   gps_sats
 uint16  gps_eph
 bool    ins_ok
 bool    mag_ok
+uint16  mis_cur
 bool    pwr_ok
 int16   pwr_batt_rem
 int16   pwr_batt_vcc

@@ -67,6 +67,7 @@ def sub_flight_status(msg):
     message.airspeed = msg.as_read
     message.alt_rel = msg.alt_rel
     message.gps_hdop = msg.gps_eph
+    message.mis_cur = msg.mis_cur
     acs_sock.send(message)
 
 def sub_pose(msg):

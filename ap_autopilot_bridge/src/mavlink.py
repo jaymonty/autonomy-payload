@@ -283,8 +283,10 @@ def mainloop(opts):
                 sta.gps_ok = (master.field('GPS_RAW_INT', 'fix_type', 0) == 3)
                 sta.gps_sats = master.field('GPS_RAW_INT', 'satellites_visible', 0)
                 sta.gps_eph = master.field('GPS_RAW_INT', 'eph', 0)
-                sta.ins_ok = mavlink_sensor_health(mavutil.mavlink.MAV_SYS_STATUS_SENSOR_3D_ACCEL | mavutil.mavlink.MAV_SYS_STATUS_SENSOR_3D_GYRO)
+                sta.ins_ok = mavlink_sensor_health(mavutil.mavlink.MAV_SYS_STATUS_SENSOR_3D_ACCEL | \
+                                                   mavutil.mavlink.MAV_SYS_STATUS_SENSOR_3D_GYRO)
                 sta.mag_ok = mavlink_sensor_health(mavutil.mavlink.MAV_SYS_STATUS_SENSOR_3D_MAG)
+                sta.mis_cur = master.field('MISSION_CURRENT', 'seq', 0)
                 sta.pwr_ok = not (master.field('POWER_STATUS', 'flags', 0) \
                                 & mavutil.mavlink.MAV_POWER_STATUS_CHANGED)
                 sta.pwr_batt_rem = master.field('SYS_STATUS', 'battery_remaining', -1)
