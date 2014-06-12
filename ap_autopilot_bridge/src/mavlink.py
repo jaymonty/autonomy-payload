@@ -247,11 +247,11 @@ def sub_waypoint_goto(data):
 # Main Loop
 
 def mainloop(opts):
-    # Initialize mavlink connection
-    mavlink_setup(opts.device, opts.baudrate, opts.skip_time_hack)
-    
     # Initialize ROS
     rospy.init_node(ROS_BASENAME)
+    
+    # Initialize mavlink connection
+    mavlink_setup(opts.device, opts.baudrate, opts.skip_time_hack)
     
     # Set up ROS publishers
     pub_gps = rospy.Publisher("%s/gps"%ROS_BASENAME, NavSatFix)
