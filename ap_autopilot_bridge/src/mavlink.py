@@ -26,7 +26,7 @@ from sensor_msgs.msg import NavSatStatus
 from sensor_msgs.msg import Imu
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Quaternion
-import std_msgs.msg 
+import std_msgs.msg as stdmsg
 from tf.transformations import quaternion_from_euler
 
 # Import ROS messages specific to this bridge
@@ -54,6 +54,13 @@ LOOP_RATE = MESSAGE_RATE
 
 # Contains the mavlink 'master' object
 master = None
+
+# Mappings between MAVLink mode strings and our own enumeration
+mode_mav_to_enum = { 'RTL' : apmsg.Status.MODE_RALLY,
+                     'MANUAL' : apmsg.Status.MODE_MANUAL,
+                     'FBWA' : apmsg.Status.MODE_FBW,
+                     'AUTO' : apmsg.Status.MODE_AUTO }
+mode_enum_to_mav = { v:k for (k,v) in mode_mav_to_enum.items() }
 
 # Last known custom_mode from AP (from last mavlink heartbeat msg)
 ap_last_custom_mode = -1
@@ -154,10 +161,9 @@ def mavlink_sensor_health(bits):
 def log_rossub(data):
     log_dbug("ROSSUB (%s)" % data)
 
-# Send an AP heartbeat whenever a heartbeast message comes in
+# Purpose: Send heartbeat to AP when heartbeat arrives
+# Fields: None
 def sub_heartbeat(data):
-    if ap_last_custom_mode == -1:
-        return
     master.mav.heartbeat_send(
         mavutil.mavlink.MAV_TYPE_ONBOARD_CONTROLLER, 
         mavutil.mavlink.MAV_TYPE_GENERIC, 
@@ -166,23 +172,85 @@ def sub_heartbeat(data):
         mavutil.mavlink.MAV_STATE_ACTIVE)
     log_rossub('heartbeat')
 
+# Purpose: (Dis)arm throttle
+# Fields: 
+# .data - True arms, False disarms
+def sub_arm_throttle(data):
+    if data.data:
+        master.arducopter_arm()
+    else:
+        master.arducopter_disarm()
+    log_rossub('arm_throttle')
+
+# Purpose: Changes autopilot mode
+# (must be in mode_mapping dictionary)
+# Fields: 
+# .data - index from mode_mapping
+def sub_change_mode(data):
+    log_rossub('change_mode')
+    mav_map = master.mode_mapping()
+    if data.data in mode_enum_to_mav and \
+       mode_enum_to_mav[data.data] in mav_map:
+        master.set_mode(mav_map[mode_enum_to_mav[data.data]])
+    else:
+        log_warn("sub_change_mode: invalid mode %u"%data.data)
+
+# Purpose: Initiates landing
+# Fields: None
+def sub_landing(data):
+    log_rossub('landing')
+    master.mav.command_long_send(
+        master.target_system,
+        master.target_component,
+        mavutil.mavlink.MAV_CMD_DO_RALLY_LAND,
+        0, 0, 0, 0, 0, 0, 0, 0)
+
+# Purpose: Aborts landing
+# Fields: 
+# .data - Altitude to return to (meters, integer)
+def sub_landing_abort(data):
+    log_rossub('landing_abort')
+    # TODO: Do we need to repeat until we see RTL again??
+    # If so, might need a "pending actions" section in mainloop()
+    master.mav.command_long_send(
+        master.target_system,
+        master.target_component,
+        mavutil.mavlink.MAV_CMD_DO_GO_AROUND,
+        0,
+        data.data, 
+        0, 0, 0, 0, 0, 0)
+
+# Purpose: Go to a lat/lon/alt in GUIDED mode
+# Fields: 
+# .lat - Decimal degrees
+# .lon - Decimal degrees
+# .alt - Decimal meters **AGL wrt home**
 def sub_guided_goto(data):
-    if ap_last_custom_mode == -1:
-        return
-    self.master.mav.mission_item_send(self.target_system,
-        self.target_component,
+    log_rossub('guided_goto')
+    master.mav.mission_item_send(
+        master.target_system,
+        master.target_component,
         0,
         mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT,
         mavutil.mavlink.MAV_CMD_NAV_WAYPOINT,
         2, 0, 0, 0, 0, 0,
         data.lat, data.lon, data.alt)
-    log_rossub('guided_goto')
+
+# Purpose: Go to a specified waypoint by index/sequence number
+# Fields: 
+# .data - Must be an index in current mission set
+def sub_waypoint_goto(data):
+    log_rossub('waypoint_goto')
+    master.waypoint_set_current_send(data.data)
 
 #-----------------------------------------------------------------------
 # Main Loop
 
 def mainloop(opts):
-    # ROS initialization
+    # Initialize mavlink connection
+    mavlink_setup(opts.device, opts.baudrate, opts.skip_time_hack)
+    
+    # Initialize ROS
     rospy.init_node('mavlink')
     
     # Set up ROS publishers
@@ -194,14 +262,22 @@ def mainloop(opts):
     # Set up ROS subscribers
     rospy.Subscriber("safety/heartbeat", 
                      safemsg.Heartbeat, sub_heartbeat)
+    rospy.Subscriber("%s/arm"%ROS_BASENAME, 
+                     stdmsg.Bool, sub_arm_throttle)
+    rospy.Subscriber("%s/mode"%ROS_BASENAME, 
+                     stdmsg.UInt8, sub_change_mode)
+    rospy.Subscriber("%s/land"%ROS_BASENAME, 
+                     stdmsg.Empty, sub_landing)
+    rospy.Subscriber("%s/land_abort"%ROS_BASENAME, 
+                     stdmsg.UInt16, sub_landing_abort)
+    rospy.Subscriber("%s/guided_goto"%ROS_BASENAME, 
+                     apmsg.LLA, sub_guided_goto)
+    rospy.Subscriber("%s/waypoint_goto"%ROS_BASENAME, 
+                     stdmsg.UInt16, sub_waypoint_goto)
+    
     #rospy.Subscriber("%s/guided_goto"%ROS_BASENAME, apmsg.GuidedGoto, 
     #                 sub_guided_goto)
         
-    #<<< START LOOP INTERNALS >>>
-    
-    # Initialize mavlink connection
-    mavlink_setup(opts.device, opts.baudrate, opts.skip_time_hack)
-    
     # Try to run this loop at LOOP_RATE Hz
     r = rospy.Rate(LOOP_RATE)
     print "\nStarting autopilot loop...\n"
@@ -263,18 +339,10 @@ def mainloop(opts):
             elif msg_type == "HEARTBEAT":
                 sta = apmsg.Status()
                 sta.header.stamp = project_ap_time()
-                if master.flightmode == 'RTL':
-                    sta.mode = sta.MODE_RALLY
-                elif master.flightmode == 'MANUAL':
-                    sta.mode = sta.MODE_MANUAL
-                elif master.flightmode == 'FBWA':
-                    sta.mode = sta.MODE_FBW
-                elif master.flightmode == 'AUTO':
-                    sta.mode = sta.MODE_AUTO
-                elif master.flightmode == '':  # TODO: Define condition for 'landing'
-                    sta.mode = sta.MODE_LAND
+                if master.flightmode in mode_mav_to_enum:
+                    sta.mode = mode_mav_to_enum[master.flightmode]
                 else:
-                    sta.mode = sta.MODE_UNKNOWN
+                    sta.mode = apmsg.Status.MODE_UNKNOWN
                 sta.armed = msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED
                 sta.ahrs_ok = mavlink_sensor_health(mavutil.mavlink.MAV_SYS_STATUS_AHRS)
                 sta.alt_rel = master.field('GLOBAL_POSITION_INT', 'relative_alt', 0)
