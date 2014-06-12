@@ -1,13 +1,14 @@
 <launch>
   <node name="autopilot" pkg="ap_autopilot_bridge" type="mavlink.py" output="screen" args="--device tcp:127.0.0.1:5762" >
-    <remap from="autopilot/status" to="aerial/send_flight_status" />
+    <remap from="autopilot/status" to="network/send_flight_status" />
+    <remap from="autopilot/heartbeat" to="safety/heartbeat" />
   </node>
-  <node name="estimator" pkg="robot_pose_ekf" type="robot_pose_ekf" output="screen" >
+  <node name="local_estim" pkg="robot_pose_ekf" type="robot_pose_ekf" output="screen" >
     <remap from="imu_data" to="autopilot/imu" />
     <remap from="gps" to="autopilot/gps_odom" />
-    <remap from="tf" to="estimator/tf" />
-    <remap from="tf_static" to="estimator/tf_static" />
-    <remap from="estimator/odom_combined" to="aerial/send_pose" />
+    <remap from="tf" to="local_estim/tf" />
+    <remap from="tf_static" to="local_estim/tf_static" />
+    <remap from="local_estim/odom_combined" to="network/send_pose" />
     <param name="odom_used" value="false" />
     <param name="imu_used" value="true" />
     <param name="gps_used" value="true" />
@@ -18,5 +19,5 @@
     <param name="debug" value="false" />
   </node>
   <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" />
-  <node name="aerial" pkg="ap_network_bridge" type="aerial.py" output="screen" args="--id $(arg id) --device lo" />
+  <node name="network" pkg="ap_network_bridge" type="aerial.py" output="screen" args="--id $(arg id) --device lo" />
 </launch>

@@ -251,7 +251,7 @@ def mainloop(opts):
     mavlink_setup(opts.device, opts.baudrate, opts.skip_time_hack)
     
     # Initialize ROS
-    rospy.init_node('mavlink')
+    rospy.init_node(ROS_BASENAME)
     
     # Set up ROS publishers
     pub_gps = rospy.Publisher("%s/gps"%ROS_BASENAME, NavSatFix)
@@ -260,7 +260,7 @@ def mainloop(opts):
     pub_status = rospy.Publisher("%s/status"%ROS_BASENAME, apmsg.Status)
     
     # Set up ROS subscribers
-    rospy.Subscriber("safety/heartbeat", 
+    rospy.Subscriber("%s/heartbeat"%ROS_BASENAME, 
                      safemsg.Heartbeat, sub_heartbeat)
     rospy.Subscriber("%s/arm"%ROS_BASENAME, 
                      stdmsg.Bool, sub_arm_throttle)

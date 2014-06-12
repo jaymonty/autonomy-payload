@@ -36,7 +36,7 @@ from ap_autopilot_bridge import msg as apmsg
 # Parameters
 
 # Base name for node topics and services
-ROS_BASENAME = 'aerial'
+ROS_BASENAME = 'network'
 
 #-----------------------------------------------------------------------
 # Ugly global data
@@ -100,7 +100,7 @@ if __name__ == '__main__':
     (opts, args) = parser.parse_args()
     
     # Initialize ROS
-    rospy.init_node('net_aerial')
+    rospy.init_node(ROS_BASENAME)
     
     # Initialize socket
     # TODO: Create dictionary of IDs->IPs 
