@@ -26,6 +26,7 @@ from acs_socket import Socket
 
 # General ROS imports
 import rospy
+import std_msgs
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 
 # Import ROS messages specific to this bridge
@@ -119,6 +120,18 @@ if __name__ == '__main__':
     # Set up publishers (network -> ROS)
     pub_pose = rospy.Publisher("%s/recv_pose"%ROS_BASENAME, 
                                netmsg.NetPoseStamped)
+    pub_arm = rospy.Publisher("%s/recv_arm"%ROS_BASENAME, 
+                              std_msgs.msg.Bool)
+    pub_mode = rospy.Publisher("%s/recv_mode"%ROS_BASENAME, 
+                               std_msgs.msg.UInt8)
+    pub_land = rospy.Publisher("%s/recv_land"%ROS_BASENAME, 
+                               std_msgs.msg.Empty)
+    pub_land_abort = rospy.Publisher("%s/recv_land_abort"%ROS_BASENAME, 
+                                     std_msgs.msg.UInt16)
+    pub_guided_goto = rospy.Publisher("%s/recv_guided_goto"%ROS_BASENAME, 
+                                      apmsg.LLA)
+    pub_waypoint_goto = rospy.Publisher("%s/recv_waypoint_goto"%ROS_BASENAME, 
+                                        std_msgs.msg.UInt16)
     
     # Loop , checking for incoming datagrams and sleeping
     # NOTE: If too many network messages come in, this loop
@@ -133,6 +146,8 @@ if __name__ == '__main__':
         if message == None:   # No packet to get, sleep a bit
             r.sleep()
             continue
+        
+        # Aircraft -> Aircraft messages
         
         if isinstance(message, acs_messages.Pose):
             msg = netmsg.NetPoseStamped()
@@ -149,7 +164,46 @@ if __name__ == '__main__':
             msg.pose.pose.orientation.w = message.q_w
             pub_pose.publish(msg)
             
-        elif False:  # Add other message types here
+        # Ground -> Aircraft messages
+        
+        elif isinstance(message, acs_messages.Heartbeat):
+            # Implement service call to safety node
             True
+            
+        elif isinstance(message, acs_messages.Arm):
+            msg = std_msgs.msg.Bool()
+            msg.data = message.enable
+            pub_arm.publish(msg)
+            
+        elif isinstance(message, acs_messages.Mode):
+            msg = std_msgs.msg.UInt8()
+            msg.data = message.mode
+            pub_arm.publish(msg)
+            
+        elif isinstance(message, acs_messages.Land):
+            msg = std_msgs.msg.Empty()
+            pub_arm.publish(msg)
+            
+        elif isinstance(message, acs_messages.LandAbort):
+            msg = std_msgs.msg.UInt16()
+            msg.data = message.alt
+            pub_arm.publish(msg)
+            
+        elif isinstance(message, acs_messages.GuidedGoto):
+            msg = apmsg.LLA()
+            msg.lat = message.lat
+            msg.lon = message.lon
+            msg.alt = message.alt
+            pub_arm.publish(msg)
+            
+        elif isinstance(message, acs_messages.WaypointGoto):
+            msg = std_msgs.msg.UInt16()
+            msg.data = message.index
+            pub_arm.publish(msg)
+            
+        elif isinstance(message, acs_messages.PayloadShutdown):
+            # Implement 'halt'
+            True
+            
         
 

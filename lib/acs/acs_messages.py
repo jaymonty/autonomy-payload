@@ -222,5 +222,148 @@ class Pose(Message):
         self.q_z = fields[5] / 1e09
         self.q_w = fields[6] / 1e09
 
+class Heartbeat(Message):
+    def _init_message(self):
+        # Define message type parameters
+        self.msg_type = 0x80
+        self.msg_fmt = '>BBH'
+        # Define message fields (setting to None helps raise Exceptions later)
+        self.enable = None         # Boolean
+        # 3 padding bytes = 0x00
 
+    def build_tuple(self):
+        # Convert message elements into pack-able fields and form tuple
+        return (int(self.enable),
+                0x00,
+                0x0000)
+
+    def parse_tuple(self, fields):
+        # Place unpacked but unconverted fields into message elements
+        self.enable = bool(fields[0]) 
+
+class Arm(Message):
+    def _init_message(self):
+        # Define message type parameters
+        self.msg_type = 0x81
+        self.msg_fmt = '>BBH'
+        # Define message fields (setting to None helps raise Exceptions later)
+        self.enable = None         # Boolean
+        # 3 padding bytes = 0x00
+        
+    def build_tuple(self):
+        # Convert message elements into pack-able fields and form tuple
+        return (int(self.enable),
+                0x00,
+                0x0000)
+        
+    def parse_tuple(self, fields):
+        # Place unpacked but unconverted fields into message elements
+        self.enable = bool(fields[0])
+
+class Mode(Message):
+    def _init_message(self):
+        # Define message type parameters
+        self.msg_type = 0x82
+        self.msg_fmt = '>BBH'
+        # Define message fields (setting to None helps raise Exceptions later)
+        self.mode = None         # Mode ID (0-15)
+        # 3 padding bytes = 0x00
+
+    def build_tuple(self):
+        # Convert message elements into pack-able fields and form tuple
+        return (int(self.mode),
+                0x00,
+                0x0000)
+
+    def parse_tuple(self, fields):
+        # Place unpacked but unconverted fields into message elements
+        self.mode = int(fields[0]) 
+
+class Land(Message):
+    def _init_message(self):
+        # Define message type parameters
+        self.msg_type = 0x83
+        self.msg_fmt = ''
+        # Define message fields (setting to None helps raise Exceptions later)
+
+    def build_tuple(self):
+        # Convert message elements into pack-able fields and form tuple
+        return None
+
+    def parse_tuple(self, fields):
+        # Place unpacked but unconverted fields into message elements
+        True
+
+class LandAbort(Message):
+    def _init_message(self):
+        # Define message type parameters
+        self.msg_type = 0x84
+        self.msg_fmt = '>hH'
+        # Define message fields (setting to None helps raise Exceptions later)
+        self.alt = None         # Waive-off altitude (approx +/-32000)
+        # 2 padding bytes = 0x0000
+
+    def build_tuple(self):
+        # Convert message elements into pack-able fields and form tuple
+        return (int(self.alt),
+                0x0000)
+
+    def parse_tuple(self, fields):
+        # Place unpacked but unconverted fields into message elements
+        self.alt = int(fields[0]) 
+
+class GuidedGoto(Message):
+    def _init_message(self):
+        # Define message type parameters
+        self.msg_type = 0x85
+        self.msg_fmt = '>lll'
+        # Define message fields (setting to None helps raise Exceptions later)
+        self.lat = None		# Decimal degrees (e.g. 35.123456)
+        self.lon = None		# Decimal degrees (e.g. -120.123456)
+        self.alt = None		# Decimal meters MSL (WGS84)
+
+    def build_tuple(self):
+        # Convert message elements into pack-able fields and form tuple
+        return (int(self.lat * 1e07),
+                int(self.lon * 1e07),
+                int(self.alt * 1e03))
+
+    def parse_tuple(self, fields):
+        # Place unpacked but unconverted fields into message elements
+        self.lat = fields[0] / 1e07
+        self.lon = fields[1] / 1e07
+        self.alt = fields[2] / 1e03
+
+class WaypointGoto(Message):
+    def _init_message(self):
+        # Define message type parameters
+        self.msg_type = 0x86
+        self.msg_fmt = '>HH'
+        # Define message fields (setting to None helps raise Exceptions later)
+        self.index = None         # Waypoint index (0-65535)
+        # 2 padding bytes = 0x0000
+
+    def build_tuple(self):
+        # Convert message elements into pack-able fields and form tuple
+        return (int(self.index),
+                0x0000)
+
+    def parse_tuple(self, fields):
+        # Place unpacked but unconverted fields into message elements
+        self.index = int(fields[0])
+
+class PayloadShutdown(Message):
+    def _init_message(self):
+        # Define message type parameters
+        self.msg_type = 0xFF
+        self.msg_fmt = ''
+        # Define message fields (setting to None helps raise Exceptions later)
+
+    def build_tuple(self):
+        # Convert message elements into pack-able fields and form tuple
+        return None
+
+    def parse_tuple(self, fields):
+        # Place unpacked but unconverted fields into message elements
+        True
 
