@@ -83,6 +83,22 @@ def generate_message_object(msg_type):
         return FlightStatus()
     elif msg_type == 0x01:
         return Pose()
+    elif msg_type == 0x80:
+        return Heartbeat()
+    elif msg_type == 0x81:
+        return Arm()
+    elif msg_type == 0x82:
+        return Mode()
+    elif msg_type == 0x83:
+        return Land()
+    elif msg_type == 0x84:
+        return LandAbort()
+    elif msg_type == 0x85:
+        return GuidedGoto()
+    elif msg_type == 0x86:
+        return WaypointGoto()
+    elif msg_type == 0xFF:
+        return PayloadShutdown()
     else:
        return None
 

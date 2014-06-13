@@ -42,9 +42,10 @@ if __name__ == '__main__':
             time.sleep(0.1)
             continue
         elif message == False:  # Packet received, but ignored
+            print "<Ignored packet>"
             continue
         
-        print "ID: %u > %u TYPE: %u TIME: %u.%09u" % \
+        print "ID: %u > %u TYPE: %02X TIME: %u.%09u" % \
             (message.msg_src, message.msg_dst, message.msg_type,
              message.msg_secs, message.msg_nsecs)
         
@@ -61,7 +62,7 @@ if __name__ == '__main__':
                  message.batt_cur, message.airspeed, message.alt_rel,
                  message.gps_hdop)
         else:
-            print "\t<Cannot decode this type>"
+            print "\t<I don't know how to decode this type>"
         
         # Debug code: repeat message (will take on false source ID)
         if opts.repeat:
