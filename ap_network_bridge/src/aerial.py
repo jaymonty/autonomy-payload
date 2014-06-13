@@ -32,6 +32,7 @@ from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 # Import ROS messages specific to this bridge
 from ap_network_bridge import msg as netmsg
 from ap_autopilot_bridge import msg as apmsg
+from ap_safety_monitor import srv as safesrv
 
 #-----------------------------------------------------------------------
 # Parameters
@@ -150,59 +151,96 @@ if __name__ == '__main__':
         # Aircraft -> Aircraft messages
         
         if isinstance(message, acs_messages.Pose):
-            msg = netmsg.NetPoseStamped()
-            msg.sender_id = message.msg_src
-            msg.pose.header.stamp.secs = message.msg_secs
-            msg.pose.header.stamp.nsecs = message.msg_nsecs
-            msg.pose.header.seq = 0
-            msg.pose.pose.position.x = message.lat
-            msg.pose.pose.position.y = message.lon
-            msg.pose.pose.position.z = message.alt
-            msg.pose.pose.orientation.x = message.q_x
-            msg.pose.pose.orientation.y = message.q_y
-            msg.pose.pose.orientation.z = message.q_z
-            msg.pose.pose.orientation.w = message.q_w
-            pub_pose.publish(msg)
+            try:
+                msg = netmsg.NetPoseStamped()
+                msg.sender_id = message.msg_src
+                msg.pose.header.stamp.secs = message.msg_secs
+                msg.pose.header.stamp.nsecs = message.msg_nsecs
+                msg.pose.header.seq = 0
+                msg.pose.pose.position.x = message.lat
+                msg.pose.pose.position.y = message.lon
+                msg.pose.pose.position.z = message.alt
+                msg.pose.pose.orientation.x = message.q_x
+                msg.pose.pose.orientation.y = message.q_y
+                msg.pose.pose.orientation.z = message.q_z
+                msg.pose.pose.orientation.w = message.q_w
+                pub_pose.publish(msg)
+            except:
+                rospy.logwarn("Error processing received Pose")
             
         # Ground -> Aircraft messages
         
         elif isinstance(message, acs_messages.Heartbeat):
-            # Implement service call to safety node
-            True
+            try:
+                srv = rospy.ServiceProxy('safety/set_health', 
+                                         safesrv.SetHealth)
+                srv(1 if message.enable else 0)
+                rospy.loginfo("Ground-to-air: Heartbeat")
+            except:
+                rospy.logwarn("Error processing command: Heartbeat")
             
         elif isinstance(message, acs_messages.Arm):
-            msg = std_msgs.msg.Bool()
-            msg.data = message.enable
-            pub_arm.publish(msg)
+            try:
+                msg = std_msgs.msg.Bool()
+                msg.data = message.enable
+                pub_arm.publish(msg)
+                rospy.loginfo("Ground-to-air: Arm")
+            except:
+                rospy.logwarn("Error processing command: Arm")
             
         elif isinstance(message, acs_messages.Mode):
-            msg = std_msgs.msg.UInt8()
-            msg.data = message.mode
-            pub_mode.publish(msg)
+            try:
+                msg = std_msgs.msg.UInt8()
+                msg.data = message.mode
+                pub_mode.publish(msg)
+                rospy.loginfo("Ground-to-air: Mode")
+            except:
+                rospy.logwarn("Error processing command: Mode")
             
         elif isinstance(message, acs_messages.Land):
-            msg = std_msgs.msg.Empty()
-            pub_land.publish(msg)
+            try:
+                msg = std_msgs.msg.Empty()
+                pub_land.publish(msg)
+                rospy.loginfo("Ground-to-air: Land")
+            except:
+                rospy.logwarn("Error processing command: Land")
             
         elif isinstance(message, acs_messages.LandAbort):
-            msg = std_msgs.msg.UInt16()
-            msg.data = message.alt
-            pub_land_abort.publish(msg)
+            try:
+                msg = std_msgs.msg.UInt16()
+                msg.data = message.alt
+                pub_land_abort.publish(msg)
+                rospy.loginfo("Ground-to-air: LandAbort")
+            except:
+                rospy.logwarn("Error processing command: LandAbort")
             
         elif isinstance(message, acs_messages.GuidedGoto):
-            msg = apmsg.LLA()
-            msg.lat = message.lat
-            msg.lon = message.lon
-            msg.alt = message.alt
-            pub_guided_goto.publish(msg)
+            try:
+                msg = apmsg.LLA()
+                msg.lat = message.lat
+                msg.lon = message.lon
+                msg.alt = message.alt
+                pub_guided_goto.publish(msg)
+                rospy.loginfo("Ground-to-air: GuidedGoto")
+            except:
+                rospy.logwarn("Error processing command: GuidedGoto")
             
         elif isinstance(message, acs_messages.WaypointGoto):
-            msg = std_msgs.msg.UInt16()
-            msg.data = message.index
-            pub_waypoint_goto.publish(msg)
+            try:
+                msg = std_msgs.msg.UInt16()
+                msg.data = message.index
+                pub_waypoint_goto.publish(msg)
+                rospy.loginfo("Ground-to-air: WaypointGoto")
+            except:
+                rospy.logwarn("Error processing command: WaypointGoto")
             
         elif isinstance(message, acs_messages.PayloadShutdown):
-            # Implement 'halt'
-            True
+            try:
+                res = os.system("halt")
+                if res != 0:
+                    raise Exception
+                rospy.loginfo("Ground-to-air: PayloadShutdown")
+            except:
+                rospy.logwarn("Error processing command: PayloadShutdown")
             
         
