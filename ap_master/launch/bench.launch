@@ -1,10 +1,10 @@
 <launch>
   <node name="autopilot" pkg="ap_autopilot_bridge" type="mavlink.py" output="screen" args="--skip-time-hack" />
-  <node name="estimator" pkg="robot_pose_ekf" type="robot_pose_ekf" output="screen" >
+  <node name="local_estim" pkg="robot_pose_ekf" type="robot_pose_ekf" output="screen" >
     <remap from="imu_data" to="autopilot/imu" />
     <remap from="gps" to="autopilot/gps_odom" />
-    <remap from="tf" to="estimator/tf" />
-    <remap from="tf_static" to="estimator/tf_static" />
+    <remap from="tf" to="local_estim/tf" />
+    <remap from="tf_static" to="local_estim/tf_static" />
     <param name="odom_used" value="false" />
     <param name="imu_used" value="true" />
     <param name="gps_used" value="true" />
@@ -14,8 +14,17 @@
     <param name="output_frame" value="odom_combined" />
     <param name="debug" value="false" />
   </node>
-  <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" />
-  <node name="aerial" pkg="ap_network_bridge" type="aerial.py" output="screen" args="--id $(arg id) --device wlan0" >
-    <remap from="aerial/send_pose" to="estimator/odom_combined" />
+  <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" >
+    <remap from="safety/heartbeat" to="autopilot/heartbeat" />
+  </node>
+  <node name="network" pkg="ap_network_bridge" type="aerial.py" output="screen" args="--id $(arg id) --device wlan0" >
+    <remap from="network/send_flight_status" to="autopilot/status" />
+    <remap from="network/send_pose" to="local_estim/odom_combined" />
+    <remap from="network/recv_arm" to="autopilot/arm" />
+    <remap from="network/recv_mode" to="autopilot/mode" />
+    <remap from="network/recv_land" to="autopilot/land" />
+    <remap from="network/recv_land_abort" to="autopilot/land_abort" />
+    <remap from="network/recv_guided_goto" to="autopilot/guided_goto" />
+    <remap from="network/recv_waypoint_goto" to="autopilot/waypoint_goto" />
   </node>
 </launch>
