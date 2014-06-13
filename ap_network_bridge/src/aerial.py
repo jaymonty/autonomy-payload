@@ -178,32 +178,31 @@ if __name__ == '__main__':
         elif isinstance(message, acs_messages.Mode):
             msg = std_msgs.msg.UInt8()
             msg.data = message.mode
-            pub_arm.publish(msg)
+            pub_mode.publish(msg)
             
         elif isinstance(message, acs_messages.Land):
             msg = std_msgs.msg.Empty()
-            pub_arm.publish(msg)
+            pub_land.publish(msg)
             
         elif isinstance(message, acs_messages.LandAbort):
             msg = std_msgs.msg.UInt16()
             msg.data = message.alt
-            pub_arm.publish(msg)
+            pub_land_abort.publish(msg)
             
         elif isinstance(message, acs_messages.GuidedGoto):
             msg = apmsg.LLA()
             msg.lat = message.lat
             msg.lon = message.lon
             msg.alt = message.alt
-            pub_arm.publish(msg)
+            pub_guided_goto.publish(msg)
             
         elif isinstance(message, acs_messages.WaypointGoto):
             msg = std_msgs.msg.UInt16()
             msg.data = message.index
-            pub_arm.publish(msg)
+            pub_waypoint_goto.publish(msg)
             
         elif isinstance(message, acs_messages.PayloadShutdown):
             # Implement 'halt'
             True
             
         
-
