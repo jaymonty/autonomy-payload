@@ -163,10 +163,10 @@ class FlightStatus(Message):
             batt_rem = self.batt_rem
         batt_vcc = 65535
         if self.batt_vcc >= 0:
-            batt_vcc = self.batt_vcc * 1e02
+            batt_vcc = self.batt_vcc
         batt_cur = 65535
         if self.batt_cur >= 0:
-            batt_cur = self.batt_cur * 1e02
+            batt_cur = self.batt_cur
         tupl = (mode_and_flags,
                 int(self.gps_sats),
                 int(batt_rem),
@@ -195,10 +195,10 @@ class FlightStatus(Message):
             self.batt_rem = -1
         self.batt_vcc = -1
         if fields[3] != 65535:  # Account for invalid values
-            self.batt_vcc = fields[3] / 1e02
+            self.batt_vcc = fields[3]
         self.batt_cur = -1
         if fields[4] != 65535:  # Account for invalid values
-            self.batt_cur = fields[4] / 1e02
+            self.batt_cur = fields[4]
         self.airspeed = fields[5] / 1e02
         self.alt_rel = fields[6] * 1e02
         self.gps_hdop = fields[7]
