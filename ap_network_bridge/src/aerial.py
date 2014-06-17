@@ -107,7 +107,12 @@ if __name__ == '__main__':
     # Initialize socket
     # TODO: Create dictionary of IDs->IPs 
     try:
-        acs_sock = Socket(opts.acid, opts.port, opts.device, None, None, None)
+        if opts.device == 'lo':
+            acs_sock = Socket(opts.acid, opts.port, None, 
+                              '127.0.0.1', '127.0.1.1', None)
+        else:
+            acs_sock = Socket(opts.acid, opts.port, opts.device, 
+                              None, None, None)
     except Exception:
         rospy.logfatal("Could not initialize network socket")
         sys.exit(-1)

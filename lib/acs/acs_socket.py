@@ -40,13 +40,9 @@ class Socket():
         # Attempt to look up network device addressing information
         if my_ip and bcast_ip:
             # Trust what the caller provides
+            # NOTE: Use this for loopback/SITL cases
             self.my_ip = my_ip
             self.bcast_ip = bcast_ip
-        elif device == 'lo':
-            # Assumes 'lo' is only used for single-UAV testing with SITL,
-            # NOTE: this solution doesn't really work with multiple UAS
-            self.my_ip = '127.0.0.1'
-            self.bcast_ip = '127.0.1.1'
         else:
             try:
                 self.my_ip = netifaces.ifaddresses(device)[2][0]['addr']
@@ -58,7 +54,13 @@ class Socket():
         try:
             self.udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            self.udp_sock.bind((self.my_ip, self.port))
+            if my_ip and bcast_ip:
+                # For now, assume that manual IP specification implies
+                #  an environment where we cannot bind to 0.0.0.0 (e.g. SITL)
+                # TODO: This is sure to bite us later on, but unclear where
+                self.udp_sock.bind((self.my_ip, self.port))
+            else:
+                self.udp_sock.bind(('', self.port))
         except Exception:
             raise Exception("Couldn't establish network socket")
 
