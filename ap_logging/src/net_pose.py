@@ -17,7 +17,7 @@ import rospy
 
 # Import ROS message and service types
 from sensor_msgs.msg import NavSatFix
-from ap_autopilot_bridge import msg as apmsg
+from autopilot_bridge import msg as apmsg
 from ap_network_bridge import msg as netmsg
 
 #-----------------------------------------------------------------------

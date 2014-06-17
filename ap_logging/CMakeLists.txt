@@ -4,7 +4,7 @@ project(ap_logging)
 find_package(catkin REQUIRED COMPONENTS
     rospy
     ap_network_bridge
-    ap_autopilot_bridge
+    autopilot_bridge
 )
 
 #add_message_files(

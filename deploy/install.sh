@@ -173,7 +173,17 @@ else
   git pull
 fi
 
-# Build the autonomy-payload
+# Clone or update the autopilot_bridge repo
+cd ~/acs_ros_ws/src/
+ls autopilot_bridge/ &> /dev/null
+if [ $? != 0 ]; then
+  git clone https://yoda.ern.nps.edu:18080/aerial-combat-swarms/autopilot_bridge.git
+else
+  cd autopilot_bridge
+  git pull
+fi
+
+# Build all workspace packages
 cd ~/acs_ros_ws/
 catkin_make
 

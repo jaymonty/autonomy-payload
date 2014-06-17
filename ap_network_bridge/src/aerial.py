@@ -31,7 +31,7 @@ from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 
 # Import ROS messages specific to this bridge
 from ap_network_bridge import msg as netmsg
-from ap_autopilot_bridge import msg as apmsg
+from autopilot_bridge import msg as apmsg
 from ap_safety_monitor import srv as safesrv
 
 #-----------------------------------------------------------------------
