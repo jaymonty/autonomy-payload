@@ -241,7 +241,7 @@ if __name__ == '__main__':
             
         elif isinstance(message, acs_messages.PayloadShutdown):
             try:
-                res = os.system("halt")
+                res = os.system("sudo halt")
                 if res != 0:
                     raise Exception
                 rospy.loginfo("Ground-to-air: PayloadShutdown")
