@@ -140,9 +140,12 @@ ls mavlink/ &> /dev/null
 if [ $? != 0 ]; then
   git clone https://github.com/mavlink/mavlink.git
   cd mavlink/pymavlink/
+  git remote add yoda https://yoda.ern.nps.edu:18080/aerial-combat-swarms/mavlink.git
+  git fetch yoda
 else
   cd mavlink/pymavlink/
-  git pull
+  git fetch origin
+  git fetch yoda
 fi
 
 python setup.py build install --user
@@ -170,7 +173,7 @@ if [ $? != 0 ]; then
   git clone https://yoda.ern.nps.edu:18080/aerial-combat-swarms/autonomy-payload.git
 else
   cd autonomy-payload
-  git pull
+  git fetch origin
 fi
 
 # Clone or update the autopilot_bridge repo
@@ -180,7 +183,7 @@ if [ $? != 0 ]; then
   git clone https://yoda.ern.nps.edu:18080/aerial-combat-swarms/autopilot_bridge.git
 else
   cd autopilot_bridge
-  git pull
+  git fetch origin
 fi
 
 # Build all workspace packages
@@ -218,6 +221,6 @@ sudo update-rc.d autonomy-payload defaults
 sudo apt-get clean
 
 echo ""
-echo "Congratulations, your system should be ready to use. Please reboot before running payload software, to make sure all settings have been applied."
+echo "Congratulations, your system has been updated. Please check that the correct branches of mavlink, autonomy-payload, and autopilot_bridge have been checked out. Then, reboot to automatically start the payload software."
 echo ""
 
