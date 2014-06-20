@@ -102,7 +102,7 @@ sudo update-locale LANG=C LANGUAGE=C LC_ALL=C LC_MESSAGES=POSIX
 ls /etc/apt/sources.list.d/ros-latest.list &> /dev/null
 if [ $? != 0 ]; then
   sudo sh -c 'echo "deb http://packages.namniart.com/repos/ros raring main" > /etc/apt/sources.list.d/ros-latest.list'
-  sudo wget http://packages.namniart.com/repos/namniart.key -O - | apt-key add -
+  sudo sh -c 'wget http://packages.namniart.com/repos/namniart.key -O - | apt-key add -'
 fi
 
 # Update package lists
