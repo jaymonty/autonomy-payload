@@ -6,15 +6,8 @@ import sys
 import time
 
 # Load in ACS libraries
-import os, inspect
-LIB_ACS_PATH = os.path.realpath(
-                   os.path.abspath(
-                       os.path.join(
-                           os.path.split(inspect.getfile(inspect.currentframe()))[0],
-                           "../lib/acs")))
-sys.path.insert(0, LIB_ACS_PATH)
-import acs_messages
-from acs_socket import Socket
+import acs.acs_messages as acs_messages
+from acs.acs_socket import Socket
 
 #-----------------------------------------------------------------------
 # Main code

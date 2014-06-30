@@ -1,1 +1,4 @@
 *.pyc
+lib/acs.egg-info/
+lib/build/
+lib/dist/
