@@ -176,6 +176,10 @@ else
   git fetch origin
 fi
 
+# Install ACS shared libs
+cd ~/acs_ros_ws/src/autonomy-payload/lib/
+python setup.py build install --user
+
 # Clone or update the autopilot_bridge repo
 cd ~/acs_ros_ws/src/
 ls autopilot_bridge/ &> /dev/null
