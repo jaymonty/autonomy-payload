@@ -1,5 +1,5 @@
 <launch>
-  <node name="autopilot" pkg="autopilot_bridge" type="mavlink.py" output="screen" args="--skip-time-hack" />
+  <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--module acs" />
   <node name="local_estim" pkg="robot_pose_ekf" type="robot_pose_ekf" output="screen" >
     <remap from="imu_data" to="autopilot/imu" />
     <remap from="gps" to="autopilot/gps_odom" />
@@ -21,7 +21,7 @@
     <remap from="network/send_flight_status" to="autopilot/status" />
     <remap from="network/send_pose" to="local_estim/odom_combined" />
     <remap from="network/recv_arm" to="autopilot/arm" />
-    <remap from="network/recv_mode" to="autopilot/mode" />
+    <remap from="network/recv_mode" to="autopilot/mode_num" />
     <remap from="network/recv_land" to="autopilot/land" />
     <remap from="network/recv_land_abort" to="autopilot/land_abort" />
     <remap from="network/recv_guided_goto" to="autopilot/guided_goto" />
