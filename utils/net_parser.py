@@ -14,7 +14,7 @@ from acs.acs_socket import Socket
 
 if __name__ == '__main__':
     # Grok args
-    parser = OptionParser("pose_parser.py [options]")
+    parser = OptionParser("net_parser.py [options]")
     parser.add_option("--device", dest="device", 
                       help="Network device to listen on", default='')
     parser.add_option("--port", dest="port", type="int",

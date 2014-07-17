@@ -97,6 +97,8 @@ def generate_message_object(msg_type):
         return GuidedGoto()
     elif msg_type == 0x86:
         return WaypointGoto()
+    elif msg_type == 0x87:
+        return SlaveSetup()
     elif msg_type == 0xFF:
         return PayloadShutdown()
     else:
@@ -367,6 +369,25 @@ class WaypointGoto(Message):
     def parse_tuple(self, fields):
         # Place unpacked but unconverted fields into message elements
         self.index = int(fields[0])
+
+class SlaveSetup(Message):
+    def _init_message(self):
+        # Define message type parameters
+        self.msg_type = 0x87
+        self.msg_fmt = '>B100p'
+        # Define message fields (setting to None helps raise Exceptions later)
+        self.enable = None         # Boolean
+        self.channel = None        # Pascal String
+
+    def build_tuple(self):
+        # Convert message elements into pack-able fields and form tuple
+        return (int(self.enable),
+                str(self.channel))
+
+    def parse_tuple(self, fields):
+        # Place unpacked but unconverted fields into message elements
+        self.enable = bool(fields[0]) 
+        self.channel = str(fields[1])
 
 class PayloadShutdown(Message):
     def _init_message(self):

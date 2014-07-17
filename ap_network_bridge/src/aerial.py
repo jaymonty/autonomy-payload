@@ -25,6 +25,7 @@ from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 # Import ROS messages specific to this bridge
 from ap_network_bridge import msg as netmsg
 from autopilot_bridge import msg as apmsg
+from autopilot_bridge import srv as apsrv
 from ap_safety_monitor import srv as safesrv
 
 #-----------------------------------------------------------------------
@@ -176,6 +177,15 @@ if __name__ == '__main__':
                 rospy.loginfo("Ground-to-air: Heartbeat")
             except:
                 rospy.logwarn("Error processing command: Heartbeat")
+            
+        elif isinstance(message, acs_messages.SlaveSetup):
+            try:
+                srv = rospy.ServiceProxy('autopilot/slave_setup', 
+                                         apsrv.SlaveSetup)
+                srv(message.enable, message.channel)
+                rospy.loginfo("Ground-to-air: SlaveSetup")
+            except Exception as ex:
+                rospy.logwarn("Error processing command: SlaveSetup")
             
         elif isinstance(message, acs_messages.Arm):
             try:
