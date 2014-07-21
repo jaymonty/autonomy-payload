@@ -64,6 +64,11 @@ def sub_flight_status(msg):
     message.alt_rel = msg.alt_rel
     message.gps_hdop = msg.gps_eph
     message.mis_cur = msg.mis_cur
+
+    # Also bring in flight-ready flag
+    message.ready = rospy.has_param("flight_ready") and \
+                    bool(rospy.get_param("flight_ready"))
+
     acs_sock.send(message)
 
 def sub_pose(msg):

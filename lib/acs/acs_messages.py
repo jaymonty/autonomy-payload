@@ -134,6 +134,7 @@ class FlightStatus(Message):
         # Define message fields (setting to None helps raise Exceptions later)
         self.mode = None	# Aircraft guidance mode (0-15, see enum)
         self.armed = None	# Boolean: Throttle Armed?
+        self.ready = None	# Boolean: Ready for flight? (user-settable)
         self.ok_ahrs = None	# Boolean: AHRS OK?
         self.ok_as = None	# Boolean: Airspeed Sensor OK?
         self.ok_gps = None	# Boolean: GPS sensor OK?
@@ -159,7 +160,8 @@ class FlightStatus(Message):
                        | (0x0080 & _bool16(self.ok_ins)) \
                        | (0x0040 & _bool16(self.ok_mag)) \
                        | (0x0020 & _bool16(self.ok_pwr)) \
-                       & 0xffe0  # Zeroize unused bits
+                       | (0x0010 & _bool16(self.ready)) \
+                       & 0xfff0  # Zeroize unused bits
         batt_rem = 255
         if 0 <= self.batt_rem <= 100:  # Set invalid values to max unsigned
             batt_rem = self.batt_rem
@@ -191,6 +193,7 @@ class FlightStatus(Message):
         self.ok_ins = bool(fields[0] & 0x0080)
         self.ok_mag = bool(fields[0] & 0x0040)
         self.ok_pwr = bool(fields[0] & 0x0020)
+        self.ready = bool(fields[0] & 0x0010)
         self.gps_sats = fields[1]
         self.batt_rem = fields[2]
         if self.batt_rem == 255:  # Account for invalid values

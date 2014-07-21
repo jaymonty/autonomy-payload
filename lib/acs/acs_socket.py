@@ -88,6 +88,7 @@ class Socket():
             # Send it, return number of bytes sent (per sendto())
             return self.udp_sock.sendto(msg, (dst_ip, self.port))
         except Exception as ex:
+            # TODO: Raise an exception, but make sure calling code catches it
             pass
 
     # Return values:
