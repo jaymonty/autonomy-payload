@@ -63,6 +63,8 @@ if __name__ == '__main__':
                  message.gps_hdop)
         else:
             print "\t<I don't know how to decode this type>"
+
+        sys.stdout.flush()
         
         # Debug code: repeat message (will take on false source ID)
         if opts.repeat:
