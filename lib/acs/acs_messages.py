@@ -53,6 +53,9 @@ class Message():
         self.msg_dst = None
         self.msg_secs = None
         self.msg_nsecs = None
+        # Add source IP and port, just for received messages (not serialized)
+        self.msg_src_ip = None
+        self.msg_src_port = None
         
         # Initialize payload component
         self._init_message()

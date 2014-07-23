@@ -137,6 +137,10 @@ class Socket():
             message.msg_dst = msg_dst
             message.msg_secs = msg_secs
             message.msg_nsecs = msg_nsecs
+
+            # Add source IP and port, just in case someone wants them
+            message.msg_src_ip = ip
+            message.msg_src_port = port
             
             # If message type has payload fields, parse and populate them
             if message.msg_size and (len(msg) == (message.hdr_size + message.msg_size)):
