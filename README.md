@@ -28,6 +28,8 @@ To install MAVLink for just your user (recommended):
 	cd mavlink/pymavlink/
 	python setup.py build install --user
 
+You must also install the autopilot\_bridge (mavbridge) separately from the autonomy-payload. See below for details.
+
 Optionally, you can set permissions for normal users to update the date and time, and disable NTP, so the companion computer time is set from autopilot GPS when the autopilot bridge node starts. This is a **good thing** if you plan to use the EKF state estimator:
 
 	sudo chmod u+s /bin/date
@@ -36,7 +38,7 @@ Optionally, you can set permissions for normal users to update the date and time
 
 ## Installation
 
-The steps we use for installation are below. Adjust the workspace directory name, etc, as you see fit.
+The approximate steps we use for installation are below. Adjust the workspace directory name, etc, as you see fit. Or see the installer scripts under the 'deploy' directory (HIGHLY RECOMMENDED).
 
 	mkdir -p ~/acs_ros_ws/src/
 	cd ~/acs_ros_ws/src/
@@ -46,9 +48,15 @@ The steps we use for installation are below. Adjust the workspace directory name
 	echo "source ~/acs_ros_ws/devel/setup.bash" >> ~/.bashrc
 	source ~/acs_ros_ws/devel/setup.bash
 	cd ~/acs_ros_ws/src/
-	git clone # Path to repository
+	git clone # Path to autonomy-payload repository
+	git clone # Path to autopilot_bridge repository
 	cd ~/acs_ros_ws/
 	catkin_make
+
+The comms library must be installed in a Python-referencable path:
+
+	cd ~/acs_ros_ws/src/autonomy-payload/lib/
+	python setup.py build install --user
 
 To run, edit autonomy-payload/ap_master/launch/master.launch as needed, then run:
 
