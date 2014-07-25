@@ -151,6 +151,6 @@ class Socket():
             
         # Any other unhandled conditions, pass them along
         except Exception as ex:
-            print ex.args
+            print(ex.args[0])
             pass
 
