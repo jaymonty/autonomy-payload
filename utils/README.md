@@ -1,5 +1,20 @@
 # Various utilities
 
+## flight\_tech.py
+
+Discovers online aircraft, displays in a color-coded list, and provides mechanism for establishing a slave MAVProxy connection through the payload to perform pre-flight.
+
+NOTE: VERY MUCH a work in progress
+
+Color coding:
+Red = Discovered but currently not broadcasting ("offline")
+Yellow = Discovered and online, but "not ready" (not pre-flighted)
+Green = Discovered, online, and ready for flight
+
+Example (assuming computer's wlan0 is on 192.168.2.x network):
+
+	python flight_tech.py --device wlan0
+
 ## net\_parser.py
 
 Prints received ACS network messages to the screen.
