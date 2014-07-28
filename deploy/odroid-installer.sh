@@ -177,8 +177,8 @@ else
   cd mavlink/pymavlink/
   git checkout .  # reset to state where we can update
   check_fail "mavlink git checkout ."
-  git checkout master
-  check_fail "mavlink git checkout master"
+  git checkout dev
+  check_fail "mavlink git checkout dev"
   git pull origin dev  # sync with branch above
   check_fail "mavlink git pull"
 fi
