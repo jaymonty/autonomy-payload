@@ -57,7 +57,7 @@ sudo update-locale LANG=C LANGUAGE=C LC_ALL=C LC_MESSAGES=POSIX
 # Add ROS repo
 ls /etc/apt/sources.list.d/ros-latest.list &> /dev/null
 if [ $? != 0 ]; then
-  sudo sh -c 'wget http://raw.githubusercontent.com/ros/rosdistro/master/ros.key -O - | apt-key add -'
+  sudo sh -c 'wget https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -O - | apt-key add -'
   check_fail "ROS apt-key"
   sudo sh -c 'echo "deb http://packages.ros.org/ros/ubuntu precise main" > /etc/apt/sources.list.d/ros-latest.list'
   check_fail "ROS apt source"
