@@ -252,20 +252,18 @@ class Heartbeat(Message):
     def _init_message(self):
         # Define message type parameters
         self.msg_type = 0x80
-        self.msg_fmt = '>BBH'
+        self.msg_fmt = '>L'
         # Define message fields (setting to None helps raise Exceptions later)
-        self.enable = None         # Boolean
+        self.counter = None         # User-definable counter (UInt32)
         # 3 padding bytes = 0x00
 
     def build_tuple(self):
         # Convert message elements into pack-able fields and form tuple
-        return (int(self.enable),
-                0x00,
-                0x0000)
+        return (int(self.counter),)
 
     def parse_tuple(self, fields):
         # Place unpacked but unconverted fields into message elements
-        self.enable = bool(fields[0]) 
+        self.counter = int(fields[0]) 
 
 class Arm(Message):
     def _init_message(self):

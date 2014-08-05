@@ -15,11 +15,12 @@
     <param name="debug" value="false" />
   </node>
   <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" >
-    <remap from="safety/heartbeat" to="autopilot/heartbeat" />
+    <remap from="safety/heartbeat" to="autopilot/heartbeat_onboard" />
   </node>
   <node name="network" pkg="ap_network_bridge" type="aerial.py" output="screen" args="--id $(arg id) --device wlan0" >
     <remap from="network/send_flight_status" to="autopilot/status" />
     <remap from="network/send_pose" to="local_estim/odom_combined" />
+    <remap from="network/recv_heart_ground" to="autopilot/heartbeat_ground" />
     <remap from="network/recv_arm" to="autopilot/arm" />
     <remap from="network/recv_mode" to="autopilot/mode_num" />
     <remap from="network/recv_land" to="autopilot/land" />

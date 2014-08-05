@@ -125,6 +125,8 @@ if __name__ == '__main__':
     # Set up publishers (network -> ROS)
     pub_pose = rospy.Publisher("%s/recv_pose"%ROS_BASENAME, 
                                netmsg.NetPoseStamped)
+    pub_heart_ground = rospy.Publisher("%s/recv_heart_ground"%ROS_BASENAME,
+                                apmsg.Heartbeat)
     pub_arm = rospy.Publisher("%s/recv_arm"%ROS_BASENAME, 
                               std_msgs.msg.Bool)
     pub_mode = rospy.Publisher("%s/recv_mode"%ROS_BASENAME, 
@@ -176,10 +178,10 @@ if __name__ == '__main__':
         
         elif isinstance(message, acs_messages.Heartbeat):
             try:
-                srv = rospy.ServiceProxy('safety/set_health', 
-                                         safesrv.SetHealth)
-                srv(1 if message.enable else 0)
-                rospy.loginfo("Ground-to-air: Heartbeat")
+                msg = apmsg.Heartbeat()
+                msg.counter = message.counter
+                pub_heart_ground.publish(msg)
+                #rospy.loginfo("Ground-to-air: Heartbeat")
             except:
                 rospy.logwarn("Error processing command: Heartbeat")
             
