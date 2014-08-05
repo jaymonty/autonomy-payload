@@ -183,15 +183,6 @@ if __name__ == '__main__':
             except:
                 rospy.logwarn("Error processing command: Heartbeat")
             
-        elif isinstance(message, acs_messages.SlaveSetup):
-            try:
-                srv = rospy.ServiceProxy('autopilot/slave_setup', 
-                                         apsrv.SlaveSetup)
-                srv(message.enable, message.channel)
-                rospy.loginfo("Ground-to-air: SlaveSetup")
-            except Exception as ex:
-                rospy.logwarn("Error processing command: SlaveSetup")
-            
         elif isinstance(message, acs_messages.Arm):
             try:
                 msg = std_msgs.msg.Bool()
@@ -246,6 +237,22 @@ if __name__ == '__main__':
                 rospy.loginfo("Ground-to-air: WaypointGoto")
             except:
                 rospy.logwarn("Error processing command: WaypointGoto")
+            
+        elif isinstance(message, acs_messages.SlaveSetup):
+            try:
+                srv = rospy.ServiceProxy('autopilot/slave_setup', 
+                                         apsrv.SlaveSetup)
+                srv(message.enable, message.channel)
+                rospy.loginfo("Ground-to-air: SlaveSetup")
+            except Exception as ex:
+                rospy.logwarn("Error processing command: SlaveSetup")
+            
+        elif isinstance(message, acs_messages.FlightReady):
+            try:
+                rospy.set_param("flight_ready", message.ready)
+                rospy.loginfo("Ground-to-air: FlightReady")
+            except Exception as ex:
+                rospy.logwarn("Error processing command: FlightReady")
             
         elif isinstance(message, acs_messages.PayloadShutdown):
             try:
