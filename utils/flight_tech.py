@@ -15,7 +15,7 @@ import time
 class UAVListWidget(QListWidget):
 
     # Some parameters for how things are displayed
-    OFFLINE_TIME = 10.0
+    OFFLINE_TIME = 5.0
     STATE_OFFLINE = QBrush(QColor('red'))
     STATE_NOT_READY= QBrush(QColor('yellow'))
     STATE_READY = QBrush(QColor('green'))
@@ -123,9 +123,17 @@ def toggle_aircraft(sock, uavid, localip, uavip, uavstat):
         return
     sock.send(fr)
 
+def shutdown_aircraft(sock, uavid, localip, uavip):
+    # Send a command to shut down the payload
+    ps = acs_messages.PayloadShutdown()
+    ps.msg_dst = int(uavid)
+    ps.msg_secs = 0
+    ps.msg_nsecs = 0
+    sock.send(ps)
+
 if __name__ == '__main__':
     # Grok args
-    parser = OptionParser("net_parser.py [options]")
+    parser = OptionParser("flight_tech.py [options]")
     parser.add_option("--device", dest="device",
                       help="Network device to listen on", default='')
     parser.add_option("--port", dest="port", type="int",
@@ -185,13 +193,28 @@ if __name__ == '__main__':
     layout.addWidget(btPrep)
 
     # Flight-ready button
-    btPrep = QPushButton("Toggle Flight Ready")
-    def do_prep():
+    btToggle = QPushButton("Toggle Flight Ready")
+    def do_toggle():
         (uavid, uavip, uavstat) = lst.currentItemInfo()
         if uavid > 0:
             toggle_aircraft(sock, uavid, my_ip, uavip, uavstat)
-    btPrep.clicked.connect(do_prep)
-    layout.addWidget(btPrep)
+    btToggle.clicked.connect(do_toggle)
+    layout.addWidget(btToggle)
+
+    # Shutdown button
+    btShutdown = QPushButton("Shut Down Payload")
+    def do_shutdown():
+        (uavid, uavip, uavstat) = lst.currentItemInfo()
+        if uavid <= 0:
+            return
+        mbx = QMessageBox()
+        mbx.setText("Shut down aircraft %d?" % int(uavid))
+        mbx.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        mbx.setDefaultButton(QMessageBox.No)
+        if mbx.exec_() == QMessageBox.Yes:
+            shutdown_aircraft(sock, uavid, my_ip, uavip)
+    btShutdown.clicked.connect(do_shutdown)
+    layout.addWidget(btShutdown)
 
     # Exit button
     btExit = QPushButton("Exit")
