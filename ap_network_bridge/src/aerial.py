@@ -11,6 +11,7 @@
 
 # Standard Python imports
 from optparse import OptionParser
+import os
 import sys
 
 # Load in ACS libraries
