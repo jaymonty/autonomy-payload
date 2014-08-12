@@ -146,6 +146,7 @@ ros-hydro-ros-base \
 ros-hydro-sensor-msgs \
 ros-hydro-robot-pose-ekf \
 iperf \
+python-netifaces \
 python-setuptools \
 screen \
 batctl

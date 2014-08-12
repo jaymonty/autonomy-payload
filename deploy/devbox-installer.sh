@@ -76,6 +76,7 @@ sudo apt-get --assume-yes install \
 ros-hydro-desktop-full \
 ros-hydro-sensor-msgs \
 ros-hydro-robot-pose-ekf \
+python-netifaces \
 python-setuptools
 check_fail "apt-get install"
 
