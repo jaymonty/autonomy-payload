@@ -29,13 +29,18 @@ class UAVListWidget(QListWidget):
         self.uav_list = {}
         self.uav_listen_event = self.startTimer(1000)
 
+        # Add a dummy aircraft to "select none"
+        self.dummy = QListWidgetItem(self)
+        self.dummy.setFont(UAVListWidget.LIST_FONT)
+        self.dummy.setText('None')
+
         # ACS protocol connection
         self.sock = sock
 
     # Return the number and status of the currently selected aircraft
     def currentItemInfo(self):
         sel = self.selectedItems()
-        if len(sel) != 1:
+        if len(sel) != 1 or sel[0].text() == 'None':
             return (-1, '', '')
         selid = sel[0].text()
         return (selid, self.uav_list[int(selid)]['i'], self.uav_list[int(selid)]['s'])
@@ -179,6 +184,7 @@ if __name__ == '__main__':
             lblStat.setText("Aircraft %d (%s): %s" % (int(uavid), uavip, uavstat))
         else:
             lblStat.setText("No Aircraft Selected")
+    #lst.setSortingEnabled(True)
     lst.itemClicked.connect(do_update_stat)
     lst.itemSelectionChanged.connect(do_update_stat)
     layout.addWidget(lblStat)
