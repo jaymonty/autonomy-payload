@@ -77,7 +77,7 @@ class Socket():
         dst_ip = self.bcast_ip
         if self.id_mapping and (message.msg_dst != Socket.ID_BCAST_ALL) \
                            and (message.msg_dst in self.id_mapping):
-            dst_ip = id_mapping[message.msg_dst]
+            dst_ip = self.id_mapping[message.msg_dst]
         
         try:
              # Pack message into byte string
