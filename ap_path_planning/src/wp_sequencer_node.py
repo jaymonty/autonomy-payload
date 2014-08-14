@@ -43,10 +43,11 @@ if __name__ == '__main__':
     rospy.init_node(args.nodename)
     timer = rospy.Rate(1.0)
     sequencer = wpseq.WaypointSequencer([], args.nodename, args.odombase, args.apbase)
-    sequencer.setSequence([ [35.716431, -120.762474, 100.0], \
-                            [35.717876, -120.766838, 100.0], \
-                            [35.719574, -120.765930, 100.0], \
-                            [35.718086, -120.761398, 100.0] ])
+    sequencer.setSequence([ [35.718299, -120.766609, 100.0], \
+                            [35.718574, -120.762931, 100.0], \
+                            [35.719459, -120.765800, 100.0], \
+                            [35.717185, -120.763793, 100.0], \
+                            [35.718330, -120.764748, 100.0] ])
 #    sequencer.startSequencer(True)
 
     # Start main loop
