@@ -15,6 +15,12 @@ fi
 # Collect any needed user information
 echo ""
 read -p "Please enter a unique numeric ID for this aircraft: " AIRCRAFT_ID
+if [ -z $AIRCRAFT_ID ]; then
+  echo "No ID specified; aborting"
+  exit 1
+fi
+read -p "Please enter a hostname for this aircraft: " AIRCRAFT_NAME
+if [ -z $AIRCRAFT_NAME ]; then AIRCRAFT_NAME='odroid'; fi
 
 #------------------------------------------------------------------------------
 # General setup
@@ -39,6 +45,12 @@ if [ $? != 0 ]; then
   check_fail "chmod (sudo permissions)"
 fi
 
+# Set the hostname
+sudo hostname $AIRCRAFT_NAME
+check_fail "set temporary hostname"
+sudo sh -c "echo $AIRCRAFT_NAME > /etc/hostame"
+check_fail "set persistent hostname"
+
 # Fix things that make SSH logins slow
 grep UseDNS /etc/ssh/sshd_config > /dev/null
 if [ $? == 0 ]; then
@@ -58,6 +70,9 @@ for s in bluetooth cups ntp saned spamassassin speech-dispatcher whoopsie; do
   sudo service $s stop
   sudo update-rc.d -f $s remove
 done
+
+# Disable automatic apt tasks
+sudo rm /etc/cron.daily/apt
 
 # Regrettably, we need to disable Git's SSL cert check
 git config --global http.sslVerify false
@@ -174,18 +189,27 @@ if [ $? != 0 ]; then
   check_fail "mavlink git clone"
   cd mavlink/pymavlink/
   git checkout dev  # The yoda branch we use for production
+  check_fail "mavlink git checkout dev"
+
+  python setup.py build install --user
+  check_fail "mavlink setup.py"
 else
   cd mavlink/pymavlink/
   git checkout .  # reset to state where we can update
   check_fail "mavlink git checkout ."
-  git checkout dev
+  git fetch origin  # update local copy of repo
+  check_fail "mavlink git fetch"
+  git diff --quiet origin/dev  # determine if there are updates
+  MAVLINK_REBUILD=$?
+  git checkout dev  # bring updates into working space
   check_fail "mavlink git checkout dev"
-  git pull origin dev  # sync with branch above
-  check_fail "mavlink git pull"
-fi
 
-python setup.py build install --user
-check_fail "mavlink setup.py"
+  # Only rebuild if the branch was actually updated
+  if [ $MAVLINK_REBUILD != 0 ]; then
+    python setup.py build install --user
+    check_fail "mavlink setup.py"
+  fi
+fi
 
 #------------------------------------------------------------------------------
 # Set up autonomy-payload
@@ -214,10 +238,10 @@ else
   cd autonomy-payload
   git checkout .  # reset to state where we can update
   check_fail "payload git checkout ."
-  git checkout master
-  check_fail "payload git checkout master"
-  git pull origin master  # the production branch we use
-  check_fail "payload git pull"
+  git fetch origin  # update local copy of repo
+  check_fail "payload git fetch"
+  git checkout master  # bring updates into working space
+  check_fail "payload git checkout dev"
 fi
 
 # Install ACS shared libs
@@ -235,10 +259,10 @@ else
   cd autopilot_bridge
   git checkout .  # reset to state where we can update
   check_fail "mavbridge git checkout ."
-  git checkout master
-  check_fail "mavbridge git checkout master"
-  git pull origin master  # the production branch we use
-  check_fail "mavbridge git pull"
+  git fetch origin  # update local copy of repo
+  check_fail "mavbridge git fetch"
+  git checkout master  # bring updates into working space
+  check_fail "mavbridge git checkout dev"
 fi
 
 # Build all workspace packages
@@ -278,6 +302,9 @@ sudo update-rc.d autonomy-payload defaults
 sudo apt-get clean
 
 echo ""
-echo "Congratulations, your system has been updated. Please check that the correct branches of mavlink, autonomy-payload, and autopilot_bridge have been checked out. Then, reboot to automatically start the payload software."
+echo "Congratulations, your system has been updated."
+echo "Please check that the correct branches of mavlink, autonomy-payload,"
+echo "and autopilot_bridge have been checked out."
+echo "Then, reboot to automatically start the payload software."
 echo ""
 

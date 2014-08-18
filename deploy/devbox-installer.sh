@@ -108,18 +108,27 @@ if [[ $INSTALL_MAVLINK == 'y' ]]; then
     fi
     cd mavlink/pymavlink/
     git checkout dev
+    check_fail "mavlink git checkout dev"
+
+    python setup.py build install --user
+    check_fail "mavlink setup.py"
   else
     cd mavlink/pymavlink/
     git checkout .  # reset to state where we can update
     check_fail "mavlink git checkout ."
-    git checkout dev
+    git fetch origin  # update local copy of repo
+    check_fail "mavlink git fetch"
+    git diff --quiet origin/dev  # determine if there are updates
+    MAVLINK_REBUILD=$?
+    git checkout dev  # bring updates into working space
     check_fail "mavlink git checkout dev"
-    git pull origin dev  # sync with branch above
-    check_fail "mavlink git pull"
-  fi
 
-  python setup.py build install --user
-  check_fail "mavlink setup.py"
+    # Only rebuild if the branch was actually updated
+    if [ $MAVLINK_REBUILD != 0 ]; then
+      python setup.py build install --user
+      check_fail "mavlink setup.py"
+    fi
+  fi
 fi
 
 #------------------------------------------------------------------------------
@@ -154,10 +163,10 @@ else
   cd autonomy-payload
   git checkout .  # reset to state where we can update
   check_fail "payload git checkout ."
-  git checkout master
-  check_fail "payload git checkout master"
-  git pull origin master  # the production branch we use
-  check_fail "payload git pull"
+  git fetch origin  # update local copy of repo
+  check_fail "payload git fetch"
+  git checkout master  # bring updates into working space
+  check_fail "payload git checkout dev"
 fi
 
 # Install ACS shared libs
@@ -180,10 +189,10 @@ else
   cd autopilot_bridge
   git checkout .  # reset to state where we can update
   check_fail "mavbridge git checkout ."
-  git checkout master
-  check_fail "mavbridge git checkout master"
-  git pull origin master  # the production branch we use
-  check_fail "mavbridge git pull"
+  git fetch origin  # update local copy of repo
+  check_fail "mavbridge git fetch"
+  git checkout master  # bring updates into working space
+  check_fail "mavbridge git checkout dev"
 fi
 
 # Build all workspace packages
