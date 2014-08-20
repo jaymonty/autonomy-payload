@@ -73,6 +73,7 @@ check_fail "apt-get upgrade"
 
 # Install ROS and other useful packages
 sudo apt-get --assume-yes install \
+git \
 ros-hydro-desktop-full \
 ros-hydro-sensor-msgs \
 ros-hydro-robot-pose-ekf \
