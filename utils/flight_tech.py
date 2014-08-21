@@ -11,39 +11,75 @@ import subprocess
 import sys
 import time
 
+# Simple representation of UAV state
+class UAVState():
+    def __init__(self, text, color):
+        self.text = text
+        self.color = color
+
+# A QListWidgetItem for UAVs, with some custom data and printing
+class UAVListWidgetItem(QListWidgetItem):
+    FONT = QFont('Helvetica', 14)
+
+    def __init__(self, ident, name, ip, state):
+        QListWidgetItem.__init__(self)
+        self.ident = ident
+        self.name = name
+        self.ip = ip
+        self.setFont(UAVListWidgetItem.FONT)
+        self.setText("%s (%03d)" % (self.name, self.ident))
+
+        self.setState(state)
+        self.updateLastSeen()
+
+    def __str__(self):
+        return "%s : %s (%d / %s)" % (self.name, self.state.text, self.ident, self.ip)
+
+    def setState(self, state):
+        self.state = state
+        self.setBackground(self.state.color)
+
+    def updateLastSeen(self):
+        self.last_seen = time.time()
+
 # This creates a list box populated by listening to ACS messages
 class UAVListWidget(QListWidget):
 
-    # Some parameters for how things are displayed
+    # UAV state
+    STATE_NONE = UAVState('INVALID', QBrush(QColor('white')))
+    STATE_OFFLINE = UAVState('OFFLINE', QBrush(QColor('red')))
+    STATE_NOT_READY = UAVState('NOT READY', QBrush(QColor('yellow')))
+    STATE_READY= UAVState('READY', QBrush(QColor.fromRgb(0,200,0)))
+    STATE_ACTIVE = UAVState('ACTIVE', QBrush(QColor.fromRgb(160,160,160)))
+
+    # Time (in seconds) until UAVs go to "offline" status
     OFFLINE_TIME = 5.0
-    STATE_OFFLINE = QBrush(QColor('red'))
-    STATE_NOT_READY= QBrush(QColor('yellow'))
-    STATE_READY = QBrush(QColor('green'))
-    LIST_FONT = QFont('Helvetica', 14)
-    # TODO: self.LIST_ICON = QIcon('aircraft.png')
 
     def __init__(self, sock, parent=None):
         QListWidget.__init__(self, parent)
 
         # Track UAVs, periodically checking for new messages
-        self.uav_list = {}
         self.uav_listen_event = self.startTimer(1000)
 
         # Add a dummy aircraft to "select none"
-        self.dummy = QListWidgetItem(self)
-        self.dummy.setFont(UAVListWidget.LIST_FONT)
-        self.dummy.setText('None')
+        self.addItem(UAVListWidgetItem(0, '(None)', '', UAVListWidget.STATE_NONE))
 
         # ACS protocol connection
         self.sock = sock
 
-    # Return the number and status of the currently selected aircraft
-    def currentItemInfo(self):
+    # Return the *singly-selected* list item
+    def currentItem(self):
         sel = self.selectedItems()
-        if len(sel) != 1 or sel[0].text() == 'None':
-            return (-1, '', '')
-        selid = sel[0].text()
-        return (selid, self.uav_list[int(selid)]['i'], self.uav_list[int(selid)]['s'])
+        if len(sel) != 1 or sel[0].ident == 0:
+            return None
+        return sel[0]
+
+    # Return item matching a given ident
+    def itemByIdent(self, ident):
+        for i in range(self.count()):
+            if self.item(i).ident == ident:
+                return self.item(i)
+        return None
 
     # Periodic event to look for new UAVs and to update the list
     def timerEvent(self, event):
@@ -63,38 +99,34 @@ class UAVListWidget(QListWidget):
             if not isinstance(msg, acs_messages.FlightStatus):
                 continue
 
-            # Create if not already in the list
-            if msg.msg_src not in self.uav_list:
-                self.uav_list[msg.msg_src] = { 'q' : QListWidgetItem(self) }
-                self.uav_list[msg.msg_src]['q'].setFont(UAVListWidget.LIST_FONT)
-                self.uav_list[msg.msg_src]['q'].setText(str(msg.msg_src))
-                self.uav_list[msg.msg_src]['i'] = msg.msg_src_ip
-                # TODO: self.uav_list[msg.msg_src]['q'].setIcon(self.LIST_ICON)
-
             # Color code based on status
-            if msg.ready:
-                self.uav_list[msg.msg_src]['q'].setBackground(UAVListWidget.STATE_READY)
-                self.uav_list[msg.msg_src]['s'] = "READY"
+            if msg.armed:
+                state = UAVListWidget.STATE_ACTIVE
+            elif msg.ready:
+                state = UAVListWidget.STATE_READY
             else:
-                self.uav_list[msg.msg_src]['q'].setBackground(UAVListWidget.STATE_NOT_READY)
-                self.uav_list[msg.msg_src]['s'] = "NOT READY"
+                state = UAVListWidget.STATE_NOT_READY
 
-            # Update last-seen timestamp
-            self.uav_list[msg.msg_src]['t'] = cur_time
+            # Create if not already in the list
+            item = self.itemByIdent(msg.msg_src)
+            if item is None:
+                self.addItem(UAVListWidgetItem(msg.msg_src, 'unnamed', msg.msg_src_ip, state))
+            else:
+                item.setState(state)
+                item.updateLastSeen()
 
         # If we haven't seen any for a while, change color
-        for i in self.uav_list:
-            if self.uav_list[i]['t'] < (cur_time - UAVListWidget.OFFLINE_TIME):
-                self.uav_list[i]['q'].setBackground(UAVListWidget.STATE_OFFLINE)
-                self.uav_list[i]['s'] = "OFFLINE"
-
-        # TODO: Implement sorting, first by status then by ID?
+        for i in range(self.count()):
+            if self.item(i).ident == 0:
+                continue
+            if self.item(i).last_seen < (cur_time - UAVListWidget.OFFLINE_TIME):
+                self.item(i).setState(UAVListWidget.STATE_OFFLINE)
 
         # schedule refresh and raise event
         self.update()
         self.itemSelectionChanged.emit()
 
-def prep_aircraft(sock, uavid, localip, uavip):
+def preflight_aircraft(sock, uavid, localip, uavip):
     # Open a slave mavlink channel to the aircraft
     # NOTE: This is done unreliably, so it might fail and we won't know :(
     ss = acs_messages.SlaveSetup()
@@ -114,18 +146,13 @@ def prep_aircraft(sock, uavid, localip, uavip):
     ss.enable = False
     sock.send(ss)
 
-def toggle_aircraft(sock, uavid, localip, uavip, uavstat):
+def set_aircraft_ready(sock, uavid, localip, uavip, ready):
     # Toggle the aircraft to be flight-ready, or not, based on 'uavstat'
     fr = acs_messages.FlightReady()
     fr.msg_dst = int(uavid)
     fr.msg_secs = 0
     fr.msg_nsecs = 0
-    if uavstat == "NOT READY":  # TODO don't hard-code these
-        fr.ready = True
-    elif uavstat == "READY":
-        fr.ready = False
-    else:  # if STATE_OFFLINE or something else, don't do anything
-        return
+    fr.ready = ready
     sock.send(fr)
 
 def shutdown_aircraft(sock, uavid, localip, uavip):
@@ -179,46 +206,50 @@ if __name__ == '__main__':
     #  relies on a signal being emitted by the UAVListWidget
     lblStat = QLabel("No Aircraft Selected")
     def do_update_stat():
-        (uavid, uavip, uavstat) = lst.currentItemInfo()
-        if uavid > 0:
-            lblStat.setText("Aircraft %d (%s): %s" % (int(uavid), uavip, uavstat))
-        else:
+        if lst.currentItem() is None:
             lblStat.setText("No Aircraft Selected")
-    #lst.setSortingEnabled(True)
+        else:
+            lblStat.setText(str(lst.currentItem()))
+    lst.setSortingEnabled(True)
     lst.itemClicked.connect(do_update_stat)
     lst.itemSelectionChanged.connect(do_update_stat)
     layout.addWidget(lblStat)
 
     # Pre-flight button
-    btPrep = QPushButton("Pre-Flight")
-    def do_prep():
-        (uavid, uavip, uavstat) = lst.currentItemInfo()
-        if uavid > 0:
-            prep_aircraft(sock, uavid, my_ip, uavip)
-    btPrep.clicked.connect(do_prep)
-    layout.addWidget(btPrep)
+    btPreflight = QPushButton("Pre-Flight")
+    def do_preflight():
+        item = lst.currentItem()
+        if item.ident > 0 and item.state in [UAVListWidget.STATE_READY,
+                                            UAVListWidget.STATE_NOT_READY]:
+            preflight_aircraft(sock, item.ident, my_ip, item.ip)
+    btPreflight.clicked.connect(do_preflight)
+    layout.addWidget(btPreflight)
 
     # Flight-ready button
     btToggle = QPushButton("Toggle Flight Ready")
     def do_toggle():
-        (uavid, uavip, uavstat) = lst.currentItemInfo()
-        if uavid > 0:
-            toggle_aircraft(sock, uavid, my_ip, uavip, uavstat)
+        item = lst.currentItem()
+        if item.ident <= 0:
+            return
+        if item.state == UAVListWidget.STATE_NOT_READY:
+            set_aircraft_ready(sock, item.ident, my_ip, item.ip, True)
+        elif item.state == UAVListWidget.STATE_READY:
+            set_aircraft_ready(sock, item.ident, my_ip, item.ip, False)
     btToggle.clicked.connect(do_toggle)
     layout.addWidget(btToggle)
 
     # Shutdown button
     btShutdown = QPushButton("Shut Down Payload")
     def do_shutdown():
-        (uavid, uavip, uavstat) = lst.currentItemInfo()
-        if uavid <= 0:
+        item = lst.currentItem()
+        if item.ident <= 0 or item.state == UAVListWidget.STATE_ACTIVE:
             return
         mbx = QMessageBox()
-        mbx.setText("Shut down aircraft %d?" % int(uavid))
+        mbx.setText("Shut down aircraft %d?" % item.ident)
         mbx.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
         mbx.setDefaultButton(QMessageBox.No)
         if mbx.exec_() == QMessageBox.Yes:
-            shutdown_aircraft(sock, uavid, my_ip, uavip)
+            shutdown_aircraft(sock, item.ident, my_ip, item.ip)
     btShutdown.clicked.connect(do_shutdown)
     layout.addWidget(btShutdown)
 
