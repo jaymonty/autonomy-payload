@@ -139,7 +139,7 @@ class SwarmTracker(object):
                                            ", " + str(self.swarm[self.ownID].pitch) +\
                                            ", " + str(self.swarm[self.ownID].yaw) + ")")
         except Exception as ex:
-            self.log_warn("Callback error: " + ex.args[0])
+            self.log_warn("Self update callback error: " + ex.args[0])
 
 
 
@@ -162,7 +162,7 @@ class SwarmTracker(object):
             updateElement.lat = poseMsg.pose.pose.position.x
             updateElement.lon = poseMsg.pose.pose.position.y
             updateElement.alt = poseMsg.pose.pose.position.z
-            [ element.roll, element.pitch, element.yaw ] =\
+            [ updateElement.roll, updateElement.pitch, updateElement.yaw ] =\
                 tf.transformations.euler_from_quaternion([ poseMsg.pose.pose.orientation.x,\
                                                            poseMsg.pose.pose.orientation.y,\
                                                            poseMsg.pose.pose.orientation.z,\
@@ -176,8 +176,13 @@ class SwarmTracker(object):
                                            ", " + str(updateElement.pitch) +\
                                            ", " + str(updateElement.yaw) + ")")
         except Exception as ex:
-            self.log_warn("Callback error: " + ex.args[0])
+            self.log_warn("Swarm update callback error: " + ex.args[0])
 
+
+
+    #--------------------------------------
+    # Class-specific functions
+    #--------------------------------------
 
 
     #--------------------------------------
