@@ -28,6 +28,9 @@ import ap_path_planning.msg as appp
 
 #import std_srvs.srv
 
+# Project-specific imports
+import acs.gps_utils as gps
+
 # Base name for node topics and services
 NODE_BASENAME = 'wp_sequencer'
 ODOM_BASENAME = 'local_estim'
@@ -39,23 +42,6 @@ WARN_PRINT = False
 
 # Other global constants
 CAPTURE_DISTANCE = 110.0
-
-# Copied from MAVProxy mp_util.py
-def gps_distance(lat1, lon1, lat2, lon2):
-    '''return distance between two points in meters,
-    coordinates are in degrees
-    thanks to http://www.movable-type.co.uk/scripts/latlong.html'''
-    radius_of_earth = 6378100.0 # in meters
-    lat1 = math.radians(lat1)
-    lat2 = math.radians(lat2)
-    lon1 = math.radians(lon1)
-    lon2 = math.radians(lon2)
-    dLat = lat2 - lat1
-    dLon = lon2 - lon1
-
-    a = math.sin(0.5*dLat)**2 + math.sin(0.5*dLon)**2 * math.cos(lat1) * math.cos(lat2)
-    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0-a))
-    return radius_of_earth * c
 
 
 # Object that creates or receives waypoint sequences and monitors the
@@ -166,8 +152,8 @@ class WaypointSequencer(object):
         try:
             if self.listComplete:  return False
             if self.readyNextWP:  return True
-            d = gps_distance(self.pose[0], self.pose[1], \
-                             self.currentWP.lat, self.currentWP.lon)
+            d = gps.gps_distance(self.pose[0], self.pose[1], \
+                                 self.currentWP.lat, self.currentWP.lon)
             if d < self.captureDistance:
                 self.readyNextWP = True
                 self.log_dbug("waypoint reached: lat=" + str(self.currentWP.lat) +\
