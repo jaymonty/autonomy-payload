@@ -26,18 +26,24 @@ class UAVListWidgetItem(QListWidgetItem):
         self.ident = ident
         self.name = name
         self.ip = ip
-        self.setFont(UAVListWidgetItem.FONT)
-        self.setText("%s (%03d)" % (self.name, self.ident))
 
         self.setState(state)
+        self.setVoltage(0.0)
         self.updateLastSeen()
 
+        self.setFont(UAVListWidgetItem.FONT)
+        self.setText("%s (%d / %2.3fv)" % (self.name, self.ident, self.vcc))
+
     def __str__(self):
-        return "%s : %s (%d / %s)" % (self.name, self.state.text, self.ident, self.ip)
+        return "%s : %s (%d / %s / %2.3fv)" % \
+               (self.name, self.state.text, self.ident, self.ip, self.vcc)
 
     def setState(self, state):
         self.state = state
         self.setBackground(self.state.color)
+
+    def setVoltage(self, vcc):
+        self.vcc = vcc
 
     def updateLastSeen(self):
         self.last_seen = time.time()
@@ -100,7 +106,8 @@ class UAVListWidget(QListWidget):
                 continue
 
             # Color code based on status
-            if msg.armed:
+            if msg.armed and msg.alt_rel > 20000:
+                # Armed ^ (Alt > 20m AGL) -> Active/Flying
                 state = UAVListWidget.STATE_ACTIVE
             elif msg.ready:
                 state = UAVListWidget.STATE_READY
@@ -113,6 +120,7 @@ class UAVListWidget(QListWidget):
                 self.addItem(UAVListWidgetItem(msg.msg_src, msg.name, msg.msg_src_ip, state))
             else:
                 item.setState(state)
+                item.setVoltage(float(msg.batt_vcc) / 1e03)
                 item.updateLastSeen()
 
         # If we haven't seen any for a while, change color
@@ -193,7 +201,7 @@ if __name__ == '__main__':
     # Build up the window itself
     app = QApplication([])
     win = QWidget()
-    win.resize(280, 400)
+    win.resize(300, 400)
     layout = QVBoxLayout()
     win.setLayout(layout)
 
