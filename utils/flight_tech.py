@@ -110,7 +110,7 @@ class UAVListWidget(QListWidget):
             # Create if not already in the list
             item = self.itemByIdent(msg.msg_src)
             if item is None:
-                self.addItem(UAVListWidgetItem(msg.msg_src, 'unnamed', msg.msg_src_ip, state))
+                self.addItem(UAVListWidgetItem(msg.msg_src, msg.name, msg.msg_src_ip, state))
             else:
                 item.setState(state)
                 item.updateLastSeen()

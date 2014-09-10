@@ -39,12 +39,13 @@ ROS_BASENAME = 'network'
 # Ugly global data
 
 acs_sock = None  # socket
+aircraft_name = ''  # aircraft friendly name
 
 #-----------------------------------------------------------------------
 # Subscribers (ROS -> Network)
 
 def sub_flight_status(msg):
-    global acs_sock
+    global acs_sock, aircraft_name
     message = acs_messages.FlightStatus()
     message.msg_dst = Socket.ID_BCAST_ALL  # TODO: Send to ground
     message.msg_secs = msg.header.stamp.secs
@@ -70,6 +71,9 @@ def sub_flight_status(msg):
     message.ready = rospy.has_param("flight_ready") and \
                     bool(rospy.get_param("flight_ready"))
 
+    # Add friendly name
+    message.name = aircraft_name
+
     acs_sock.send(message)
 
 def sub_pose(msg):
@@ -94,16 +98,32 @@ if __name__ == '__main__':
     # Grok args
     parser = OptionParser("aerial.py [options]")
     parser.add_option("--id", dest="acid", type='int',
-                      help="Aircraft ID", default=1)
+                      help="Aircraft ID (default to ROS param aircraft_id)", default=0)
+    parser.add_option("--name", dest="acname",
+                      help="Aircraft Name (default to ROS param aircraft_name)", default='')
     parser.add_option("--device", dest="device", 
-                      help="Network device to use", default="wlan0")
+                      help="Network device to use (default wlan0)", default="wlan0")
     parser.add_option("--port", dest="port", type='int',
-                      help="UDP port", default=5554)
+                      help="UDP port (default 5554)", default=5554)
     (opts, args) = parser.parse_args()
     
     # Initialize ROS
     rospy.init_node(ROS_BASENAME)
     
+    # Make sure ID and Name are set
+    if opts.acid == 0 and rospy.has_param("aircraft_id"):
+        opts.acid = rospy.get_param("aircraft_id")
+    if opts.acid == 0:
+        rospy.logfatal("Aircraft ID not specified and no aircraft_id param")
+        sys.exit(-1)
+    if opts.acname == '' and rospy.has_param("aircraft_name"):
+        opts.acname = rospy.get_param("aircraft_name")
+    if opts.acname == '':
+        rospy.logfatal("Aircraft ID not specified and no aircraft_name param")
+        sys.exit(-1)
+    else:
+        aircraft_name = opts.acname
+
     # Initialize socket
     # TODO: Create dictionary of IDs->IPs 
     try:

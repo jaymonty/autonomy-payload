@@ -19,7 +19,7 @@ if [ -z $AIRCRAFT_ID ]; then
   echo "No ID specified; aborting"
   exit 1
 fi
-read -p "Please enter a hostname for this aircraft: " AIRCRAFT_NAME
+read -p "Please enter a hostname for this aircraft (max 16 chars): " AIRCRAFT_NAME
 if [ -z $AIRCRAFT_NAME ]; then AIRCRAFT_NAME='odroid'; fi
 
 #------------------------------------------------------------------------------
@@ -275,6 +275,7 @@ check_fail "catkin_make"
 # (highly unlikely to have errors, ignore check_fail())
 sudo cp ~/acs_ros_ws/src/autonomy-payload/deploy/init.d-script /etc/init.d/autonomy-payload
 sudo sed -i s/AIRCRAFT_ID/$AIRCRAFT_ID/g /etc/init.d/autonomy-payload
+sudo sed -i s/AIRCRAFT_NAME/$AIRCRAFT_NAME/g /etc/init.d/autonomy-payload
 sudo sed -i s/USER/$USER/g /etc/init.d/autonomy-payload
 sudo chown root:root /etc/init.d/autonomy-payload
 sudo chmod 755 /etc/init.d/autonomy-payload
