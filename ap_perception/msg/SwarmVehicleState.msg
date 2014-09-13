@@ -1,0 +1,3 @@
+uint16 vehicleID
+geometry_msgs/PoseWithCovariance pose
+geometry_msgs/TwistWithCovariance velocity
