@@ -11,8 +11,8 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   geometry_msgs
   autopilot_bridge
-  message_generation
   ap_lib
+  ap_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -49,10 +49,10 @@ find_package(catkin REQUIRED COMPONENTS
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-add_message_files(
-   FILES
-   WaypointListStamped.msg
- )
+#add_message_files(
+#   FILES
+#   WaypointListStamped.msg
+# )
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -69,12 +69,12 @@ add_message_files(
 # )
 
 ## Generate added messages and services with any dependencies listed here
-generate_messages(
-   DEPENDENCIES
-   std_msgs
-   geometry_msgs
-   autopilot_bridge
-)
+#generate_messages(
+#   DEPENDENCIES
+#   std_msgs
+#   geometry_msgs
+#   autopilot_bridge
+#)
 
 ###################################
 ## catkin specific configuration ##

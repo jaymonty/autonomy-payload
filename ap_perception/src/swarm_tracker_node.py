@@ -20,7 +20,7 @@ import rospy
 # Import ROS message and service types
 
 # ACS-specific imports
-import swarm_tracker as tracker
+from ap_perception.swarm_tracker import *
 
 
 if __name__ == '__main__':
@@ -28,14 +28,12 @@ if __name__ == '__main__':
     parser = ArgumentParser("rosrun ap_perception swarm_tracker.py")
     parser.add_argument('-n', "--nodename", dest="nodename", \
                         help="Name for the ROS node to register as", \
-                        default=tracker.NODE_BASENAME)
+                        default=NODE_BASENAME)
     parser.add_argument('-id', "--aircraft", dest="acft", \
                         help="ID (integer) of this aircraft", default=1)
     args = parser.parse_args(args=rospy.myargv(argv=sys.argv)[1:])
-    
-    # Initialize ROS node & instantiate a SwarmTracker object
-    rospy.init_node("swarm_tracker")
-    swarm_tracker = tracker.SwarmTracker(int(args.acft))
-    swarm_tracker.runAsNode(10.0, [], [ tracker.SELF_ODOM_BASENAME, \
-                                        tracker.NET_ODOM_BASENAME ], [])
+
+    swarm_tracker = SwarmTracker(int(args.acft))
+    swarm_tracker.runAsNode(10.0, [], [ SELF_ODOM_BASENAME, \
+                                        NET_ODOM_BASENAME ], [])
 

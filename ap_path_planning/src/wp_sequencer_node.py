@@ -20,7 +20,7 @@ import rospy
 # Import ROS message and service types
 
 # ACS-specific imports
-import wp_sequencer as wpseq
+import ap_path_planning.wp_sequencer as wpseq
 
 
 #---------------------------------------------

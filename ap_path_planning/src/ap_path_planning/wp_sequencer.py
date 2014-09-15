@@ -28,7 +28,7 @@ from geometry_msgs.msg import PoseWithCovarianceStamped
 from autopilot_bridge.msg import LLA
 from ap_lib.nodeable import *
 from ap_lib.gps_utils import *
-import ap_path_planning.msg as appp
+import ap_msgs.msg as apm
 
 
 # Base name for node topics and services
@@ -92,7 +92,7 @@ class WaypointSequencer(Nodeable):
                          PoseWithCovarianceStamped, self.updatePose)
         rospy.Subscriber("%s/wp_sequencer_run"%self.nodeName, stdmsg.Bool, \
                          self.processRunMsg)
-        rospy.Subscriber("%s/wp_list"%self.nodeName, appp.WaypointListStamped, \
+        rospy.Subscriber("%s/wp_list"%self.nodeName, apm.WaypointListStamped, \
                          self.receiveWaypointList)
 
 
@@ -183,7 +183,7 @@ class WaypointSequencer(Nodeable):
     # @param newRunState:  True or False to start or stop object run state
     def startSequencer(self, newRunState):
         self.isRunning = newRunState
-    
+
 
     #-----------------------------------------
     # ROS Subscriber callbacks for this object
@@ -211,11 +211,4 @@ class WaypointSequencer(Nodeable):
         for wpt in wptList.waypoints:
            wpts.append([ wpt.lat, wpt.lon, wpt.alt ])
         setSequence(wpts)
-
-
-    #-----------------------------
-    # ROS services for this object
-    #-----------------------------
-
-
 
