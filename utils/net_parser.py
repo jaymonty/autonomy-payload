@@ -50,9 +50,11 @@ if __name__ == '__main__':
              message.msg_secs, message.msg_nsecs)
         
         if isinstance(message, acs_messages.Pose):
-            print "\tLa: %f Lo: %f Al: %f Qx: %f Qy: %f Qz: %f Qw: %f" % \
+            print "\tLa: %f Lo: %f Al: %f Qx: %f Qy: %f Qz: %f Qw: %f\n\tVLx: %f VLy: %f VLz: %f VAx: %f VAy: %f VAz: %f" % \
                 (message.lat, message.lon, message.alt, 
-                 message.q_x, message.q_y, message.q_z, message.q_w)
+                 message.q_x, message.q_y, message.q_z, message.q_w,
+                 message.vlx, message.vly, message.vlz,
+                 message.vax, message.vay, message.vaz)
         elif isinstance(message, acs_messages.FlightStatus):
             print "\tNm: %s Mo: %u Wp: %u Fl: %u%u%u%u%u%u%u%u Sa: %u Br: %d Bv: %d Bc: %d As: %f Ar: %d Gh: %u" % \
                 (message.name, message.mode, int(message.mis_cur), int(message.armed), int(message.ok_ahrs),

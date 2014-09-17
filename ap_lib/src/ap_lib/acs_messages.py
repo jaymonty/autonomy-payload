@@ -221,7 +221,7 @@ class Pose(Message):
     def _init_message(self):
         # Define message type parameters
         self.msg_type = 0x01
-        self.msg_fmt = '>lllllll'
+        self.msg_fmt = '>lllllllhhhhhh'
         # Define message fields (setting to None helps raise Exceptions later)
         self.lat = None		# Decimal degrees (e.g. 35.123456)
         self.lon = None		# Decimal degrees (e.g. -120.123456)
@@ -230,6 +230,12 @@ class Pose(Message):
         self.q_y = None		# Quaternion Y
         self.q_z = None		# Quaternion Z
         self.q_w = None		# Quaternion W
+        self.vlx = None		# Linear velocity x (cm/s)
+        self.vly = None		# Linear velocity y (cm/s)
+        self.vlz = None		# Linear velocity z (cm/s)
+        self.vax = None		# Angular velocity x (rad/s * 100)
+        self.vay = None		# Angular velocity y (rad/s * 100)
+        self.vaz = None		# Angular velocity z (rad/s * 100)
         
     def build_tuple(self):
         # Convert message elements into pack-able fields and form tuple
@@ -239,7 +245,13 @@ class Pose(Message):
                 int(self.q_x * 1e09),
                 int(self.q_y * 1e09),
                 int(self.q_z * 1e09),
-                int(self.q_w * 1e09))
+                int(self.q_w * 1e09),
+                int(self.vlx * 1e02),
+                int(self.vly * 1e02),
+                int(self.vlz * 1e02),
+                int(self.vax * 1e02),
+                int(self.vay * 1e02),
+                int(self.vaz * 1e02))
         
     def parse_tuple(self, fields):
         # Place unpacked but unconverted fields into message elements
@@ -250,6 +262,12 @@ class Pose(Message):
         self.q_y = fields[4] / 1e09
         self.q_z = fields[5] / 1e09
         self.q_w = fields[6] / 1e09
+        self.vlx = fields[7] / 1e02
+        self.vly = fields[8] / 1e02
+        self.vlz = fields[9] / 1e02
+        self.vax = fields[10] / 1e02
+        self.vay = fields[11] / 1e02
+        self.vaz = fields[12] / 1e02
 
 class Heartbeat(Message):
     def _init_message(self):

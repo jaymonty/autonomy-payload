@@ -21,7 +21,7 @@ from ap_lib.acs_socket import Socket
 # General ROS imports
 import rospy
 import std_msgs
-from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
+from nav_msgs.msg import Odometry
 
 # Import ROS messages specific to this bridge
 from ap_network_bridge import msg as netmsg
@@ -89,6 +89,12 @@ def sub_pose(msg):
     message.q_y = msg.pose.pose.orientation.y
     message.q_z = msg.pose.pose.orientation.z
     message.q_w = msg.pose.pose.orientation.w
+    message.vlx = msg.twist.twist.linear.x
+    message.vly = msg.twist.twist.linear.y
+    message.vlz = msg.twist.twist.linear.z
+    message.vax = msg.twist.twist.angular.x
+    message.vay = msg.twist.twist.angular.y
+    message.vaz = msg.twist.twist.angular.z
     acs_sock.send(message)
 
 #-----------------------------------------------------------------------
@@ -141,7 +147,7 @@ if __name__ == '__main__':
     rospy.Subscriber("%s/send_flight_status"%ROS_BASENAME, 
                      apmsg.Status, sub_flight_status)
     rospy.Subscriber("%s/send_pose"%ROS_BASENAME, 
-                     PoseWithCovarianceStamped, sub_pose)
+                     Odometry, sub_pose)
     
     # Set up publishers (network -> ROS)
     pub_pose = rospy.Publisher("%s/recv_pose"%ROS_BASENAME, 
