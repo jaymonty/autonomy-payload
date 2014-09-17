@@ -2,26 +2,12 @@
   <param name="aircraft_id" type="int" value="$(arg id)" />
   <param name="aircraft_name" type="str" value="$(arg name)" />
   <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--module acs --module slave" />
-  <node name="local_estim" pkg="robot_pose_ekf" type="robot_pose_ekf" output="screen" >
-    <remap from="imu_data" to="autopilot/imu" />
-    <remap from="gps" to="autopilot/gps_odom" />
-    <remap from="tf" to="local_estim/tf" />
-    <remap from="tf_static" to="local_estim/tf_static" />
-    <param name="odom_used" value="false" />
-    <param name="imu_used" value="true" />
-    <param name="gps_used" value="true" />
-    <param name="vo_used" value="false" />
-    <param name="freq" value="30.0" />
-    <param name="sensor_timeout" value="2.0" />
-    <param name="output_frame" value="odom_combined" />
-    <param name="debug" value="false" />
-  </node>
   <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" >
     <remap from="safety/heartbeat" to="autopilot/heartbeat_onboard" />
   </node>
   <node name="network" pkg="ap_network_bridge" type="aerial.py" output="screen" args="--device wlan0" >
     <remap from="network/send_flight_status" to="autopilot/status" />
-    <remap from="network/send_pose" to="local_estim/odom_combined" />
+    <remap from="network/send_pose" to="autopilot/acs_pose" />
     <remap from="network/recv_heart_ground" to="autopilot/heartbeat_ground" />
     <remap from="network/recv_arm" to="autopilot/arm" />
     <remap from="network/recv_mode" to="autopilot/mode_num" />
