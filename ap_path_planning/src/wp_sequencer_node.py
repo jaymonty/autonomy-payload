@@ -20,7 +20,7 @@ import rospy
 # Import ROS message and service types
 
 # ACS-specific imports
-import wp_sequencer as wpseq
+import ap_path_planning.wp_sequencer as wpseq
 
 
 #---------------------------------------------
@@ -40,20 +40,11 @@ if __name__ == '__main__':
     args = parser.parse_args(args=rospy.myargv(argv=sys.argv)[1:])
 
     # ROS and object initialization
-    rospy.init_node(args.nodename)
-    timer = rospy.Rate(1.0)
-    sequencer = wpseq.WaypointSequencer([], args.nodename, args.odombase, args.apbase)
+    sequencer = wpseq.WaypointSequencer(args.nodename, [])
     sequencer.setSequence([ [35.718299, -120.766609, 100.0], \
                             [35.718574, -120.762931, 100.0], \
                             [35.719459, -120.765800, 100.0], \
                             [35.717185, -120.763793, 100.0], \
                             [35.718330, -120.764748, 100.0] ])
-#    sequencer.startSequencer(True)
-
-    # Start main loop
-    print "\nStarting waypoint sequencer loop...\n"
-    while not rospy.is_shutdown():
-        sequencer.loopOnce()
-        # Sleep so ROS subscribers and services can run
-        timer.sleep()
+    sequencer.runAsNode(10.0, [], [ args.odombase ], [ args.apbase ])
 

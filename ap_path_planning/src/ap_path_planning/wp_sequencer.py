@@ -23,39 +23,22 @@ import rospy
 # Import ROS message and service types
 import std_msgs.msg as stdmsg
 from geometry_msgs.msg import PoseWithCovarianceStamped
-from autopilot_bridge.msg import LLA
-import ap_path_planning.msg as appp
 
-#import std_srvs.srv
+# Project-specific imports
+from autopilot_bridge.msg import LLA
+from ap_lib.nodeable import *
+from ap_lib.gps_utils import *
+import ap_msgs.msg as apm
+
 
 # Base name for node topics and services
 NODE_BASENAME = 'wp_sequencer'
 ODOM_BASENAME = 'local_estim'
 AP_BASENAME = 'autopilot'
 
-# Control printing of messages to stdout
-DBUG_PRINT = False
-WARN_PRINT = False
 
 # Other global constants
 CAPTURE_DISTANCE = 110.0
-
-# Copied from MAVProxy mp_util.py
-def gps_distance(lat1, lon1, lat2, lon2):
-    '''return distance between two points in meters,
-    coordinates are in degrees
-    thanks to http://www.movable-type.co.uk/scripts/latlong.html'''
-    radius_of_earth = 6378100.0 # in meters
-    lat1 = math.radians(lat1)
-    lat2 = math.radians(lat2)
-    lon1 = math.radians(lon1)
-    lon2 = math.radians(lon2)
-    dLat = lat2 - lat1
-    dLon = lon2 - lon1
-
-    a = math.sin(0.5*dLat)**2 + math.sin(0.5*dLon)**2 * math.cos(lat1) * math.cos(lat2)
-    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0-a))
-    return radius_of_earth * c
 
 
 # Object that creates or receives waypoint sequences and monitors the
@@ -71,7 +54,7 @@ def gps_distance(lat1, lon1, lat2, lon2):
 #   listComplete: set to true when the last waypoint is reached
 #   isRunning: set to True is the waypoint sequencer is running
 #   readyNextWP: set to True when the next waypoint can be issued
-class WaypointSequencer(object):
+class WaypointSequencer(Nodeable):
 
 
     # Class initializer initializes variables, subscribes to required
@@ -80,33 +63,45 @@ class WaypointSequencer(object):
     # ROS node (i.e., the object does not initialize itself as a node).
     # This enables multiple objects to run within a single node if
     # required.
-    # @param waypoints: list of waypoints in the desired traversal order
     # @param nodeName: name of the ROS node for this object
-    # @param odomBaseName: base name of ROS topic to read odometry from
+    # @param waypoints: list of waypoints in the desired traversal order
     # @param apBaseName: base name of the ROS topic to publish waypoints to
     # @param captureDistance: distance from a waypoint considered good enough
-    def __init__(self, waypoints=[], nodeName=NODE_BASENAME,\
-                 odomBaseName=ODOM_BASENAME, apBaseName=AP_BASENAME,\
+    def __init__(self, nodeName=NODE_BASENAME, waypoints=[], \
                  captureDistance=CAPTURE_DISTANCE):
-        self.nodeName = nodeName
+        Nodeable.__init__(self, nodeName)
         self.currentWP = LLA()
         self.pose = None
         self.setSequence(waypoints)
         self.isRunning = False
         self.captureDistance = captureDistance
 
-        # Set up object-specific ROS publishers
-        self.wpPublisher = rospy.Publisher("%s/payload_waypoint"%apBaseName, LLA)
 
-        # Set up object-specific ROS subscribers
-        rospy.Subscriber("%s/odom_combined"%odomBaseName, \
+
+    #-------------------------------------------------
+    # Implementation of parent class virtual functions
+    #-------------------------------------------------
+
+    # Establishes the callbacks for the WaypointSequencer object.  The object
+    # object subscribes to the odom_combined topic for current position
+    # updates, the wp_sequencer_run topic for start and stop commands, and
+    # the wp_list topic to receive new waypoint sequence lists
+    # @param params: list as follows: [ odometry_base_name ]
+    def callbackSetup(self, params=[ ODOM_BASENAME ]):
+        rospy.Subscriber("%s/odom_combined"%params[0], \
                          PoseWithCovarianceStamped, self.updatePose)
-        rospy.Subscriber("%s/wp_sequencer_run"%nodeName, stdmsg.Bool, \
+        rospy.Subscriber("%s/wp_sequencer_run"%self.nodeName, stdmsg.Bool, \
                          self.processRunMsg)
-        rospy.Subscriber("%s/wp_list"%nodeName, appp.WaypointListStamped, \
+        rospy.Subscriber("%s/wp_list"%self.nodeName, apm.WaypointListStamped, \
                          self.receiveWaypointList)
 
-        # Set up object-specific ROS services
+
+
+    # Establishes the publishers for the WaypointSequencer object.  The object
+    # publishes waypoint commands (LLA message) to the payload_waypoint topic
+    # @param params: list as follows: [ odometry_base_name ]
+    def publisherSetup(self, params=[ AP_BASENAME ]):
+        self.wpPublisher = rospy.Publisher("%s/payload_waypoint"%params[0], LLA)
 
 
     #--------------------------
@@ -188,16 +183,8 @@ class WaypointSequencer(object):
     # @param newRunState:  True or False to start or stop object run state
     def startSequencer(self, newRunState):
         self.isRunning = newRunState
-    
 
-    # Runs one iteration of the sequencer checks to see if the current
-    # waypoint has been reached, and if so, issues the next one
-    def loopOnce(self):
-        if (self.isRunning and not self.listComplete):
-            self.checkReadyNextWP()
-            if self.readyNextWP:  self.incrementWP()
 
-            
     #-----------------------------------------
     # ROS Subscriber callbacks for this object
     #-----------------------------------------
@@ -224,27 +211,4 @@ class WaypointSequencer(object):
         for wpt in wptList.waypoints:
            wpts.append([ wpt.lat, wpt.lon, wpt.alt ])
         setSequence(wpts)
-
-
-    #-----------------------------
-    # ROS services for this object
-    #-----------------------------
-
-
-    #--------------------------------------
-    # Logging and message utility functions
-    #--------------------------------------
-
-    # Logging utility function for this object
-    def log_dbug(self, msg):
-        rospy.logdebug(msg)
-        if DBUG_PRINT:
-            print "..DEBUG.. %s: %s" % (self.nodeName, msg)
-
-
-    # Warning utility function for this object
-    def log_warn(self, msg):
-        rospy.logwarn(msg)
-        if WARN_PRINT:
-            print "**WARN** %s: %s" % (self.nodeName, msg)
 
