@@ -135,7 +135,7 @@ class FlightStatus(Message):
     def _init_message(self):
         # Define message type parameters
         self.msg_type = 0x00
-        self.msg_fmt = '>HBBHHhhHH'
+        self.msg_fmt = '>HBBHHhhHH16s'
         # Define message fields (setting to None helps raise Exceptions later)
         self.mode = None	# Aircraft guidance mode (0-15, see enum)
         self.armed = None	# Boolean: Throttle Armed?
@@ -154,6 +154,7 @@ class FlightStatus(Message):
         self.alt_rel = None	# AGL (int, millimeters)
         self.gps_hdop = None	# GPS HDOP (int, 0-65535)
         self.mis_cur = None	# Current mission (waypoint) index (0-65535)
+        self.name = None	# Friendly name of aircraft (16 chars max)
         
     def build_tuple(self):
         # Convert message elements into pack-able fields and form tuple
@@ -184,7 +185,8 @@ class FlightStatus(Message):
                 int(self.airspeed * 1e02),  # TODO: Are these large enough?
                 int(self.alt_rel / 1e02),
                 int(self.gps_hdop),
-                int(self.mis_cur))
+                int(self.mis_cur),
+                self.name)
         #print tupl
         return tupl
         
@@ -213,6 +215,7 @@ class FlightStatus(Message):
         self.alt_rel = fields[6] * 1e02
         self.gps_hdop = fields[7]
         self.mis_cur = fields[8]
+        self.name = str(fields[9]).strip(chr(0x0))
 
 class Pose(Message):
     def _init_message(self):
