@@ -4,8 +4,8 @@ from optparse import OptionParser
 import sys
 
 # Load in ACS libraries
-import acs.acs_messages as acs_messages
-from acs.acs_socket import Socket
+import ap_lib.acs_messages as acs_messages
+from ap_lib.acs_socket import Socket
 
 #-----------------------------------------------------------------------
 # Main code

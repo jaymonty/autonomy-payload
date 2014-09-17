@@ -3,8 +3,8 @@
 from PySide.QtCore import *
 from PySide.QtGui import *
 
-from acs import acs_messages
-from acs.acs_socket import Socket
+from ap_lib import acs_messages
+from ap_lib.acs_socket import Socket
 
 from optparse import OptionParser
 import subprocess
