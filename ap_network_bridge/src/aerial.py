@@ -151,7 +151,7 @@ if __name__ == '__main__':
     
     # Set up publishers (network -> ROS)
     pub_pose = rospy.Publisher("%s/recv_pose"%ROS_BASENAME, 
-                               netmsg.NetPoseStamped)
+                               netmsg.NetOdometry)
     pub_heart_ground = rospy.Publisher("%s/recv_heart_ground"%ROS_BASENAME,
                                 apmsg.Heartbeat)
     pub_arm = rospy.Publisher("%s/recv_arm"%ROS_BASENAME, 
@@ -185,18 +185,26 @@ if __name__ == '__main__':
         
         if isinstance(message, acs_messages.Pose):
             try:
-                msg = netmsg.NetPoseStamped()
+                msg = netmsg.NetOdometry()
                 msg.sender_id = message.msg_src
-                msg.pose.header.stamp.secs = message.msg_secs
-                msg.pose.header.stamp.nsecs = message.msg_nsecs
-                msg.pose.header.seq = 0
-                msg.pose.pose.position.x = message.lat
-                msg.pose.pose.position.y = message.lon
-                msg.pose.pose.position.z = message.alt
-                msg.pose.pose.orientation.x = message.q_x
-                msg.pose.pose.orientation.y = message.q_y
-                msg.pose.pose.orientation.z = message.q_z
-                msg.pose.pose.orientation.w = message.q_w
+                msg.odom.header.stamp.secs = message.msg_secs
+                msg.odom.header.stamp.nsecs = message.msg_nsecs
+                msg.odom.header.seq = 0
+                msg.odom.pose.pose.position.x = message.lat
+                msg.odom.pose.pose.position.y = message.lon
+                msg.odom.pose.pose.position.z = message.alt
+                msg.odom.pose.pose.orientation.x = message.q_x
+                msg.odom.pose.pose.orientation.y = message.q_y
+                msg.odom.pose.pose.orientation.z = message.q_z
+                msg.odom.pose.pose.orientation.w = message.q_w
+                # msg.odom.pose.covariance is not used
+                msg.odom.twist.twist.linear.x = message.vlx
+                msg.odom.twist.twist.linear.y = message.vly
+                msg.odom.twist.twist.linear.z = message.vlz
+                msg.odom.twist.twist.angular.x = message.vax
+                msg.odom.twist.twist.angular.y = message.vay
+                msg.odom.twist.twist.angular.z = message.vaz
+                # msg.odom.twist.covariance is not used
                 pub_pose.publish(msg)
             except:
                 rospy.logwarn("Error processing received Pose")
