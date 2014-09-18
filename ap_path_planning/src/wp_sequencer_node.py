@@ -33,7 +33,7 @@ if __name__ == '__main__':
                         default=wpseq.NODE_BASENAME)
     parser.add_argument('-o', "--odombase", dest="odombase", \
                         help="Basename for the ROS odometry topic", \
-                        default=wpseq.ODOM_BASENAME)
+                        default=wpseq.AP_BASENAME)
     parser.add_argument('-a', "--apbase", dest="apbase", \
                         help="Basename for the ROS autopilot topics", \
                         default=wpseq.AP_BASENAME)

@@ -1,3 +1,2 @@
-uint16 vehicleID
-geometry_msgs/PoseWithCovariance pose
-geometry_msgs/TwistWithCovariance velocity
+uint16 vehicle_id
+nav_msgs/Odometry state

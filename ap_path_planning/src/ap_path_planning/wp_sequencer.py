@@ -23,6 +23,7 @@ import rospy
 # Import ROS message and service types
 import std_msgs.msg as stdmsg
 from geometry_msgs.msg import PoseWithCovarianceStamped
+from nav_msgs.msg import Odometry
 
 # Project-specific imports
 from autopilot_bridge.msg import LLA
@@ -33,7 +34,6 @@ import ap_msgs.msg as apm
 
 # Base name for node topics and services
 NODE_BASENAME = 'wp_sequencer'
-ODOM_BASENAME = 'local_estim'
 AP_BASENAME = 'autopilot'
 
 
@@ -75,6 +75,8 @@ class WaypointSequencer(Nodeable):
         self.setSequence(waypoints)
         self.isRunning = False
         self.captureDistance = captureDistance
+#        self.DBUG_PRINT = True
+#        self.WARN_PRINT = True
 
 
 
@@ -83,13 +85,12 @@ class WaypointSequencer(Nodeable):
     #-------------------------------------------------
 
     # Establishes the callbacks for the WaypointSequencer object.  The object
-    # object subscribes to the odom_combined topic for current position
+    # object subscribes to the acs_pose topic for current position
     # updates, the wp_sequencer_run topic for start and stop commands, and
     # the wp_list topic to receive new waypoint sequence lists
     # @param params: list as follows: [ odometry_base_name ]
-    def callbackSetup(self, params=[ ODOM_BASENAME ]):
-        rospy.Subscriber("%s/odom_combined"%params[0], \
-                         PoseWithCovarianceStamped, self.updatePose)
+    def callbackSetup(self, params=[ AP_BASENAME ]):
+        rospy.Subscriber("%s/acs_pose"%params[0], Odometry, self.updatePose)
         rospy.Subscriber("%s/wp_sequencer_run"%self.nodeName, stdmsg.Bool, \
                          self.processRunMsg)
         rospy.Subscriber("%s/wp_list"%self.nodeName, apm.WaypointListStamped, \
@@ -99,9 +100,18 @@ class WaypointSequencer(Nodeable):
 
     # Establishes the publishers for the WaypointSequencer object.  The object
     # publishes waypoint commands (LLA message) to the payload_waypoint topic
-    # @param params: list as follows: [ odometry_base_name ]
+    # @param params: list as follows: [ autopilot_base_name ]
     def publisherSetup(self, params=[ AP_BASENAME ]):
         self.wpPublisher = rospy.Publisher("%s/payload_waypoint"%params[0], LLA)
+
+
+    # Executes one iteration of the timed loop for the WaypointSequencer
+    # object. When "on", checks to see if the current waypoint has been
+    # reached, and if so, issues the next one.
+    def executeTimedLoop(self):
+        if (self.isRunning and not self.listComplete):
+            self.checkReadyNextWP()
+            if self.readyNextWP:  self.incrementWP()
 
 
     #--------------------------
