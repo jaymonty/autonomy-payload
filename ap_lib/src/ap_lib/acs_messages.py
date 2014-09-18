@@ -104,6 +104,8 @@ def generate_message_object(msg_type):
         return SlaveSetup()
     elif msg_type == 0x88:
         return FlightReady()
+    elif msg_type == 0xFE:
+        return PayloadHeartbeat()
     elif msg_type == 0xFF:
         return PayloadShutdown()
     else:
@@ -434,6 +436,25 @@ class FlightReady(Message):
     def parse_tuple(self, fields):
         # Place unpacked but unconverted fields into message elements
         self.ready = bool(fields[0]) 
+
+class PayloadHeartbeat(Message):
+    def _init_message(self):
+        # Define message type parameters
+        self.msg_type = 0xFE
+        self.msg_fmt = '>BBH'
+        # Define message fields (setting to None helps raise Exceptions later)
+        self.enable = None         # Boolean
+        # 3 padding bytes = 0x00
+
+    def build_tuple(self):
+        # Convert message elements into pack-able fields and form tuple
+        return (int(self.enable),
+                0x00,
+                0x0000)
+
+    def parse_tuple(self, fields):
+        # Place unpacked but unconverted fields into message elements
+        self.enable = bool(fields[0])
 
 class PayloadShutdown(Message):
     def _init_message(self):

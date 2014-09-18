@@ -290,6 +290,15 @@ if __name__ == '__main__':
                 rospy.loginfo("Ground-to-air: FlightReady")
             except Exception as ex:
                 rospy.logwarn("Error processing command: FlightReady")
+
+        elif isinstance(message, acs_messages.PayloadHeartbeat):
+            try:
+                srv = rospy.ServiceProxy('safety/set_health',
+                                         safesrv.SetHealth)
+                srv(message.enable)
+                rospy.loginfo("Ground-to-air: PayloadHeartbeat")
+            except Exception as ex:
+                rospy.logwarn("Error processing command: PayloadHeartbeat")
             
         elif isinstance(message, acs_messages.PayloadShutdown):
             try:
