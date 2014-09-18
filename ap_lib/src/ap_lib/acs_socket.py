@@ -142,15 +142,21 @@ class Socket():
             message.msg_src_ip = ip
             message.msg_src_port = port
             
-            # If message type has payload fields, parse and populate them
-            if message.msg_size and (len(msg) == (message.hdr_size + message.msg_size)):
+            # Does the size of the message match?
+            if len(msg) != message.hdr_size + message.msg_size:
+                return False
+
+            # Attempt to parse the payload fields, if any
+            if not message.msg_size:
+                return message
+            try:
                 fields = struct.unpack_from(message.msg_fmt, msg, message.hdr_size)
                 message.parse_tuple(fields)
+                return message
+            except:
+                return False
             
-            return message
-            
-        # Any other unhandled conditions, pass them along
+        # Any other unhandled conditions are printed for our awareness
         except Exception as ex:
             print(ex.args[0])
-            pass
 
