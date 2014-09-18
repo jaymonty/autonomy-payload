@@ -245,11 +245,6 @@ else
   check_fail "payload git checkout dev"
 fi
 
-# Install ACS shared libs
-cd ~/acs_ros_ws/src/autonomy-payload/lib/
-python setup.py build install --user
-check_fail "payload lib setup.py"
-
 # Clone or update the autopilot_bridge repo
 cd ~/acs_ros_ws/src/
 ls autopilot_bridge/ &> /dev/null
@@ -267,6 +262,7 @@ else
 fi
 
 # Build all workspace packages
+# NOTE: This now also builds all shared libs in autonomy-payload
 cd ~/acs_ros_ws/
 catkin_make
 check_fail "catkin_make"
