@@ -229,7 +229,9 @@ if __name__ == '__main__':
         item = lst.currentItem()
         if item.ident > 0 and item.state in [UAVListWidget.STATE_READY,
                                             UAVListWidget.STATE_NOT_READY]:
+            print "START  %f" % time.time()
             preflight_aircraft(sock, item.ident, my_ip, item.ip)
+            print "STOP   %f" % time.time()
     btPreflight.clicked.connect(do_preflight)
     layout.addWidget(btPreflight)
 
