@@ -50,7 +50,7 @@ sudo hostname $AIRCRAFT_NAME
 check_fail "set temporary hostname"
 sudo sh -c "echo $AIRCRAFT_NAME > /etc/hostame"
 check_fail "set persistent hostname"
-sudo sed -i s/odroid/$AIRCRAFT_NAME/ /etc/hosts
+sudo sed -i "s/\tlocalhost.*/\tlocalhost\t$AIRCRAFT_NAME/" /etc/hosts
 check_fail "set loopback hostname"
 
 # Fix things that make SSH logins slow
