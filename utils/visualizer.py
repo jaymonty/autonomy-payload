@@ -184,8 +184,8 @@ if __name__ == '__main__':
                 color[p.ID] = "r-"
             elif p.ID == 1: #keep as a special plane
                 marker = get_marker_corvette(p)
-                #br.sendTransform((marker.pose.position.x, marker.pose.position.y, marker.pose.position.y), tf.transformations.quaternion_from_euler(p.pitch,p.roll,p.yaw), rospy.Time.now(),"1","world")
-                
+                q = marker.pose.orientation 
+                br.sendTransform((marker.pose.position.x, marker.pose.position.y, marker.pose.position.y), (q.x,q.y,q.z,q.w), rospy.Time.now(),"plane 1","world")
                 color[p.ID] = "g-"
             else:
                 marker = get_marker_5th_2ss(p)
