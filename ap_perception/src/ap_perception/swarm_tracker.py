@@ -323,7 +323,7 @@ class SwarmTracker(Nodeable):
     # and the recv_pose topic for swarm member updates
     # @param params: list as follows: [ odometry_base_name, net_base_name ]
     def callbackSetup(self, params=[ SELF_ODOM_BASENAME, NET_ODOM_BASENAME ]):
-        rospy.Subscriber("%s/acs_pose"%params[0], Odometry, \
+        rospy.Subscriber("%s/gps_odom"%params[0], Odometry, \
                          self.updateOwnPose)
         rospy.Subscriber("%s/recv_pose"%params[1], NetOdometry, \
                          self.updateSwarmPose)
@@ -386,7 +386,7 @@ class SwarmTracker(Nodeable):
 
             # Update an existing element if it's already in the dictionary
             if poseMsg.sender_id in self.swarm:
-                updateElement = swarm[poseMsg.sender_id]
+                updateElement = self.swarm[poseMsg.sender_id]
                 elTime = float(updateElement.state.header.stamp.secs) +\
                          float(updateElement.state.header.stamp.nsecs) / float(1e9)
                 if poseTime <= elTime: return # older than latest data
@@ -395,8 +395,8 @@ class SwarmTracker(Nodeable):
                 newElement = SwarmElement(poseMsg.sender_id, poseMsg.odom)
                 self.swarm[poseMsg.sender_id] = newElement
 
-            element = swarm[poseMsg.sender_id]
-            (roll, pitch, yaw) = element.pose.getEulerAngles()
+            element = self.swarm[poseMsg.sender_id]
+            (roll, pitch, yaw) = element.getEulerAngles()
             self.log_dbug("update act " + str(poseMsg.sender_id) + ": " + \
                           element.getAsString())
 
