@@ -1,7 +1,7 @@
 <launch>
   <param name="aircraft_id" type="int" value="$(arg id)" />
   <param name="aircraft_name" type="str" value="$(arg name)" />
-  <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--device tcp:127.0.0.1:5762 --module acs --module slave" />
+  <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--device tcp:127.0.0.1:5762 --module acs --module param --module slave" />
   <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" >
     <remap from="safety/heartbeat" to="autopilot/heartbeat_onboard" />
   </node>
@@ -16,4 +16,5 @@
     <remap from="network/recv_guided_goto" to="autopilot/guided_goto" />
     <remap from="network/recv_waypoint_goto" to="autopilot/waypoint_goto" />
   </node>
+  <node name="run_once" pkg="ap_tasks" type="run_once.py" output="screen" args="" />
 </launch>
