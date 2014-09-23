@@ -48,9 +48,9 @@ fi
 # Set the hostname
 sudo hostname $AIRCRAFT_NAME
 check_fail "set temporary hostname"
-sudo sh -c "echo $AIRCRAFT_NAME > /etc/hostame"
+sudo sh -c "echo $AIRCRAFT_NAME > /etc/hostname"
 check_fail "set persistent hostname"
-sudo sed -i "s/\tlocalhost.*/\tlocalhost\t$AIRCRAFT_NAME/" /etc/hosts
+sudo sed -ri "s/\s+localhost.*/\tlocalhost\t$AIRCRAFT_NAME/" /etc/hosts
 check_fail "set loopback hostname"
 
 # Fix things that make SSH logins slow
