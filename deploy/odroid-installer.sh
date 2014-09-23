@@ -200,12 +200,14 @@ else
   cd mavlink/pymavlink/
   git checkout .  # reset to state where we can update
   check_fail "mavlink git checkout ."
-  git fetch origin  # update local copy of repo
+  git checkout dev  # have the right branch checked out
+  check_fail "mavlink git checkout dev"
+  git fetch origin  # update local copy of remote repo
   check_fail "mavlink git fetch"
   git diff --quiet origin/dev  # determine if there are updates
   MAVLINK_REBUILD=$?
-  git checkout dev  # bring updates into working space
-  check_fail "mavlink git checkout dev"
+  git merge origin/dev  # bring in updates
+  check_false "mavlink git merge origin/dev"
 
   # Only rebuild if the branch was actually updated
   if [ $MAVLINK_REBUILD != 0 ]; then
@@ -241,10 +243,12 @@ else
   cd autonomy-payload
   git checkout .  # reset to state where we can update
   check_fail "payload git checkout ."
-  git fetch origin  # update local copy of repo
-  check_fail "payload git fetch"
-  git checkout master  # bring updates into working space
+  git checkout master  # have the right branch checked out
   check_fail "payload git checkout dev"
+  git fetch origin  # update local copy of remote repo
+  check_fail "payload git fetch"
+  git merge origin/master  # bring in updates
+  check_fail "payload git merge origin/master"
 fi
 
 # Clone or update the autopilot_bridge repo
@@ -257,10 +261,12 @@ else
   cd autopilot_bridge
   git checkout .  # reset to state where we can update
   check_fail "mavbridge git checkout ."
-  git fetch origin  # update local copy of repo
-  check_fail "mavbridge git fetch"
-  git checkout master  # bring updates into working space
+  git checkout master  # have the right branch checked out
   check_fail "mavbridge git checkout dev"
+  git fetch origin  # update local copy of remote repo
+  check_fail "mavbridge git fetch"
+  git merge origin/master  # bring in updates
+  check_fail "mavbridge git merge origin/master"
 fi
 
 # Build all workspace packages
