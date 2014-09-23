@@ -266,6 +266,8 @@ fi
 # Build all workspace packages
 # NOTE: This now also builds all shared libs in autonomy-payload
 cd ~/acs_ros_ws/
+catkin_make clean
+check_fail "catkin_make clean"
 catkin_make
 check_fail "catkin_make"
 
