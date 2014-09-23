@@ -207,7 +207,7 @@ else
   git diff --quiet origin/dev  # determine if there are updates
   MAVLINK_REBUILD=$?
   git merge origin/dev  # bring in updates
-  check_false "mavlink git merge origin/dev"
+  check_fail "mavlink git merge origin/dev"
 
   # Only rebuild if the branch was actually updated
   if [ $MAVLINK_REBUILD != 0 ]; then
