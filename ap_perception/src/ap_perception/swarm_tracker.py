@@ -148,10 +148,11 @@ class SwarmElement(object):
     # TODO:  DR is all screwed up
     # TODO:  Implement covariance growth functionality
     def computeDRPose(self, drTime):
-#        poseTimeFloat = float(self.state.header.stamp.secs) +\
-#                        float(self.state.header.stamp.nsecs) / float(1e9)
-#        drTimeFloat = float(drTime.secs) + float(drTime.nsecs) / float(1e9)
-#        if drTimeFloat <= poseTimeFloat:  # If DR time in past, use current pose
+        poseTimeFloat = float(self.state.header.stamp.secs) +\
+                        float(self.state.header.stamp.nsecs) / float(1e9)
+        drTimeFloat = float(drTime.secs) + float(drTime.nsecs) / float(1e9)
+        dt = drTimeFloat - poseTimeFloat
+        if dt <= 0.0:  # If DR time in past, use current pose
             self.drPose.header.stamp.secs = self.state.header.stamp.secs
             self.drPose.header.stamp.nsecs = self.state.header.stamp.nsecs
             self.drPose.pose.pose.position.x = self.state.pose.pose.position.x
@@ -162,49 +163,52 @@ class SwarmElement(object):
             self.drPose.pose.pose.orientation.z = self.state.pose.pose.orientation.z
             self.drPose.pose.pose.orientation.w = self.state.pose.pose.orientation.w
             self.drPose.pose.covariance = self.state.pose.covariance
-#        else:
-#            self.drPose.header.stamp.secs = drTime.secs
-#            self.drPose.header.stamp.nsecs = drTime.nsecs
-#
-#            # Dead Reckon the orientation quaternion
-#            poseQuaternion = [ self.state.pose.pose.orientation.x, \
-#                               self.state.pose.pose.orientation.y, \
-#                               self.state.pose.pose.orientation.z, \
-#                               self.state.pose.pose.orientation.w ]
-#            pqrQuaternion = [ self.state.twist.twist.angular.x, \
-#                              self.state.twist.twist.angular.y, \
-#                              self.state.twist.twist.angular.z, 0.0 ]
-#            qDot = multiply_quaternion( poseQuaternion, pqrQuaternion)
-#            qDot = scalar_multiply_quaternion(qDot, 0.5)
-#            poseQuaternion = \
-#                [ qDot[0] * drTimeFloat + self.state.pose.pose.orientation.x, \
-#                  qDot[1] * drTimeFloat + self.state.pose.pose.orientation.y, \
-#                  qDot[2] * drTimeFloat + self.state.pose.pose.orientation.z, \
-#                  qDot[3] * drTimeFloat + self.state.pose.pose.orientation.w ]
-#            poseQuaternion = \
-#                normalize_quaternion(poseQuaternion)
-#            self.drPose.pose.pose.orientation.x = poseQuaternion[0]
-#            self.drPose.pose.pose.orientation.y = poseQuaternion[1]
-#            self.drPose.pose.pose.orientation.z = poseQuaternion[2]
-#            self.drPose.pose.pose.orientation.w = poseQuaternion[3]
-#
-#            # simple straight line DR for now (use a curve at some point)
-#            (phi1, theta1, psi1) = self.getEulerAngles(CURRENT_POSE)
-#            (phi2, theta2, psi2) = self.getEulerAngles(DR_POSE)
-#            psiDot = (psi2 - psi1) / drTimeFloat
-#
-#            direction = atan2(self.state.twist.twist.linear.y, \
-#                              self.state.twist.twist.linear.x)
-#            velocity = math.hypot(self.state.twist.twist.linear.y, \
-#                                  self.state.twist.twist.linear.x)
-#            distance = velocity * drTimeFloat
-#            (self.drPose.pose.pose.position.x, self.drPose.pose.pose.position.y) = \
-#                gps_newpos(self.state.pose.pose.position.x, \
-#                           self.state.pose.pose.position.y, \
-#                           direction, distance)
-#            self.drPose.pose.pose.position.z -= \
-#                self.state.twist.twist.linear.z * drTimeFloat
-#            self.drPose.pose.covariance = self.state.pose.covariance '''
+        else:
+            self.drPose.header.stamp.secs = drTime.secs
+            self.drPose.header.stamp.nsecs = drTime.nsecs
+
+            # Dead Reckon the orientation quaternion
+            poseQuaternion = [ self.state.pose.pose.orientation.x, \
+                               self.state.pose.pose.orientation.y, \
+                               self.state.pose.pose.orientation.z, \
+                               self.state.pose.pose.orientation.w ]
+            pqrQuaternion = [ self.state.twist.twist.angular.x, \
+                              self.state.twist.twist.angular.y, \
+                              self.state.twist.twist.angular.z, 0.0 ]
+            qDot = multiply_quaternion( poseQuaternion, pqrQuaternion)
+            qDot = scalar_multiply_quaternion(qDot, 0.5)
+            poseQuaternion = \
+                [ qDot[0] * dt + self.state.pose.pose.orientation.x, \
+                  qDot[1] * dt + self.state.pose.pose.orientation.y, \
+                  qDot[2] * dt + self.state.pose.pose.orientation.z, \
+                  qDot[3] * dt + self.state.pose.pose.orientation.w ]
+            poseQuaternion = \
+                normalize_quaternion(poseQuaternion)
+            self.drPose.pose.pose.orientation.x = poseQuaternion[0]
+            self.drPose.pose.pose.orientation.y = poseQuaternion[1]
+            self.drPose.pose.pose.orientation.z = poseQuaternion[2]
+            self.drPose.pose.pose.orientation.w = poseQuaternion[3]
+
+            # simple straight line DR for now (use a curve at some point)
+            (phi1, theta1, psi1) = self.getEulerAngles(CURRENT_POSE)
+            (phi2, theta2, psi2) = self.getEulerAngles(DR_POSE)
+            deltaPsi = psi2 - psi1
+            if deltaPsi <= -pi: deltaPsi += 2.0 * pi
+            elif deltaPsi > pi: deltaPsi -= 2.0 * pi
+            psiDot = deltaPsi / dt
+
+            direction = atan2(self.state.twist.twist.linear.y, \
+                              self.state.twist.twist.linear.x)
+            velocity = math.hypot(self.state.twist.twist.linear.y, \
+                                  self.state.twist.twist.linear.x)
+            distance = velocity * dt
+            (self.drPose.pose.pose.position.x, self.drPose.pose.pose.position.y) = \
+                gps_newpos(self.state.pose.pose.position.x, \
+                           self.state.pose.pose.position.y, \
+                           direction, distance)
+            self.drPose.pose.pose.position.z -= \
+                self.state.twist.twist.linear.z * dt
+            self.drPose.pose.covariance = self.state.pose.covariance
 
 
     # Utility function to extract Euler angles (roll, pitch, yaw) of a pose
@@ -323,7 +327,7 @@ class SwarmTracker(Nodeable):
     # and the recv_pose topic for swarm member updates
     # @param params: list as follows: [ odometry_base_name, net_base_name ]
     def callbackSetup(self, params=[ SELF_ODOM_BASENAME, NET_ODOM_BASENAME ]):
-        rospy.Subscriber("%s/gps_odom"%params[0], Odometry, \
+        rospy.Subscriber("%s/acs_pose"%params[0], Odometry, \
                          self.updateOwnPose)
         rospy.Subscriber("%s/recv_pose"%params[1], NetOdometry, \
                          self.updateSwarmPose)
