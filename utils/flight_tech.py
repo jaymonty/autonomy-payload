@@ -26,12 +26,16 @@ class UAVListWidgetItem(QListWidgetItem):
         self.ident = ident
         self.name = name
         self.ip = ip
+        self.vcc = 0.0
+        self.last_seen = 0.0
 
         self.setState(state)
-        self.setVoltage(0.0)
         self.updateLastSeen()
 
         self.setFont(UAVListWidgetItem.FONT)
+        self._setText()
+
+    def _setText(self):
         self.setText("%s (%d / %2.3fv)" % (self.name, self.ident, self.vcc))
 
     def __str__(self):
@@ -44,6 +48,7 @@ class UAVListWidgetItem(QListWidgetItem):
 
     def setVoltage(self, vcc):
         self.vcc = vcc
+        self._setText()
 
     def updateLastSeen(self):
         self.last_seen = time.time()
@@ -65,7 +70,7 @@ class UAVListWidget(QListWidget):
         QListWidget.__init__(self, parent)
 
         # Track UAVs, periodically checking for new messages
-        self.uav_listen_event = self.startTimer(1000)
+        self.uav_listen_event = self.startTimer(100)
 
         # Add a dummy aircraft to "select none"
         self.addItem(UAVListWidgetItem(0, '(None)', '', UAVListWidget.STATE_NONE))
@@ -91,9 +96,6 @@ class UAVListWidget(QListWidget):
     def timerEvent(self, event):
         if event.timerId() != self.uav_listen_event:
             return
-
-        # Current time, used for staling out old reports
-        cur_time = time.time()
 
         while True:
             # Try to receive a message
@@ -124,6 +126,7 @@ class UAVListWidget(QListWidget):
                 item.updateLastSeen()
 
         # If we haven't seen any for a while, change color
+        cur_time = time.time()
         for i in range(self.count()):
             if self.item(i).ident == 0:
                 continue
