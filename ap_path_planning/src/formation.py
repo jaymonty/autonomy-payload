@@ -9,7 +9,7 @@
 import sys
 import rospy
 #Append libraries directory to path:
-from ap_lib.dubins import *
+#from ap_lib.dubins import *
 # Keeps track of agents in the networ
 from ap_perception.swarm_tracker import *
 from ap_lib import gps_utils
@@ -93,6 +93,18 @@ def compute_follow_wp(leaderID, tracker):
 
 
 
+def dubins_path_length(start_config, end_config, radius):
+    #A config is a tuple (x,y,theta)
+    #This is a hueristic for the actual dubins distance.
+    
+    #if within turning radius, then really hard to visit
+    path_length = math.sqrt((start_config[0]-end_config[0])**2 + (start_config[1]-end_config[1])**2)
+    if path_length < radius:
+        path_length += 2*math.pi*radius
+    path_length += radius*abs(start_config[2]-end_config[2])
+    return path_length
+
+
 #Perform algorithm for V formation
 def find_local_leader(flockLeaderID, tracker):
     global STATE_TYPE
@@ -120,7 +132,7 @@ def find_local_leader(flockLeaderID, tracker):
     leader_config = (leader_R*math.cos(leader_bearing), leader_R*math.sin(leader_bearing), math.pi/2-l_yaw)
 
     #Get distance to go straight to leader
-    MAX_DISTANCE = dubins.path_length(self_config, leader_config, dubins_rad)
+    MAX_DISTANCE = dubins_path_length(self_config, leader_config, dubins_rad)
 
     #Initialize to flockLeader
     local_leader = flockLeaderID
@@ -147,14 +159,14 @@ def find_local_leader(flockLeaderID, tracker):
             #TODO: revisit this logic.
 
             #find minimum distance path from agent to leader
-            distance_al = dubins.path_length(agent_config, leader_config, dubins_rad)
+            distance_al = dubins_path_length(agent_config, leader_config, dubins_rad)
 
             #Don't consider if further from leader than you are.
             if distance_al > MAX_DISTANCE:
                 continue
 
             #find minimum distance path from self to agent 
-            distance_sa = dubins.path_length(self_config, agent_config, dubins_rad)
+            distance_sa = dubins_path_length(self_config, agent_config, dubins_rad)
             #don't consider if further from leader
             if distance_sa > MAX_DISTANCE:
                 continue 
@@ -171,10 +183,12 @@ def find_local_leader(flockLeaderID, tracker):
 if __name__ == '__main__':
     #Parse arguments
     parser = ArgumentParser("rosrun ap_path_planning follow_us.py")
-    parser.add_argument("leaderID",help="ID of flock leader")
-    parser.add_argument("selfID",help="ID of self")
+    parser.add_argument("-leaderID",help="ID of flock leader",dest="leaderID",default=None)
+    parser.add_argument("-selfID",help="ID of self",dest="selfID",default=None)
     parser.add_argument("--use-base-alt",help="altitude to maintain during flight",dest="BASE_ALT",default=None)
     parser.add_argument("--use-alt-sep",help="altitude separation to maintain from leader",dest="ALT_SEP",default=None)
+    parser.add_argument("--lookahead", dest="lookahead",default=-10,help="following distance to leader")
+    parser.add_argument("--overshoot", dest="overshoot",default=40,help="Overshoot distance distance")
     args = parser.parse_args(args=rospy.myargv(argv=sys.argv)[1:])
     if args.BASE_ALT is not None:
         BASE_ALT = float(args.BASE_ALT)
@@ -189,12 +203,22 @@ if __name__ == '__main__':
         print "Please supply either base altitude or separation altitude (--use-base-alt (alt in meters) or --use-alt-sep (alt_sep in meters)"
         sys.exit(1)
     flockLeaderID = int(args.leaderID)
+    if flockLeaderID is None:
+        print "Please supply leader ID (--leaderID LEADERID)"
+        sys.exit(1)
+
     ownID = int(args.selfID)
+    if ownID is None:
+        print "Please supply self ID (--selfID SELFID)"
+        sys.exit(1)
+
+    Rfollow = float(args.lookahead)
+    Rovershoot = float(args.overshoot)
 
     #Initialize ROS nodes
-    rospy.init_node("follow_us")
+    rospy.init_node("formation")
     #pub_pl_wp = rospy.Publisher("/autopilot/guided_goto",LLA)
-    pub_pl_wp = rospy.Publisher("/autopilot/guided_goto",LLA)
+    pub_pl_wp = rospy.Publisher("/autopilot/payload_waypoint",LLA)
     print "\n Agent %u flocking around aircraft %u....\n" % (ownID,flockLeaderID)
     tracker = SwarmTrackerSubscriber()
     leaderUpdateCounter=0
@@ -210,7 +234,7 @@ if __name__ == '__main__':
             if leaderUpdateCounter == leaderUpdateCount:
                 print "Re-evaluating leader"
                 leaderUpdateCounter = 0
-                #leader_ID = find_local_leader(flockLeaderID, tracker)
+                leader_ID = find_local_leader(flockLeaderID, tracker)
             else:
                 leaderUpdateCounter+=1
             leader_lat=None

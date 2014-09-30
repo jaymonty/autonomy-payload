@@ -24,9 +24,9 @@ BASE_ALT= None
  #altitude separation
 ALT_SEP = None
  # Target following distance from leader
-Rfollow = -10 #None #units meters
+Rfollow = None #-10 #None #units meters
  # Overshoot distance for avoiding loiter 
-Rovershoot = 60 #units meters
+Rovershoot = None #60 #units meters
 
 # These are set by incoming ROS messages
 tstamp = None
@@ -116,10 +116,12 @@ def odom_callback(data):
 if __name__ == '__main__':
     # Parse command line arguments
     parser = ArgumentParser("rosrun ap_path_planning follow_me.py")
-    parser.add_argument("aircraft", help="ID of aircraft to follow")
-    #parser.add_argument("Rfollow", help="following distance")
-    parser.add_argument("--use-base-alt", dest="BASE_ALT", default=None)
-    parser.add_argument("--use-alt-sep", dest="ALT_SEP",default=None)
+    parser.add_argument("--target", dest="aircraft", default=None,help="ID of aircraft to follow")
+    parser.add_argument("--lookahead", dest="lookahead",default=-10,help="following distance to leader")
+    parser.add_argument("--overshoot", dest="overshoot",default=40,help="Overshoot distance distance")
+    parser.add_argument("--use-base-alt", dest="BASE_ALT", default=None,help="Use fixed altitude")
+    parser.add_argument("--use-alt-sep", dest="ALT_SEP",default=None, help="Use altitude separation from leader")
+
     args = parser.parse_args(args=rospy.myargv(argv=sys.argv)[1:])
     if args.BASE_ALT is not None:
         BASE_ALT = float(args.BASE_ALT)
@@ -135,7 +137,12 @@ if __name__ == '__main__':
         sys.exit(1)
     
     apid = int(args.aircraft)
-    # Rfollow = float(args.Rfollow) 
+    if apid is None: 
+        print "Please supply target aircraft \(--target AIRCRAFT_ID\)"
+        sys.exit(1) 
+    Rfollow = float(args.lookahead) 
+    Rovershoot = float(args.overshoot)
+
     # Initialize ROS node
     rospy.init_node("follow_me")
 
@@ -145,14 +152,12 @@ if __name__ == '__main__':
                                 pose_callback)
 
     # Listen to self pose messages
-    sub_odom = rospy.Subscriber("/autopilot/gps_odom",
+    sub_odom = rospy.Subscriber("/autopilot/acs_pose",
                                       Odometry,
                                       odom_callback)
 
     # Publish to autopilot's WP navigation
-#    pub_pl_wp = rospy.Publisher("/autopilot/payload_waypoint",
-#                                LLA)
-    pub_pl_wp = rospy.Publisher("/autopilot/guided_goto",LLA)
+    pub_pl_wp = rospy.Publisher("/autopilot/payload_waypoint",LLA)
 
     print "\nFollowing aircraft %u ...\n" % (apid)
 
