@@ -213,6 +213,8 @@ else
   check_fail "mavlink git merge origin/dev"
 fi
 
+rm -rf ~/.local/  # Clear out old build
+check_fail "mavlink remove .local/"
 python setup.py build install --user
 check_fail "mavlink setup.py"
 
