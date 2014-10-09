@@ -194,27 +194,27 @@ if [ $? != 0 ]; then
   git checkout dev  # The yoda branch we use for production
   check_fail "mavlink git checkout dev"
 
-  python setup.py build install --user
-  check_fail "mavlink setup.py"
+  grep "export MAVLINK_DIALECT=ardupilotmega" ~/.bashrc
+  if [ $? != 0 ]; then
+    echo "export MAVLINK_DIALECT=ardupilotmega" >> ~/.bashrc
+    export MAVLINK_DIALECT=ardupilotmega
+  fi
 else
   cd mavlink/pymavlink/
-  git checkout .  # reset to state where we can update
-  check_fail "mavlink git checkout ."
-  git checkout dev  # have the right branch checked out
-  check_fail "mavlink git checkout dev"
   git fetch origin  # update local copy of remote repo
   check_fail "mavlink git fetch"
-  git diff --quiet origin/dev  # determine if there are updates
-  MAVLINK_REBUILD=$?
+  git checkout .  # discard any local changes
+  check_fail "mavlink git checkout ."
+  git clean -df  # discard any untracked files
+  check_fail "mavlink git clean"
+  git checkout dev  # have the right branch checked out
+  check_fail "mavlink git checkout dev"
   git merge origin/dev  # bring in updates
   check_fail "mavlink git merge origin/dev"
-
-  # Only rebuild if the branch was actually updated
-  if [ $MAVLINK_REBUILD != 0 ]; then
-    python setup.py build install --user
-    check_fail "mavlink setup.py"
-  fi
 fi
+
+python setup.py build install --user
+check_fail "mavlink setup.py"
 
 #------------------------------------------------------------------------------
 # Set up autonomy-payload
@@ -241,12 +241,14 @@ if [ $? != 0 ]; then
   check_fail "payload git clone"
 else
   cd autonomy-payload
-  git checkout .  # reset to state where we can update
-  check_fail "payload git checkout ."
-  git checkout master  # have the right branch checked out
-  check_fail "payload git checkout dev"
   git fetch origin  # update local copy of remote repo
   check_fail "payload git fetch"
+  git checkout .  # discard any local changes
+  check_fail "payload git checkout ."
+  git clean -df  # discard any untracked files
+  check_fail "payload git clean"
+  git checkout master  # have the right branch checked out
+  check_fail "payload git checkout master"
   git merge origin/master  # bring in updates
   check_fail "payload git merge origin/master"
 fi
@@ -259,12 +261,14 @@ if [ $? != 0 ]; then
   check_fail "mavbridge git clone"
 else
   cd autopilot_bridge
-  git checkout .  # reset to state where we can update
-  check_fail "mavbridge git checkout ."
-  git checkout master  # have the right branch checked out
-  check_fail "mavbridge git checkout dev"
   git fetch origin  # update local copy of remote repo
   check_fail "mavbridge git fetch"
+  git checkout .  # discard any local changes
+  check_fail "mavbridge git checkout ."
+  git clean -df  # discard any untracked files
+  check_fail "mavbridge git clean"
+  git checkout master  # have the right branch checked out
+  check_fail "mavbridge git checkout master"
   git merge origin/master  # bring in updates
   check_fail "mavbridge git merge origin/master"
 fi
