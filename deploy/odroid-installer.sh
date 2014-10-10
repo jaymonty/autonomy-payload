@@ -322,3 +322,10 @@ echo "and autopilot_bridge have been checked out."
 echo "Then, reboot to automatically start the payload software."
 echo ""
 
+ls ~/bags/*bag* &> /dev/null
+if [ $? == 0 ]; then
+  echo "WARNING: There are ROS bags in ~/bags/;"
+  echo "you may wish to clear these off before flight!"
+  echo ""
+fi
+
