@@ -38,11 +38,82 @@ def _bool16(val):
         return 0xffff
     return 0x0000
 
+# Parse data into a Message subtype
+def parse(data):
+    # Make sure we at least have a full header
+    if len(data) < Message.hdr_size:
+        print "header too small"
+        return None
+
+    # Parse header fields
+    try:
+        msg_type, _unused, msg_src, msg_dst, msg_secs, msg_nsecs = \
+            struct.unpack_from(Message.hdr_fmt, data, 0)
+    except:
+        print "header bad"
+        return None
+
+    # Create corresponding subtype
+    if msg_type == 0x00:
+        msg = FlightStatus()
+    elif msg_type == 0x01:
+        msg = Pose()
+    elif msg_type == 0x80:
+        msg = Heartbeat()
+    elif msg_type == 0x81:
+        msg = Arm()
+    elif msg_type == 0x82:
+        msg = Mode()
+    elif msg_type == 0x83:
+        msg = Land()
+    elif msg_type == 0x84:
+        msg = LandAbort()
+    elif msg_type == 0x85:
+        msg = GuidedGoto()
+    elif msg_type == 0x86:
+        msg = WaypointGoto()
+    elif msg_type == 0x87:
+        msg = SlaveSetup()
+    elif msg_type == 0x88:
+        msg = FlightReady()
+    elif msg_type == 0xFE:
+        msg = PayloadHeartbeat()
+    elif msg_type == 0xFF:
+        msg = PayloadShutdown()
+    else:
+        print "unknown type: %02X" % msg_type
+        return None
+
+    # Make sure we have right number of bytes
+    if len(data) != msg.hdr_size + msg.msg_size:
+        print "payload wrong size"
+        return None
+
+    # Populate header fields
+    msg.msg_type = msg_type
+    msg.msg_src = msg_src
+    msg.msg_dst = msg_dst
+    msg.msg_secs = msg_secs
+    msg.msg_nsecs = msg_nsecs
+
+    # If subtype has no payload fields, we're done
+    if not msg.msg_size:
+        return msg
+
+    # Parse payload fields
+    try:
+        fields = struct.unpack_from(msg.msg_fmt, data, msg.hdr_size)
+        msg.parse_tuple(fields)
+        return msg
+    except:
+        print "payload bad"
+        return None
+
 class Message():
     # Define header parameters
     hdr_fmt = '>BBBBLL'
     hdr_size = struct.calcsize(hdr_fmt)
-    
+
     def __init__(self):
         # Set instance variables from class variables
         self.hdr_fmt = Message.hdr_fmt
@@ -56,7 +127,7 @@ class Message():
         # Add source IP and port, just for received messages (not serialized)
         self.msg_src_ip = None
         self.msg_src_port = None
-        
+
         # Initialize payload component
         self._init_message()
         self.msg_size = _get_msg_size(self.msg_fmt)
@@ -77,39 +148,14 @@ class Message():
         self.msg_secs  = fields[4]
         self.msg_nsecs = fields[5]
 
+    def serialize(self):
+        data = struct.pack(self.hdr_fmt, *self.build_hdr_tuple())
+        if self.msg_size:
+            data = data + struct.pack(self.msg_fmt, *self.build_tuple())
+        return data
+
 #-----------------------------------------------------------------------
 # Message definitions
-
-# Must add each new message type here, used for receiving/parsing
-def generate_message_object(msg_type):
-    if msg_type == 0x00:
-        return FlightStatus()
-    elif msg_type == 0x01:
-        return Pose()
-    elif msg_type == 0x80:
-        return Heartbeat()
-    elif msg_type == 0x81:
-        return Arm()
-    elif msg_type == 0x82:
-        return Mode()
-    elif msg_type == 0x83:
-        return Land()
-    elif msg_type == 0x84:
-        return LandAbort()
-    elif msg_type == 0x85:
-        return GuidedGoto()
-    elif msg_type == 0x86:
-        return WaypointGoto()
-    elif msg_type == 0x87:
-        return SlaveSetup()
-    elif msg_type == 0x88:
-        return FlightReady()
-    elif msg_type == 0xFE:
-        return PayloadHeartbeat()
-    elif msg_type == 0xFF:
-        return PayloadShutdown()
-    else:
-       return None
 
 # Example message type follows; copy and modify to need
 '''

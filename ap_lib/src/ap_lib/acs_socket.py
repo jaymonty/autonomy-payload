@@ -64,29 +64,27 @@ class Socket():
         except Exception:
             raise Exception("Couldn't establish network socket")
 
-    # 'message' must be a valid Message subclass
-    def send(self, message):
-        if not message and not isinstance(message, Message):
+    # 'msg' must be a valid Message subclass
+    def send(self, msg):
+        if not msg and not isinstance(msg, Message):
             raise Exception("Parameter is not a Message")
         
         # Enforce sender ID
-        message.msg_src = self.my_id
+        msg.msg_src = self.my_id
         
         # If sending to a device with a known ID->IP mapping, use it;
         #  otherwise broadcast
         dst_ip = self.bcast_ip
-        if self.id_mapping and (message.msg_dst != Socket.ID_BCAST_ALL) \
-                           and (message.msg_dst in self.id_mapping):
-            dst_ip = self.id_mapping[message.msg_dst]
+        if self.id_mapping and (msg.msg_dst != Socket.ID_BCAST_ALL) \
+                           and (msg.msg_dst in self.id_mapping):
+            dst_ip = self.id_mapping[msg.msg_dst]
         
         try:
-             # Pack message into byte string
-            msg = struct.pack(message.hdr_fmt, *message.build_hdr_tuple())
-            if message.msg_size:
-                msg = msg + struct.pack(message.msg_fmt, *message.build_tuple())
+            # Pack message into byte string
+            data = msg.serialize()
             
             # Send it, return number of bytes sent (per sendto())
-            return self.udp_sock.sendto(msg, (dst_ip, self.port))
+            return self.udp_sock.sendto(data, (dst_ip, self.port))
         except Exception as ex:
             # TODO: Raise an exception, but make sure calling code catches it
             pass
@@ -100,9 +98,9 @@ class Socket():
             raise Exception("Invalid receive buffer size")
         
         try:
-            msg, (ip, port) = self.udp_sock.recvfrom(buffsize, socket.MSG_DONTWAIT)
+            data, (ip, port) = self.udp_sock.recvfrom(buffsize, socket.MSG_DONTWAIT)
             # Mostly likely due to no packets being available
-            if not msg:
+            if not data:
                 return None
         except Exception as ex:
             # Mostly likely due to no packets being available
@@ -115,46 +113,20 @@ class Socket():
             if ip == self.my_ip:
                 return False
             
-            # Parse header
-            # TODO: This should be done by the Message sub-class,
-            #  but we won't know which subclass to generate until we
-            #  get the message type :(
-            msg_type, _unused, msg_src, msg_dst, msg_secs, msg_nsecs = \
-                struct.unpack_from(acs_messages.Message.hdr_fmt, msg, 0)
+            # Parse message
+            msg = acs_messages.parse(data)
+            if not msg:
+                return False
             
             # Is it meant for us?
-            if msg_dst not in [self.my_id, Socket.ID_BCAST_ALL]:
+            if msg.msg_dst not in [self.my_id, Socket.ID_BCAST_ALL]:
                 return False
             
-            # Is it a valid type?
-            message = acs_messages.generate_message_object(msg_type)
-            if message is None:
-                return False
-            
-            # Populate message object with headers
-            message.msg_type = msg_type
-            message.msg_src = msg_src
-            message.msg_dst = msg_dst
-            message.msg_secs = msg_secs
-            message.msg_nsecs = msg_nsecs
-
             # Add source IP and port, just in case someone wants them
-            message.msg_src_ip = ip
-            message.msg_src_port = port
+            msg.msg_src_ip = ip
+            msg.msg_src_port = port
             
-            # Does the size of the message match?
-            if len(msg) != message.hdr_size + message.msg_size:
-                return False
-
-            # Attempt to parse the payload fields, if any
-            if not message.msg_size:
-                return message
-            try:
-                fields = struct.unpack_from(message.msg_fmt, msg, message.hdr_size)
-                message.parse_tuple(fields)
-                return message
-            except:
-                return False
+            return msg
             
         # Any other unhandled conditions are printed for our awareness
         except Exception as ex:
