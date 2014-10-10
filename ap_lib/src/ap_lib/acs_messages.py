@@ -42,7 +42,6 @@ def _bool16(val):
 def parse(data):
     # Make sure we at least have a full header
     if len(data) < Message.hdr_size:
-        print "header too small"
         return None
 
     # Parse header fields
@@ -50,7 +49,7 @@ def parse(data):
         msg_type, _unused, msg_src, msg_dst, msg_secs, msg_nsecs = \
             struct.unpack_from(Message.hdr_fmt, data, 0)
     except:
-        print "header bad"
+        #print "header bad"
         return None
 
     # Create corresponding subtype
@@ -81,12 +80,12 @@ def parse(data):
     elif msg_type == 0xFF:
         msg = PayloadShutdown()
     else:
-        print "unknown type: %02X" % msg_type
+        #print "unknown type: %02X" % msg_type
         return None
 
     # Make sure we have right number of bytes
     if len(data) != msg.hdr_size + msg.msg_size:
-        print "payload wrong size"
+        #print "payload wrong size"
         return None
 
     # Populate header fields
@@ -106,7 +105,7 @@ def parse(data):
         msg.parse_tuple(fields)
         return msg
     except:
-        print "payload bad"
+        #print "payload bad"
         return None
 
 class Message():
