@@ -77,7 +77,7 @@ echo "Launching payload in the new namespace ..."
 
 # Launch a terminal from within the new namespace
 sudo ip netns exec $SITL_NS \
-  su -l -c "source /opt/ros/hydro/setup.bash; source ~/acs_ros_ws/devel/setup.bash; roslaunch ap_master sitl.launch id:=$ID name:=$SITL_NS dev:=$SITL_DEV_ALIAS sitl:=$SITL" $USER
+  su -l -c "source /opt/ros/$ROS_DISTRO/setup.bash; source $ACS_ROOT/acs_ros_ws/devel/setup.bash; roslaunch ap_master sitl.launch id:=$ID name:=$SITL_NS dev:=$SITL_DEV_ALIAS sitl:=$SITL" $USER
 
 echo ""
 echo "Tearing down the namespace (may require sudo password) ..."
