@@ -1,5 +1,23 @@
 #!/bin/bash
 
+# Read in the ID for the virtual aircraft. THIS MUST BE UNIQUE.
+# Note that this MUST be the same as the SITL "-I" value.
+
+if [[ -z $1 ]]; then
+  echo "Usage: $0 <INSTANCE ID>"
+  exit 1
+fi
+
+ID=$1
+shift 1  # Shift in case we want to send $@ elsewhere later on
+
+# This variable should be set in newer SITL installs, but if it isn't
+# then default to the user's home directory
+
+if [[ -z $ACS_ROOT ]]; then
+  ACS_ROOT="~"
+fi
+
 # Set up the basic networking parameters for our multi-SITL environment.
 # This is set to mimic our flight configuration as closely as possible.
 # All aircraft (and ground stations) are in 192.168.2.0/24
@@ -22,12 +40,9 @@ NET_NS_PREFIX="sitl"
 BRIDGE_DEV="sitl_bridge"
 BRIDGE_IP="${NET_IP_PREFIX}.250"
 
-# Read in the ID for the virtual aircraft. THIS MUST BE UNIQUE.
-# Read in the connection string to the SITL. THIS MUST BE UNIQUE.
+# Compute the MAVLink connection string (e.g., tcp:192.168.2.250:5772)
 
-ID=$1
-SITL=$2
-shift 2  # Shift in case we want to send $@ elsewhere later on
+SITL_CONNECT="tcp:${BRIDGE_IP}:"$((5762+10*${ID}))
 
 # Define the instance-specific networking parameters. Each virtual aircraft
 # gets its own network namespace and a new virtual network interface.
@@ -77,7 +92,7 @@ echo "Launching payload in the new namespace ..."
 
 # Launch a terminal from within the new namespace
 sudo ip netns exec $SITL_NS \
-  su -l -c "source /opt/ros/$ROS_DISTRO/setup.bash; source $ACS_ROOT/acs_ros_ws/devel/setup.bash; roslaunch ap_master sitl.launch id:=$ID name:=$SITL_NS dev:=$SITL_DEV_ALIAS sitl:=$SITL" $USER
+  su -l -c "source /opt/ros/$ROS_DISTRO/setup.bash; source $ACS_ROOT/acs_ros_ws/devel/setup.bash; roslaunch ap_master sitl.launch id:=$ID name:=$SITL_NS dev:=$SITL_DEV_ALIAS sitl:=$SITL_CONNECT" $USER
 
 echo ""
 echo "Tearing down the namespace (may require sudo password) ..."
