@@ -9,18 +9,6 @@ find_package(catkin REQUIRED COMPONENTS
     message_generation
 )
 
-add_message_files(
-  FILES
-  NetOdometry.msg
-)
-
-generate_messages(
-  DEPENDENCIES 
-  std_msgs 
-  sensor_msgs 
-  nav_msgs
-)
-
 catkin_package(
   CATKIN_DEPENDS message_runtime
 )

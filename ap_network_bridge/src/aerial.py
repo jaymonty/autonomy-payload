@@ -24,10 +24,10 @@ import std_msgs
 from nav_msgs.msg import Odometry
 
 # Import ROS messages specific to this bridge
-from ap_network_bridge import msg as netmsg
+from ap_msgs import msg as ap_msgs
+from ap_srvs import srv as ap_srvs
 from autopilot_bridge import msg as apmsg
 from autopilot_bridge import srv as apsrv
-from ap_safety_monitor import srv as safesrv
 
 #-----------------------------------------------------------------------
 # Parameters
@@ -151,7 +151,7 @@ if __name__ == '__main__':
     
     # Set up publishers (network -> ROS)
     pub_pose = rospy.Publisher("%s/recv_pose"%ROS_BASENAME, 
-                               netmsg.NetOdometry)
+                               ap_msgs.SwarmVehicleState)
     pub_heart_ground = rospy.Publisher("%s/recv_heart_ground"%ROS_BASENAME,
                                 apmsg.Heartbeat)
     pub_arm = rospy.Publisher("%s/recv_arm"%ROS_BASENAME, 
@@ -185,8 +185,8 @@ if __name__ == '__main__':
         
         if isinstance(message, acs_messages.Pose):
             try:
-                msg = netmsg.NetOdometry()
-                msg.sender_id = message.msg_src
+                msg = ap_msgs.SwarmVehicleState()
+                msg.vehicle_id = message.msg_src
                 msg.odom.header.stamp.secs = message.msg_secs
                 msg.odom.header.stamp.nsecs = message.msg_nsecs
                 msg.odom.header.seq = 0
@@ -293,8 +293,8 @@ if __name__ == '__main__':
 
         elif isinstance(message, acs_messages.PayloadHeartbeat):
             try:
-                srv = rospy.ServiceProxy('safety/set_health',
-                                         safesrv.SetHealth)
+                srv = rospy.ServiceProxy('safety/set_health_state',
+                                         ap_srvs.SetBoolean)
                 srv(message.enable)
                 rospy.loginfo("Ground-to-air: PayloadHeartbeat")
             except Exception as ex:
