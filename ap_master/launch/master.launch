@@ -1,9 +1,14 @@
 <launch>
+  <arg name="gps" default="true" />
+
+  <arg name="gps_arg" default="--gps-time-hack" if="$(arg gps)" />
+  <arg name="gps_arg" default="" unless="$(arg gps)" />
+
   <param name="aircraft_id" type="int" value="$(arg id)" />
   <param name="aircraft_name" type="str" value="$(arg name)" />
   <param name="rosbag_enable" type="bool" value="true" />
 
-  <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--module acs --module param --module slave --gps-time-hack" />
+  <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--module acs --module param --module slave $(arg gps_arg)" />
   <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" >
     <remap from="safety/heartbeat" to="autopilot/heartbeat_onboard" />
   </node>
