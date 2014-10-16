@@ -45,12 +45,25 @@ def rosbag_stop():
     rosbag_start.proc.send_signal(subprocess.signal.SIGINT)
 
 #-----------------------------------------------------------------------
-# Tasks for when autopilot becomes "ready"
+# Task iteration loop
+# Take a list of task functions and optional a 'type' (name to print)
+# Return those functions that threw exceptions
 
-# Add functions to be run here
-# If the function returns, it will be considered done and removed
-#  from the list; if the function fails, it should raise an Exception
-autopilot_ready_tasks = [ap_param_set, rosbag_start]
+def attempt_tasks(task_list, task_type="\b"):
+    tasks_remaining = task_list
+
+    for task in tasks_remaining:
+        try:
+            task()
+            rospy.loginfo("Successfully completed %s task" % task_type)
+            tasks_remaining.remove(task)
+        except Exception as ex:
+            rospy.logwarn("Failed to complete %s task: %s" % (task_type, ex.args[0]))
+
+    return tasks_remaining
+
+#-----------------------------------------------------------------------
+# Task callbacks
 
 # This callback waits for the first 'status' message from the
 # autopilot, indicating that there is positive communications
@@ -59,13 +72,13 @@ autopilot_ready_tasks = [ap_param_set, rosbag_start]
 def autopilot_ready_callback(data):
     global autopilot_ready_tasks
 
-    for task in autopilot_ready_tasks:
-        try:
-            task()
-            rospy.loginfo("Successfully completed autopilot_ready task")
-            autopilot_ready_tasks.remove(task)
-        except Exception as ex:
-            rospy.logwarn("Failed to complete autopilot_ready task: " + ex.args[0])
+    # Updating the list causes a retry on subsequent callback firings
+    autopilot_ready_tasks = attempt_tasks(autopilot_ready_tasks, "autopilot_ready")
+
+# This callback gets fired when the ROS node is shut down
+def ros_shutdown_callback():
+    global ros_shutdown_tasks
+    attempt_tasks(ros_shutdown_tasks, "ros_shutdown")
 
 #-----------------------------------------------------------------------
 # Start-up
@@ -74,6 +87,15 @@ if __name__ == '__main__':
     # ROS initialization
     rospy.init_node(ROS_BASENAME)
     
+    # Set up lists of tasks to complete
+    autopilot_ready_tasks = [ap_param_set]
+    ros_shutdown_tasks = []
+
+    # Conditionally add tasks
+    if rospy.has_param('rosbag_enable') and rospy.get_param('rosbag_enable'):
+        autopilot_ready_tasks.append(rosbag_start)
+        ros_shutdown_tasks.append(rosbag_stop)
+
     # Set up ROS subscribers
     sub_ap_status = rospy.Subscriber("autopilot/status", apmsg.Status,
                                      autopilot_ready_callback)
@@ -82,4 +104,5 @@ if __name__ == '__main__':
     rospy.spin()
 
     # Shut down anything as needed
-    rosbag_stop()
+    ros_shutdown_callback()
+
