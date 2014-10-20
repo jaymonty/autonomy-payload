@@ -28,8 +28,9 @@ if __name__ == '__main__':
     swarm_sub = SwarmTrackerSubscriber()
     r = rospy.Rate(10.0)
     while not rospy.is_shutdown():
-        print "time: " + str(swarm_sub.timestamp)
+        print "\ntime: " + str(swarm_sub.timestamp)
         for vid in swarm_sub.swarm:
+            print "aicraft_id: " + str(vid)
             print str(swarm_sub.swarm[vid].state)
         r.sleep()
 

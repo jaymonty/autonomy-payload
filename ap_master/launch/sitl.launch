@@ -20,5 +20,6 @@
     <remap from="network/recv_guided_goto" to="autopilot/guided_goto" />
     <remap from="network/recv_waypoint_goto" to="autopilot/waypoint_goto" />
   </node>
+  <node name="swarm_tracker" pkg="ap_perception" type="swarm_tracker_node.py" output="screen" args="" />
   <node name="run_once" pkg="ap_tasks" type="run_once.py" output="screen" args="" />
 </launch>
