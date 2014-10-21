@@ -68,7 +68,7 @@ else
 fi
 
 # Disable services we don't plan to use
-for s in bluetooth cups ntp saned spamassassin speech-dispatcher whoopsie; do
+for s in bluetooth cups lightdm ntp saned spamassassin speech-dispatcher whoopsie; do
   sudo service $s stop
   sudo update-rc.d -f $s remove
 done
