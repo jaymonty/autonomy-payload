@@ -187,24 +187,24 @@ if __name__ == '__main__':
             try:
                 msg = ap_msgs.SwarmVehicleState()
                 msg.vehicle_id = message.msg_src
-                msg.odom.header.stamp.secs = message.msg_secs
-                msg.odom.header.stamp.nsecs = message.msg_nsecs
-                msg.odom.header.seq = 0
-                msg.odom.pose.pose.position.x = message.lat
-                msg.odom.pose.pose.position.y = message.lon
-                msg.odom.pose.pose.position.z = message.alt
-                msg.odom.pose.pose.orientation.x = message.q_x
-                msg.odom.pose.pose.orientation.y = message.q_y
-                msg.odom.pose.pose.orientation.z = message.q_z
-                msg.odom.pose.pose.orientation.w = message.q_w
-                # msg.odom.pose.covariance is not used
-                msg.odom.twist.twist.linear.x = message.vlx
-                msg.odom.twist.twist.linear.y = message.vly
-                msg.odom.twist.twist.linear.z = message.vlz
-                msg.odom.twist.twist.angular.x = message.vax
-                msg.odom.twist.twist.angular.y = message.vay
-                msg.odom.twist.twist.angular.z = message.vaz
-                # msg.odom.twist.covariance is not used
+                msg.state.header.stamp.secs = message.msg_secs
+                msg.state.header.stamp.nsecs = message.msg_nsecs
+                msg.state.header.seq = 0
+                msg.state.pose.pose.position.x = message.lat
+                msg.state.pose.pose.position.y = message.lon
+                msg.state.pose.pose.position.z = message.alt
+                msg.state.pose.pose.orientation.x = message.q_x
+                msg.state.pose.pose.orientation.y = message.q_y
+                msg.state.pose.pose.orientation.z = message.q_z
+                msg.state.pose.pose.orientation.w = message.q_w
+                # msg.state.pose.covariance is not used
+                msg.state.twist.twist.linear.x = message.vlx
+                msg.state.twist.twist.linear.y = message.vly
+                msg.state.twist.twist.linear.z = message.vlz
+                msg.state.twist.twist.angular.x = message.vax
+                msg.state.twist.twist.angular.y = message.vay
+                msg.state.twist.twist.angular.z = message.vaz
+                # msg.state.twist.covariance is not used
                 pub_pose.publish(msg)
             except:
                 rospy.logwarn("Error processing received Pose")
