@@ -27,7 +27,6 @@ from argparse import ArgumentParser
 
 # Other ACS package imports
 #from autopilot_bridge.msg import LLA
-from ap_network_bridge.msg import NetOdometry
 from ap_msgs.msg import *
 from ap_lib.gps_utils import *
 from ap_lib.quaternion_math import *
@@ -323,13 +322,13 @@ class SwarmTracker(Nodeable):
     #-------------------------------------------------
 
     # Establishes the callbacks for the SwarmTracker object.  The object
-    # subscribes to the odom_combined topic for own-aircraft state updates
+    # subscribes to the acs_pose topic for own-aircraft state updates
     # and the recv_pose topic for swarm member updates
     # @param params: list as follows: [ odometry_base_name, net_base_name ]
     def callbackSetup(self, params=[ SELF_ODOM_BASENAME, NET_ODOM_BASENAME ]):
         rospy.Subscriber("%s/acs_pose"%params[0], Odometry, \
                          self.updateOwnPose)
-        rospy.Subscriber("%s/recv_pose"%params[1], NetOdometry, \
+        rospy.Subscriber("%s/recv_pose"%params[1], SwarmVehicleState, \
                          self.updateSwarmPose)
 
 
@@ -382,26 +381,26 @@ class SwarmTracker(Nodeable):
 
 
     # Updates swarm information for a swarm aircraft when a new pose is published
-    # @param poseMsg: NetOdometry object with the new pose
+    # @param poseMsg: SwarmVehicleState object with the new pose
     def updateSwarmPose(self, poseMsg):
         try:
-            newTime = poseMsg.odom.header.stamp
+            newTime = poseMsg.state.header.stamp
             poseTime = newTime.secs + (newTime.nsecs / float(1e9))
 
             # Update an existing element if it's already in the dictionary
-            if poseMsg.sender_id in self.swarm:
-                updateElement = self.swarm[poseMsg.sender_id]
+            if poseMsg.vehicle_id in self.swarm:
+                updateElement = self.swarm[poseMsg.vehicle_id]
                 elTime = float(updateElement.state.header.stamp.secs) +\
                          float(updateElement.state.header.stamp.nsecs) / float(1e9)
                 if poseTime <= elTime: return # older than latest data
-                updateElement.updateState(poseMsg.odom)
+                updateElement.updateState(poseMsg.state)
             else:  # Create and initialize a new element if this is the first report
-                newElement = SwarmElement(poseMsg.sender_id, poseMsg.odom)
-                self.swarm[poseMsg.sender_id] = newElement
+                newElement = SwarmElement(poseMsg.vehicle_id, poseMsg.state)
+                self.swarm[poseMsg.vehicle_id] = newElement
 
-            element = self.swarm[poseMsg.sender_id]
+            element = self.swarm[poseMsg.vehicle_id]
             (roll, pitch, yaw) = element.getEulerAngles()
-            self.log_dbug("update act " + str(poseMsg.sender_id) + ": " + \
+            self.log_dbug("update act " + str(poseMsg.vehicle_id) + ": " + \
                           element.getAsString())
 
         except Exception as ex:
