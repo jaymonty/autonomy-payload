@@ -4,6 +4,8 @@ A collection of ROS nodes for perception, path planning, safety monitoring, etc,
 
 ## Requirements
 
+_Note: Typically this software is installed using a script (see deploy/odroid-installer.sh or the acs-installer repository). The following instructions won't generally be used and are only provided for reference._
+
 This is currently being developed against ROS Hydro on an Ubuntu-esque system. For best compatibility, use Ubuntu 12.04 LTS or newer (Xubuntu, etc should be fine as well).
 
 You will need the following ROS packages for your distribution:
@@ -38,7 +40,9 @@ Optionally, you can set permissions for normal users to update the date and time
 
 ## Installation
 
-The approximate steps we use for installation are below. Adjust the workspace directory name, etc, as you see fit. Or see the installer scripts under the 'deploy' directory (HIGHLY RECOMMENDED).
+_Note: Typically this software is installed using a script (see deploy/odroid-installer.sh or the acs-installer repository). The following instructions won't generally be used and are only provided for reference._
+
+To install and build the software:
 
 	mkdir -p ~/acs_ros_ws/src/
 	cd ~/acs_ros_ws/src/
@@ -53,14 +57,11 @@ The approximate steps we use for installation are below. Adjust the workspace di
 	cd ~/acs_ros_ws/
 	catkin_make
 
-The comms library must be installed in a Python-referencable path:
-
-	cd ~/acs_ros_ws/src/autonomy-payload/lib/
-	python setup.py build install --user
+Note that this also builds the common libraries in the ap_lib folder. These may be used by non-ROS programs; see utils/*.py for examples.
 
 To run, edit autonomy-payload/ap_master/launch/master.launch as needed, then run:
 
-	roslaunch ap_master master.launch id:=AIRCRAFT_ID
+	roslaunch ap_master master.launch id:=AIRCRAFT_ID name:=AIRCRAFT_NAME
 
-replacing AIRCRAFT_ID with an aircraft-unique numeric ID (right now, constrained to 16-bit unsigned ints, so roughly 1..65535).
+replacing AIRCRAFT_ID with an aircraft-unique numeric ID (right now, constrained to 8-bit unsigned ints, so roughly 1..254). Likewise, replace AIRCRAFT_NAME with a (preferably unique) friendly string name, up to 16 characters.
 
