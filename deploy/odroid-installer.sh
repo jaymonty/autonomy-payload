@@ -6,33 +6,28 @@
 # Author: Mike Clement
 #------------------------------------------------------------------------------
 
-# We want to run as the actual user, not as root
-if [ `whoami` == "root" ]; then
-  echo "Please run as the user that will run the payload software."
-  exit 1
-fi
-
-# Collect any needed user information
-echo ""
-read -p "Please enter a unique numeric ID for this aircraft: " AIRCRAFT_ID
-if [ -z $AIRCRAFT_ID ]; then
-  echo "No ID specified; aborting"
-  exit 1
-fi
-read -p "Please enter a hostname for this aircraft (max 16 chars): " AIRCRAFT_NAME
-if [ -z $AIRCRAFT_NAME ]; then AIRCRAFT_NAME='odroid'; fi
-
 #------------------------------------------------------------------------------
-# General setup
+# Helper functions
 
 # Function to check for command failure and print useful error messages
 function check_fail
 {
-  if [ $? != 0 ]; then
-    echo -e "\nERROR: $1\n"
-    kill -INT $$
-  fi
+if [ $? != 0 ]; then
+  echo -e "\nERROR: $1\n"
+  kill -INT $$
+fi
 }
+
+#------------------------------------------------------------------------------
+# Parition various pieces of the install
+# Note: we try to make each function idempotent, so it can safely be
+# run over and over again, and used as an upgrade script.
+
+#####
+# Perform initial configuration (generally only needed once)
+#####
+function install_initial
+{
 
 # Make it so this user can do passwordless sudo :)
 sudo grep -x "$USER ALL=(ALL) NOPASSWD: ALL" /etc/sudoers > /dev/null
@@ -73,8 +68,23 @@ for s in bluetooth cups lightdm ntp saned spamassassin speech-dispatcher whoopsi
   sudo update-rc.d -f $s remove
 done
 
+# Update locale settings
+sudo update-locale LANG=C LANGUAGE=C LC_ALL=C LC_MESSAGES=POSIX
+
+# Remove unneeded packages
+sudo apt-get --assume-yes remove flash-kernel
+
 # Disable automatic apt tasks
 sudo rm /etc/cron.daily/apt
+
+# Add ROS repo
+ls /etc/apt/sources.list.d/ros-latest.list &> /dev/null
+if [ $? != 0 ]; then
+  sudo sh -c 'wget http://packages.namniart.com/repos/namniart.key -O - | apt-key add -'
+  check_fail "ROS apt-key"
+  sudo sh -c 'echo "deb http://packages.namniart.com/repos/ros raring main" > /etc/apt/sources.list.d/ros-latest.list'
+  check_fail "ROS apt source"
+fi
 
 # Regrettably, we need to disable Git's SSL cert check
 git config --global http.sslVerify false
@@ -130,24 +140,13 @@ if [ $? != 0 ]; then
   check_fail "dns (wlan config)"
 fi
 
-# Make sure user has Internet connection set up
-echo ""
-read -p "Please make sure you have an appropriate Internet gateway set up, then press Enter. "
+}
 
-#------------------------------------------------------------------------------
-# Install packages 
-
-# Update locale settings
-sudo update-locale LANG=C LANGUAGE=C LC_ALL=C LC_MESSAGES=POSIX
-
-# Add ROS repo
-ls /etc/apt/sources.list.d/ros-latest.list &> /dev/null
-if [ $? != 0 ]; then
-  sudo sh -c 'wget http://packages.namniart.com/repos/namniart.key -O - | apt-key add -'
-  check_fail "ROS apt-key"
-  sudo sh -c 'echo "deb http://packages.namniart.com/repos/ros raring main" > /etc/apt/sources.list.d/ros-latest.list'
-  check_fail "ROS apt source"
-fi
+#####
+# Do base software installation
+#####
+function install_base_software
+{
 
 # Update package lists
 sudo apt-get update
@@ -162,7 +161,6 @@ sudo apt-get --assume-yes install \
 git \
 ros-hydro-ros-base \
 ros-hydro-sensor-msgs \
-ros-hydro-robot-pose-ekf \
 iperf \
 python-netifaces \
 python-setuptools \
@@ -170,10 +168,8 @@ screen \
 batctl
 check_fail "apt-get install"
 
-#------------------------------------------------------------------------------
 # Set up ROS
-
-# These might fail on repeat tries; don't worry about check_fail()
+# (some of these might fail after the first successful run, don't worry about error checking)
 sudo rosdep init
 rosdep update
 grep "/opt/ros/hydro/setup.bash" ~/.bashrc
@@ -182,9 +178,32 @@ if [ $? != 0 ]; then
 fi
 source /opt/ros/hydro/setup.bash
 
-#------------------------------------------------------------------------------
-# Install (py)mavlink library
+# Clean up deb files to free up some space
+sudo apt-get clean
 
+# Install kernel with batman-adv support
+# NOTE: this is a work in progress; need update support!
+KERNEL_DPKG="linux-image-3.8.13.28"
+KERNEL_FILE="${KERNEL_DPKG}-10.00.batman_armhf.deb"
+dpkg -l | grep $KERNEL_DPKG &> /dev/null
+if [ $? != 0 ]; then
+  cd ~
+  wget --no-check-certificate https://yoda.ern.nps.edu/download/$KERNEL_FILE
+  check_fail "kernel download"
+  sudo dpkg -i $KERNEL_FILE
+  check_fail "kernel install"
+  rm $KERNEL_FILE
+fi
+
+}
+
+#####
+# Install payload software from repos
+#####
+function install_payload_software
+{
+
+# Install (py)mavlink library
 cd ~
 ls mavlink/ &> /dev/null
 if [ $? != 0 ]; then
@@ -193,12 +212,6 @@ if [ $? != 0 ]; then
   cd mavlink/pymavlink/
   git checkout dev  # The yoda branch we use for production
   check_fail "mavlink git checkout dev"
-
-  grep "export MAVLINK_DIALECT=ardupilotmega" ~/.bashrc
-  if [ $? != 0 ]; then
-    echo "export MAVLINK_DIALECT=ardupilotmega" >> ~/.bashrc
-    export MAVLINK_DIALECT=ardupilotmega
-  fi
 else
   cd mavlink/pymavlink/
   git fetch origin  # update local copy of remote repo
@@ -213,13 +226,20 @@ else
   check_fail "mavlink git merge origin/dev"
 fi
 
+# Set dialect so we don't compile the universe
+env | grep "MAVLINK_DIALECT" &> /dev/null
+if [ $? != 0 ]; then
+  export MAVLINK_DIALECT=ardupilotmega
+fi
+grep "MAVLINK_DIALECT" ~/.bashrc &> /dev/null
+if [ $? != 0 ]; then
+  echo "export MAVLINK_DIALECT=ardupilotmega" >> ~/.bashrc
+fi
+
 rm -rf ~/.local/  # Clear out old build
 check_fail "mavlink remove .local/"
 python setup.py build install --user
 check_fail "mavlink setup.py"
-
-#------------------------------------------------------------------------------
-# Set up autonomy-payload
 
 # Initialize the ROS workspace
 # (highly unlikely we'll see failures here; ignoring check_fail())
@@ -283,6 +303,14 @@ check_fail "catkin_make clean"
 catkin_make
 check_fail "catkin_make"
 
+}
+
+#####
+# Function to set up auto-start of payload software
+#####
+function install_autostart
+{
+
 # Set up automatic start-on-boot
 # (highly unlikely to have errors, ignore check_fail())
 sudo cp ~/acs_ros_ws/src/autonomy-payload/deploy/init.d-script /etc/init.d/autonomy-payload
@@ -293,35 +321,82 @@ sudo chown root:root /etc/init.d/autonomy-payload
 sudo chmod 755 /etc/init.d/autonomy-payload
 sudo update-rc.d autonomy-payload defaults
 
-#------------------------------------------------------------------------------
-# Install BATMAN-adv module
-# THIS IS A WORK IN PROGRESS, HARDKERNEL DOES WEIRD KERNEL STUFF
-
-# Either clone the repo, or make sure it's updated
-#ls batman-adv/ &> /dev/null
-#if [ $? != 0 ]; then
-#  git clone http://git.open-mesh.org/batman-adv.git batman-adv
-#  cd batman-adv/
-#else
-#  cd batman-adv/
-#  git pull
-#fi
-
-# Build and install the module
-#make && make install
+}
 
 #------------------------------------------------------------------------------
-# Clean-up
+# Main program flow
 
-sudo apt-get clean
+INSTALL_INIT=true
+INSTALL_BASE=true
 
+# Parse any arguments
+while getopts ":uq" opt; do
+  case $opt in
+    u)
+      INSTALL_INIT=false
+      ;;
+    q)
+      INSTALL_INIT=false
+      INSTALL_BASE=false
+      ;;
+    \?)
+      echo ""
+      echo "usage: $0 [-u] [-q]"
+      echo "  -u   Update only (skip initial config)"
+      echo "  -q   Quick update only (skip initial config AND base software install)"
+      echo ""
+      exit 0
+      ;;
+  esac
+done
+
+# We want to run as the actual user, not as root
+if [ `whoami` == "root" ]; then
+  echo "Please run as the user that will run the payload software."
+  exit 1
+fi
+
+if [ $INSTALL_INIT == true ]; then
+  # Collect any needed user information
+  echo ""
+  read -p "Please enter a unique numeric ID for this aircraft: " AIRCRAFT_ID
+  if [ -z $AIRCRAFT_ID ]; then
+    echo "No ID specified; aborting"
+    exit 1
+  fi
+  read -p "Please enter a hostname for this aircraft (max 16 chars): " AIRCRAFT_NAME
+  if [ -z $AIRCRAFT_NAME ]; then AIRCRAFT_NAME='odroid'; fi
+
+  install_initial
+fi
+
+# Make sure user has Internet connection set up
+echo ""
+read -p "Please make sure you have an appropriate Internet gateway set up, then press Enter. "
+
+# Stop any running payload
+sudo service autonomy-payload stop
+
+# Conditionally perform base software install
+if [ $INSTALL_BASE == true ]; then
+  install_base_software
+fi
+
+# Always perform payload software install
+install_payload_software
+
+# If performing an initial install, set up autostart
+if [ $INSTALL_INIT == true ]; then
+  install_autostart
+fi
+
+# Final message(s) to user
 echo ""
 echo "Congratulations, your system has been updated."
 echo "Please check that the correct branches of mavlink, autonomy-payload,"
 echo "and autopilot_bridge have been checked out."
 echo "Then, reboot to automatically start the payload software."
 echo ""
-
 ls ~/bags/*bag* &> /dev/null
 if [ $? == 0 ]; then
   echo "WARNING: There are ROS bags in ~/bags/;"
