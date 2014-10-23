@@ -72,7 +72,7 @@ check_fail "Couldn't copy installer to home directory."
 chmod +x $HOMEDIR/$SCRIPT
 check_fail "Couldn't set permissions on installer script."
 
-sudo umount $MOUNTPOINT
+umount $MOUNTPOINT
 check_fail "Couldn't umount filesystem."
 
 echo "The media is prepared for installation. Please boot it on an ODroid"
