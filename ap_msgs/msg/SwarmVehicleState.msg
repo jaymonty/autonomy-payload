@@ -1,2 +1,2 @@
 uint16 vehicle_id
-nav_msgs/Odometry state
+autopilot_bridge/Geodometry state
