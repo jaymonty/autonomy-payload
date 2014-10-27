@@ -21,7 +21,6 @@ from ap_lib.acs_socket import Socket
 # General ROS imports
 import rospy
 import std_msgs
-from nav_msgs.msg import Odometry
 
 # Import ROS messages specific to this bridge
 from ap_msgs import msg as ap_msgs
@@ -82,9 +81,9 @@ def sub_pose(msg):
     message.msg_dst = Socket.ID_BCAST_ALL
     message.msg_secs = msg.header.stamp.secs
     message.msg_nsecs = msg.header.stamp.nsecs
-    message.lat = msg.pose.pose.position.x
-    message.lon = msg.pose.pose.position.y
-    message.alt = msg.pose.pose.position.z
+    message.lat = msg.pose.pose.position.lat
+    message.lon = msg.pose.pose.position.lon
+    message.alt = msg.pose.pose.position.alt  # NOTE: send MSL
     message.q_x = msg.pose.pose.orientation.x
     message.q_y = msg.pose.pose.orientation.y
     message.q_z = msg.pose.pose.orientation.z
@@ -147,7 +146,7 @@ if __name__ == '__main__':
     rospy.Subscriber("%s/send_flight_status"%ROS_BASENAME, 
                      apmsg.Status, sub_flight_status)
     rospy.Subscriber("%s/send_pose"%ROS_BASENAME, 
-                     Odometry, sub_pose)
+                     apmsg.Geodometry, sub_pose)
     
     # Set up publishers (network -> ROS)
     pub_pose = rospy.Publisher("%s/recv_pose"%ROS_BASENAME, 
@@ -190,9 +189,12 @@ if __name__ == '__main__':
                 msg.state.header.stamp.secs = message.msg_secs
                 msg.state.header.stamp.nsecs = message.msg_nsecs
                 msg.state.header.seq = 0
-                msg.state.pose.pose.position.x = message.lat
-                msg.state.pose.pose.position.y = message.lon
-                msg.state.pose.pose.position.z = message.alt
+                msg.state.pose.pose.position.lat = message.lat
+                msg.state.pose.pose.position.lon = message.lon
+                msg.state.pose.pose.position.alt = message.alt
+                msg.state.pose.pose.position.rel_alt = 0
+                msg.state.pose.pose.position.using_alt = True
+                msg.state.pose.pose.position.using_rel_alt = False
                 msg.state.pose.pose.orientation.x = message.q_x
                 msg.state.pose.pose.orientation.y = message.q_y
                 msg.state.pose.pose.orientation.z = message.q_z
