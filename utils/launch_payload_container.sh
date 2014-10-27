@@ -62,8 +62,9 @@ if [ $? != 0 ]; then
   echo "Building software bridge ..."
   sudo ip link add $BRIDGE_DEV type bridge
   sudo ip addr add $BRIDGE_IP/$NET_MASK broadcast $NET_BCAST dev $BRIDGE_DEV
-  sudo ip link set dev $BRIDGE_DEV up
 fi
+# Always make sure it is set to 'up'
+sudo ip link set dev $BRIDGE_DEV up
 
 echo "Building a new network namespace configuration ..."
 
