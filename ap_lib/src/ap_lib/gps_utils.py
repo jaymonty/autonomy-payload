@@ -6,7 +6,7 @@
 import math
 import os
 
-radius_of_earth = 6378100.0 # in meters
+EARTH_RADIUS = 6378100.0 # Approximate equatorial radius of the earth in meters
 
 def gps_distance(lat1, lon1, lat2, lon2):
     '''return distance between two points in meters,
@@ -21,7 +21,7 @@ def gps_distance(lat1, lon1, lat2, lon2):
 
     a = math.sin(0.5*dLat)**2 + math.sin(0.5*dLon)**2 * math.cos(lat1) * math.cos(lat2)
     c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0-a))
-    return radius_of_earth * c
+    return EARTH_RADIUS * c
 
 
 def gps_bearing(lat1, lon1, lat2, lon2):
@@ -57,7 +57,7 @@ def gps_newpos(lat, lon, bearing, distance):
     lat1 = math.radians(lat)
     lon1 = math.radians(lon)
     brng = bearing
-    dr = distance/radius_of_earth
+    dr = distance/EARTH_RADIUS
 
     lat2 = math.asin(math.sin(lat1)*math.cos(dr) +
                      math.cos(lat1)*math.sin(dr)*math.cos(brng))
@@ -72,5 +72,10 @@ def gps_offset(lat, lon, east, north):
     bearing = math.atan2(east, north)
     distance = math.sqrt(east**2 + north**2)
     return gps_newpos(lat, lon, bearing, distance)
+
+
+def radius_at_latitude(lat):
+    '''return the approximate radius of the earth at a specific latitude'''
+    return EARTH_RADIUS * math.cos(math.radians(lat))
 
 
