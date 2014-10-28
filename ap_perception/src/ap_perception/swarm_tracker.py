@@ -15,10 +15,7 @@
 import rospy
 import tf
 from std_msgs.msg import Header
-from nav_msgs.msg import Odometry
-from geometry_msgs.msg import PoseWithCovarianceStamped
-from geometry_msgs.msg import PoseWithCovariance
-from geometry_msgs.msg import TwistWithCovariance
+import autopilot_bridge.msg as apbrg
 from rospy import rostime
 
 # Standard Python imports
@@ -101,11 +98,8 @@ class SwarmTrackerSubscriber(object):
 #
 # Class member variables:
 #   ID:  aircraft ID (integer) of the particular swarm member
-#   state: aircraft pose and  (PoseWithCovariance)
-#   drPose: computed (dead reckoning) position for a future time (PoseWithCovarianceStamped)
-#   velocity: aircraft velocity.  Angular rates are in the body-fixed
-#             frame (p, q, and r).  Linear rates are in the earth-fixed
-#             north-east-down frame (xDot, yDot, zDot) (TwistWithCovariance)
+#   state: aircraft pose and  (Geodometry)
+#   drPose: computed (dead reckoning) position for a future time (Geodometry)
 #
 # Class member functions
 #   updateState:  update the state information with new data
@@ -115,18 +109,29 @@ class SwarmTrackerSubscriber(object):
 #   getPosition: returns a 3-vector (lat, lon, alt) position
 #   setPoseFromEulerAngles: sets the quaternion orientation
 #
-#   TODO:  Implement dead reckoning
+#   TODO:  Implement nonlinear dead reckoning
 class SwarmElement(object):
 
     # Class initializer initializes member variables (velocity is set to zero)
     # @param ownID: ID of the aircraft for this state vector
-    # @param initState: Odometry object with the initial state information
-    def __init__(self, ownID, initState):
+    # @param initState: Geodometry object with the initial state information
+    # @param baseAlt: MSL altitude from which relative altitude (rel_alt) is calculated
+    def __init__(self, ownID, initState, baseAlt = 0.0):
         self.ID = ownID
         self.state = initState
         self.state.header.seq = 0
-        self.drPose = PoseWithCovarianceStamped()
+        self.state.header.frame_id = 'base_footprint'
+        if not initState.pose.pose.position.using_rel_alt:
+            self.state.pose.pose.position.rel_alt = \
+                initState.pose.pose.position.alt - baseAlt
+        self.state.pose.pose.position.using_alt = True
+        self.state.pose.pose.position.using_rel_alt = True
+        self.drPose = apbrg.Geodometry()
+        self.drPose.header.seq = 0
+        self.state.header.frame_id = 'base_footprint'
         self.drPose.pose.pose.orientation.w = 1.0
+        self.drPose.pose.pose.position.using_alt = True
+        self.drPose.pose.pose.position.using_rel_alt = True
 
 
     # Updates the object to contain new state information. Displacement
@@ -134,17 +139,19 @@ class SwarmElement(object):
     # quaternion (x, y, z, w).  Linear velocity data is earth-fixed
     # meters per second (vx, vy, vz).  Angular velocity is body-fixed
     # radians per second (p, q, r)
-    # @param newState: Odometry object with the new state information
+    # @param newState: Geodometry object with the new state information
     def updateState(self, newState):
         oldState = self.state
         self.state = newState
         self.state.header.seq = oldState.header.seq + 1
+        self.state.header.frame_id = 'base_footprint'
         del oldState
 
 
     # Computes a dead reckon position for a (presumably) future time
     # @param drTime time (rospy.rostime.Time object) for the DR computation
-    # TODO:  DR is all screwed up
+    # @param baseAlt altitude from which rel_alt is calculated (if not built in)
+    # TODO:  DR is a simple linear update--add in angular rates and make it an arc
     # TODO:  Implement covariance growth functionality
     def computeDRPose(self, drTime):
         poseTimeFloat = float(self.state.header.stamp.secs) +\
@@ -154,9 +161,10 @@ class SwarmElement(object):
         if dt <= 0.0:  # If DR time in past, use current pose
             self.drPose.header.stamp.secs = self.state.header.stamp.secs
             self.drPose.header.stamp.nsecs = self.state.header.stamp.nsecs
-            self.drPose.pose.pose.position.x = self.state.pose.pose.position.x
-            self.drPose.pose.pose.position.y = self.state.pose.pose.position.y
-            self.drPose.pose.pose.position.z = self.state.pose.pose.position.z
+            self.drPose.pose.pose.position.lat = self.state.pose.pose.position.lat
+            self.drPose.pose.pose.position.lon = self.state.pose.pose.position.lon
+            self.drPose.pose.pose.position.alt = self.state.pose.pose.position.alt
+            self.drPose.pose.pose.position.rel_alt = self.state.pose.pose.position.rel_alt
             self.drPose.pose.pose.orientation.x = self.state.pose.pose.orientation.x
             self.drPose.pose.pose.orientation.y = self.state.pose.pose.orientation.y
             self.drPose.pose.pose.orientation.z = self.state.pose.pose.orientation.z
@@ -167,6 +175,7 @@ class SwarmElement(object):
             self.drPose.header.stamp.nsecs = drTime.nsecs
 
             # Dead Reckon the orientation quaternion
+            # TODO:  check this once the angular velocity numbers are verified
             poseQuaternion = [ self.state.pose.pose.orientation.x, \
                                self.state.pose.pose.orientation.y, \
                                self.state.pose.pose.orientation.z, \
@@ -189,24 +198,21 @@ class SwarmElement(object):
             self.drPose.pose.pose.orientation.w = poseQuaternion[3]
 
             # simple straight line DR for now (use a curve at some point)
-            (phi1, theta1, psi1) = self.getEulerAngles(CURRENT_POSE)
-            (phi2, theta2, psi2) = self.getEulerAngles(DR_POSE)
-            deltaPsi = psi2 - psi1
-            if deltaPsi <= -pi: deltaPsi += 2.0 * pi
-            elif deltaPsi > pi: deltaPsi -= 2.0 * pi
-            psiDot = deltaPsi / dt
-
             direction = atan2(self.state.twist.twist.linear.y, \
                               self.state.twist.twist.linear.x)
             velocity = math.hypot(self.state.twist.twist.linear.y, \
                                   self.state.twist.twist.linear.x)
             distance = velocity * dt
-            (self.drPose.pose.pose.position.x, self.drPose.pose.pose.position.y) = \
-                gps_newpos(self.state.pose.pose.position.x, \
-                           self.state.pose.pose.position.y, \
+            (self.drPose.pose.pose.position.lat, self.drPose.pose.pose.position.lon) = \
+                gps_newpos(self.state.pose.pose.position.lat, \
+                           self.state.pose.pose.position.lon, \
                            direction, distance)
-            self.drPose.pose.pose.position.z -= \
-                self.state.twist.twist.linear.z * dt
+            base_alt = self.state.pose.pose.position.alt - \
+                       self.state.pose.pose.position.rel_alt
+            self.drPose.pose.pose.position.alt = self.state.pose.pose.position.alt - \
+                                                 (self.state.twist.twist.linear.z * dt)
+            self.drPose.pose.pose.position.rel_alt = \
+                self.drPose.pose.pose.position.alt - base_alt
             self.drPose.pose.covariance = self.state.pose.covariance
 
 
@@ -223,14 +229,14 @@ class SwarmElement(object):
                                                           quaternion.w ))
 
 
-    # Utility function to extract position (lat, lon, alt) of a pose
+    # Utility function to extract position (lat, lon, alt, rel_alt) of a pose
     # @param whichPose: enumeration (int) identifying previous, current, or DR pose
     # @return 3-vector containing the requested position information
     def getPosition(self, whichPose=CURRENT_POSE):
         pose = self.state.pose.pose.position
         if whichPose == DR_POSE: pose = self.drPose.pose.pose.position
         elif not whichPose == CURRENT_POSE: return None  # invalid request
-        return ( pose.x, pose.y, pose.z )
+        return ( pose.lat, pose.lon, pose.alt, pose.rel_alt )
 
 
     # Utility function to set pose orientation from Euler angles (roll, pitch yaw)
@@ -250,13 +256,14 @@ class SwarmElement(object):
 
 
     # Utility function to generate a string representation of the state as
-    # "t=####, (X, Y, Z, Qx, Qy, Qz, Qw, xDot, yDot, zDot, p, q, r)"
+    # "t=####, (Lat, Lon, Alt, Rel_Alt, Qx, Qy, Qz, Qw, Vx, Vy, Vz, p, q, r)"
     # @return the requested string form of the state vector
     def getAsString(self):
         return "t=" + str(self.state.header.stamp) + ", (" + \
-                      str(self.state.pose.pose.position.x) + ", " + \
-                      str(self.state.pose.pose.position.y) + ", " + \
-                      str(self.state.pose.pose.position.z) + ", " + \
+                      str(self.state.pose.pose.position.lat) + ", " + \
+                      str(self.state.pose.pose.position.lon) + ", " + \
+                      str(self.state.pose.pose.position.alt) + ", " + \
+                      str(self.state.pose.pose.position.rel_alt) + ", " + \
                       str(self.state.pose.pose.orientation.x) + ", " + \
                       str(self.state.pose.pose.orientation.y) + ", " + \
                       str(self.state.pose.pose.orientation.z) + ", " + \
@@ -269,6 +276,7 @@ class SwarmElement(object):
                       str(self.state.twist.twist.angular.z) + ")"
 
 ###############################################################################
+
 
 # Object that maintains the status of all known aircraft in the
 # swarm.  Currently, this object just maintains the position and velocity of
@@ -307,12 +315,13 @@ class SwarmTracker(Nodeable):
         Nodeable.__init__(self, nodeName)
         self.ownID = ownID
         self.swarm = dict()
-        initState = Odometry()
+        initState = apbrg.Geodometry()
         initState.pose.pose.orientation.w = 1.0
         self.swarm[self.ownID] = SwarmElement(self.ownID, initState)
         self.swarmPublisher = None
         self.swarmMessage = SwarmStateStamped()
         self.swarmMessage.header.seq = 0
+        self.swarmMessage.header.frame_id = "base_footprint"
         self.DBUG_PRINT = False
         self.WARN_PRINT = False
 
@@ -326,7 +335,7 @@ class SwarmTracker(Nodeable):
     # and the recv_pose topic for swarm member updates
     # @param params: list as follows: [ odometry_base_name, net_base_name ]
     def callbackSetup(self, params=[ SELF_ODOM_BASENAME, NET_ODOM_BASENAME ]):
-        rospy.Subscriber("%s/acs_pose"%params[0], Odometry, \
+        rospy.Subscriber("%s/acs_pose"%params[0], apbrg.Geodometry, \
                          self.updateOwnPose)
         rospy.Subscriber("%s/recv_pose"%params[1], SwarmVehicleState, \
                          self.updateSwarmPose)
@@ -352,7 +361,7 @@ class SwarmTracker(Nodeable):
             vehicle.computeDRPose(self.swarmMessage.header.stamp)
             vehicleMsg = SwarmVehicleState()
             vehicleMsg.vehicle_id = vID
-            vehicleMsg.state = Odometry()
+            vehicleMsg.state = apbrg.Geodometry()
             vehicleMsg.state.header = self.swarmMessage.header
             vehicleMsg.state.pose = vehicle.drPose.pose
             vehicleMsg.state.twist = vehicle.state.twist
@@ -367,7 +376,7 @@ class SwarmTracker(Nodeable):
 
     # Updates swarm information for this aircraft when a new pose is
     # publishedHandles new pose information for this aircraft
-    # @param poseMsg: PoseWithCovarianceStamped object with the new pose
+    # @param poseMsg: Geodometry object with the new pose
     # TODO:  change to include velocity & covariances when they are
     #        included in the msg
     def updateOwnPose(self, stateMsg):
@@ -392,14 +401,14 @@ class SwarmTracker(Nodeable):
                 updateElement = self.swarm[poseMsg.vehicle_id]
                 elTime = float(updateElement.state.header.stamp.secs) +\
                          float(updateElement.state.header.stamp.nsecs) / float(1e9)
-                if poseTime <= elTime: return # older than latest data
+                if poseTime < elTime: return # older than latest data
                 updateElement.updateState(poseMsg.state)
             else:  # Create and initialize a new element if this is the first report
                 newElement = SwarmElement(poseMsg.vehicle_id, poseMsg.state)
                 self.swarm[poseMsg.vehicle_id] = newElement
 
             element = self.swarm[poseMsg.vehicle_id]
-            (roll, pitch, yaw) = element.getEulerAngles()
+#            (roll, pitch, yaw) = element.getEulerAngles()
             self.log_dbug("update act " + str(poseMsg.vehicle_id) + ": " + \
                           element.getAsString())
 
