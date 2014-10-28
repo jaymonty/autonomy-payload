@@ -4,12 +4,26 @@
 # Note that this MUST be the same as the SITL "-I" value.
 
 if [[ -z $1 ]]; then
-  echo "Usage: $0 <INSTANCE ID>"
+  echo "Usage: $0 instance_id [ROS_username]"
   exit 1
 fi
 
 ID=$1
 shift 1  # Shift in case we want to send $@ elsewhere later on
+
+ROS_USER_TO_USE=$USER
+if [[ -z $1 ]]; then
+    #do nothing -- just use the current user
+    :
+else
+    if [[ `getent passwd | grep -c "^$1"` != 0 ]]; then
+        ROS_USER_TO_USE=$1
+        shift 1
+    fi
+
+    #otherwise assume this is not meant to be a username
+    #argument and don't shift so it will get sent in $@ later on
+fi
 
 # This variable should be set in newer SITL installs, but if it isn't
 # then default to the user's home directory
@@ -93,7 +107,7 @@ echo "Launching payload in the new namespace ..."
 
 # Launch a terminal from within the new namespace
 sudo ip netns exec $SITL_NS \
-  su -l -c "source /opt/ros/$ROS_DISTRO/setup.bash; source $ACS_ROOT/acs_ros_ws/devel/setup.bash; roslaunch ap_master sitl.launch id:=$ID name:=$SITL_NS dev:=$SITL_DEV_ALIAS sitl:=$SITL_CONNECT" $USER
+  su -l -c "source /opt/ros/$ROS_DISTRO/setup.bash; source $ACS_ROOT/acs_ros_ws/devel/setup.bash; roslaunch ap_master sitl.launch id:=$ID name:=$SITL_NS dev:=$SITL_DEV_ALIAS sitl:=$SITL_CONNECT" $ROS_USER_TO_USE
 
 echo ""
 echo "Tearing down the namespace (may require sudo password) ..."
