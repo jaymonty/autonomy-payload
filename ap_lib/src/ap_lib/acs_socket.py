@@ -32,6 +32,7 @@ class Socket():
         # Instance variables
         self.port = udp_port		# UDP port for send/recv
         self.my_id = my_id		# Local entity ID (0..255 currently)
+        self.my_sub = 0			# Local entity subswarm ID
         self.id_mapping = mapped_ids	# Mapping of IDs to IPs
         self.my_ip = None		# Local entity IP address
         self.bcast_ip = None		# Broadcast IP address
@@ -119,7 +120,10 @@ class Socket():
                 return False
             
             # Is it meant for us?
-            if msg.msg_dst not in [self.my_id, Socket.ID_BCAST_ALL]:
+            if not (msg.msg_dst == self.my_id or \
+                    msg.msg_dst ==  Socket.ID_BCAST_ALL or \
+                    (msg.msg_dst & 0xE0 == 0xE0 and \
+                     msg.msg_dst & 0x1F == self.my_sub)):
                 return False
             
             # Add source IP and port, just in case someone wants them

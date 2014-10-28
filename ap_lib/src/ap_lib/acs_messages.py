@@ -14,11 +14,12 @@ import struct
 '''
 Packet header format (all fields in network byte order):
  - (8b)  Message type
- - (8b)  RESERVED
+ - (8b)  Subswarm ID (low 5 bits; high 3 reserved)
  - (8b)  Source ID
  - (8b)  Destination ID
  - (32b) Seconds since Unix epoch
- - (32b) Nanoseconds since last second
+ - (16b) Milliseconds since last second
+ - (16b) UNUSED
 '''
 
 # Cache message sizes so we only calculate once each
@@ -46,7 +47,7 @@ def parse(data):
 
     # Parse header fields
     try:
-        msg_type, _unused, msg_src, msg_dst, msg_secs, msg_nsecs = \
+        msg_type, msg_sub, msg_src, msg_dst, msg_secs, msg_msecs = \
             struct.unpack_from(Message.hdr_fmt, data, 0)
     except:
         #print "header bad"
@@ -91,9 +92,10 @@ def parse(data):
     # Populate header fields
     msg.msg_type = msg_type
     msg.msg_src = msg_src
+    msg.msg_sub = msg_sub & 0x1F
     msg.msg_dst = msg_dst
     msg.msg_secs = msg_secs
-    msg.msg_nsecs = msg_nsecs
+    msg.msg_nsecs = msg_msecs * 1e6
 
     # If subtype has no payload fields, we're done
     if not msg.msg_size:
@@ -110,7 +112,7 @@ def parse(data):
 
 class Message():
     # Define header parameters
-    hdr_fmt = '>BBBBLL'
+    hdr_fmt = '>BBBBLHxx'
     hdr_size = struct.calcsize(hdr_fmt)
 
     def __init__(self):
@@ -120,6 +122,7 @@ class Message():
         # Initialize common elements
         self.msg_type = None
         self.msg_src = None
+        self.msg_sub = 0  # TODO: Should be maintained and set elsewhere
         self.msg_dst = None
         self.msg_secs = None
         self.msg_nsecs = None
@@ -133,20 +136,12 @@ class Message():
         
     def build_hdr_tuple(self):
         return (self.msg_type,
-                0x00,
+                self.msg_sub & 0x1f,
                 self.msg_src,
                 self.msg_dst,
                 self.msg_secs,
-                self.msg_nsecs)
+                self.msg_nsecs / 1e6)
     
-    def parse_hdr_tuple(self, fields):
-        self.msg_type  = fields[0]
-        # fields[1] is unused
-        self.msg_src   = fields[2]
-        self.msg_dst   = fields[3]
-        self.msg_secs  = fields[4]
-        self.msg_nsecs = fields[5]
-
     def serialize(self):
         data = struct.pack(self.hdr_fmt, *self.build_hdr_tuple())
         if self.msg_size:
