@@ -37,7 +37,8 @@ ROS_BASENAME = 'network'
 #-----------------------------------------------------------------------
 # Ugly global data
 
-acs_sock = None  # socket
+acs_sock = None     # socket
+aircraft_id = 0     # aircraft numeric ID
 aircraft_name = ''  # aircraft friendly name
 
 #-----------------------------------------------------------------------
@@ -116,28 +117,31 @@ if __name__ == '__main__':
     rospy.init_node(ROS_BASENAME)
     
     # Make sure ID and Name are set
-    if opts.acid == 0 and rospy.has_param("aircraft_id"):
-        opts.acid = rospy.get_param("aircraft_id")
-    if opts.acid == 0:
+    if opts.acid > 0:
+        aircraft_id = opts.acid
+    elif rospy.has_param("aircraft_id"):
+        aircraft_id = rospy.get_param("aircraft_id")
+    else:
         rospy.logfatal("Aircraft ID not specified and no aircraft_id param")
         sys.exit(-1)
-    if opts.acname == '' and rospy.has_param("aircraft_name"):
-        opts.acname = rospy.get_param("aircraft_name")
-    if opts.acname == '':
-        rospy.logfatal("Aircraft ID not specified and no aircraft_name param")
-        sys.exit(-1)
-    else:
+    if opts.acname != '':
         aircraft_name = opts.acname
+    elif rospy.has_param("aircraft_name"):
+        aircraft_name = rospy.get_param("aircraft_name")
+    else:
+        rospy.logfatal("Aircraft name not specified and no aircraft_name param")
+        sys.exit(-1)
 
     # Initialize socket
     # TODO: Create dictionary of IDs->IPs 
     try:
+        loc_ip = None
+        rem_ip = None
         if opts.device == 'lo':
-            acs_sock = Socket(opts.acid, opts.port, None, 
-                              '127.0.0.1', '127.0.1.1', None)
-        else:
-            acs_sock = Socket(opts.acid, opts.port, opts.device, 
-                              None, None, None)
+            loc_ip = '127.0.0.1'
+            rem_ip = '127.0.1.1'
+        acs_sock = Socket(aircraft_id, opts.port, opts.device, 
+                          loc_ip, rem_ip, None)
     except Exception:
         rospy.logfatal("Could not initialize network socket")
         sys.exit(-1)
@@ -186,6 +190,7 @@ if __name__ == '__main__':
             try:
                 msg = ap_msgs.SwarmVehicleState()
                 msg.vehicle_id = message.msg_src
+                msg.subswarm_id = message.msg_sub
                 msg.state.header.stamp.secs = message.msg_secs
                 msg.state.header.stamp.nsecs = message.msg_nsecs
                 msg.state.header.seq = 0
