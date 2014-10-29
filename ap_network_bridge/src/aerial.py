@@ -169,6 +169,8 @@ if __name__ == '__main__':
                                       apmsg.LLA)
     pub_waypoint_goto = rospy.Publisher("%s/recv_waypoint_goto"%ROS_BASENAME, 
                                         std_msgs.msg.UInt16)
+    pub_set_subswarm = rospy.Publisher("%s/recv_set_subswarm"%ROS_BASENAME,
+                                       std_msgs.msg.UInt8)
     
     # Loop , checking for incoming datagrams and sleeping
     # NOTE: If too many network messages come in, this loop
@@ -297,6 +299,17 @@ if __name__ == '__main__':
                 rospy.loginfo("Ground-to-air: FlightReady")
             except Exception as ex:
                 rospy.logwarn("Error processing command: FlightReady")
+
+        elif isinstance(message, acs_messages.SetSubswarm):
+            try:
+                acs_sock.subswarm = message.subswarm
+                msg = std_msgs.msg.UInt8()
+                msg.data = message.subswarm
+                pub_set_subswarm.publish(msg)
+                rospy.set_param("subswarm_id", message.subswarm)
+                rospy.loginfo("Ground-to-air: SetSubswarm")
+            except Exception as ex:
+                rospy.logwarn("Error processing command: SetSubswarm")
 
         elif isinstance(message, acs_messages.PayloadHeartbeat):
             try:
