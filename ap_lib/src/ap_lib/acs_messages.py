@@ -39,6 +39,10 @@ def _bool16(val):
         return 0xffff
     return 0x0000
 
+# Specify bitmask for subswarm IDs
+SUBSWARM_MASK = 0xE0  # 224-254 for subswarms
+SUBSWARM_BITS = 0xFF - SUBSWARM_MASK
+
 # Parse data into a Message subtype
 def parse(data):
     # Make sure we at least have a full header
@@ -92,7 +96,7 @@ def parse(data):
     # Populate header fields
     msg.msg_type = msg_type
     msg.msg_src = msg_src
-    msg.msg_sub = msg_sub & 0x1F
+    msg.msg_sub = msg_sub & SUBSWARM_BITS
     msg.msg_dst = msg_dst
     msg.msg_secs = msg_secs
     msg.msg_nsecs = msg_msecs * 1e6
@@ -122,7 +126,7 @@ class Message():
         # Initialize common elements
         self.msg_type = None
         self.msg_src = None
-        self.msg_sub = 0  # TODO: Should be maintained and set elsewhere
+        self.msg_sub = None
         self.msg_dst = None
         self.msg_secs = None
         self.msg_nsecs = None
@@ -136,7 +140,7 @@ class Message():
         
     def build_hdr_tuple(self):
         return (self.msg_type,
-                self.msg_sub & 0x1f,
+                self.msg_sub & SUBSWARM_BITS,
                 self.msg_src,
                 self.msg_dst,
                 self.msg_secs,

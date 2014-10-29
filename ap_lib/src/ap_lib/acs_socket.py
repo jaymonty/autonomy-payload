@@ -32,7 +32,7 @@ class Socket():
         # Instance variables
         self.port = udp_port		# UDP port for send/recv
         self.my_id = my_id		# Local entity ID (0..255 currently)
-        self.my_sub = 0			# Local entity subswarm ID
+        self.my_subswarm = 0		# Local entity subswarm ID
         self.id_mapping = mapped_ids	# Mapping of IDs to IPs
         self.my_ip = None		# Local entity IP address
         self.bcast_ip = None		# Broadcast IP address
@@ -65,13 +65,22 @@ class Socket():
         except Exception:
             raise Exception("Couldn't establish network socket")
 
+    # Get and set subswarm ID in Pythonic property style
+    @property
+    def subswarm(self):
+        return self.my_subswarm
+    @subswarm.setter
+    def subswarm(self, value):
+        self.my_subswarm = value
+
     # 'msg' must be a valid Message subclass
     def send(self, msg):
         if not msg and not isinstance(msg, Message):
             raise Exception("Parameter is not a Message")
         
-        # Enforce sender ID
+        # Enforce sender ID and subswarm ID
         msg.msg_src = self.my_id
+        msg.msg_sub = self.my_subswarm
         
         # If sending to a device with a known ID->IP mapping, use it;
         #  otherwise broadcast
@@ -86,9 +95,11 @@ class Socket():
             
             # Send it, return number of bytes sent (per sendto())
             return self.udp_sock.sendto(data, (dst_ip, self.port))
+
+        # Print any exception for user's awareness
         except Exception as ex:
-            # TODO: Raise an exception, but make sure calling code catches it
-            pass
+            print ex.args[0]
+            return False
 
     # Return values:
     #  - <Object> - valid received message object
@@ -121,9 +132,9 @@ class Socket():
             
             # Is it meant for us?
             if not (msg.msg_dst == self.my_id or \
-                    msg.msg_dst ==  Socket.ID_BCAST_ALL or \
-                    (msg.msg_dst & 0xE0 == 0xE0 and \
-                     msg.msg_dst & 0x1F == self.my_sub)):
+                    msg.msg_dst == Socket.ID_BCAST_ALL or \
+                    (msg.msg_dst & acs_messages.SUBSWARM_MASK == acs_messages.SUBSWARM_MASK and \
+                     msg.msg_dst & acs_messages.SUBSWARM_BITS == self.my_subswarm)):
                 return False
             
             # Add source IP and port, just in case someone wants them
@@ -135,4 +146,5 @@ class Socket():
         # Any other unhandled conditions are printed for our awareness
         except Exception as ex:
             print(ex.args[0])
+            return False
 
