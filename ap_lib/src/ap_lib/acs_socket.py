@@ -28,7 +28,7 @@ class Socket():
     # If you provide both, ip's are used
     # Mapping IDs to IPs: mapped_ids[id] = ip_address
     def __init__(self, my_id, udp_port, device=None, 
-                 my_ip=None, bcast_ip=None, mapped_ids=None):
+                 my_ip=None, bcast_ip=None, mapped_ids=None, send_only=False):
         # Instance variables
         self.port = udp_port		# UDP port for send/recv
         self.my_id = my_id		# Local entity ID (0..255 currently)
@@ -37,6 +37,7 @@ class Socket():
         self.my_ip = None		# Local entity IP address
         self.bcast_ip = None		# Broadcast IP address
         self.sock = None		# UDP socket
+        self.send_only = send_only	# Don't bind a port
         
         # Attempt to look up network device addressing information
         if my_ip and bcast_ip:
@@ -55,7 +56,10 @@ class Socket():
         try:
             self.udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            if my_ip and bcast_ip:
+            if send_only:
+                # Allow a socket that can send but not receive
+                pass
+            elif my_ip and bcast_ip:
                 # For now, assume that manual IP specification implies
                 #  an environment where we cannot bind to 0.0.0.0 (e.g. SITL)
                 # TODO: This is sure to bite us later on, but unclear where
@@ -106,6 +110,9 @@ class Socket():
     #  - False - A message arrived, but one to be ignored
     #  - None - No valid message arrived
     def recv(self, buffsize=1024):
+        if self.send_only:
+            raise Exception("Attempted to receive on send-only socket")
+
         if not buffsize:
             raise Exception("Invalid receive buffer size")
         
