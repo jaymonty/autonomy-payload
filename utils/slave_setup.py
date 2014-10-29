@@ -47,7 +47,7 @@ if __name__ == '__main__':
         bcast_ip = '127.0.0.1'
 
     try:
-        sock = Socket(0xff, opts.port, opts.device, my_ip, bcast_ip)
+        sock = Socket(0xff, opts.port, opts.device, my_ip, bcast_ip, send_only=True)
     except Exception:
         print "Sorry, couldn't start up the listening socket"
         sys.exit(1)
