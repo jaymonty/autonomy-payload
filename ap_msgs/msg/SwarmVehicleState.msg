@@ -1,2 +1,3 @@
 uint16 vehicle_id
+uint16 subswarm_id
 autopilot_bridge/Geodometry state
