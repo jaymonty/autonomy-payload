@@ -56,8 +56,8 @@ if __name__ == '__main__':
                  message.vlx, message.vly, message.vlz,
                  message.vax, message.vay, message.vaz)
         elif isinstance(message, acs_messages.FlightStatus):
-            print "\tNm: %s Mo: %u Wp: %u Fl: %u%u%u%u%u%u%u%u Sa: %u Br: %d Bv: %d Bc: %d As: %f Ar: %d Gh: %u" % \
-                (message.name, message.mode, int(message.mis_cur), int(message.armed), int(message.ok_ahrs),
+            print "\tNm: %s Su: %u Mo: %u Wp: %u Fl: %u%u%u%u%u%u%u%u Sa: %u Br: %d Bv: %d Bc: %d As: %f Ar: %d Gh: %u" % \
+                (message.name, message.msg_sub, message.mode, int(message.mis_cur), int(message.armed), int(message.ok_ahrs),
                  int(message.ok_as), int(message.ok_gps), int(message.ok_ins),
                  int(message.ok_mag), int(message.ok_pwr), int(message.ready),
                  message.gps_sats, message.batt_rem, message.batt_vcc,
