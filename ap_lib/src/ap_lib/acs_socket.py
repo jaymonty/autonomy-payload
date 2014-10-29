@@ -15,7 +15,7 @@ import socket
 import struct
 
 # Message definitions
-import acs_messages
+from ap_lib import acs_messages
 
 #-----------------------------------------------------------------------
 # Socket class
