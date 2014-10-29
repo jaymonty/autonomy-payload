@@ -80,6 +80,8 @@ def parse(data):
         msg = SlaveSetup()
     elif msg_type == 0x88:
         msg = FlightReady()
+    elif msg_type == 0x89:
+        msg = SetSubswarm()
     elif msg_type == 0xFE:
         msg = PayloadHeartbeat()
     elif msg_type == 0xFF:
@@ -322,7 +324,6 @@ class Heartbeat(Message):
         self.msg_fmt = '>L'
         # Define message fields (setting to None helps raise Exceptions later)
         self.counter = None         # User-definable counter (UInt32)
-        # 3 padding bytes = 0x00
 
     def build_tuple(self):
         # Convert message elements into pack-able fields and form tuple
@@ -336,16 +337,14 @@ class Arm(Message):
     def _init_message(self):
         # Define message type parameters
         self.msg_type = 0x81
-        self.msg_fmt = '>BBH'
+        self.msg_fmt = '>B3x'
         # Define message fields (setting to None helps raise Exceptions later)
         self.enable = None         # Boolean
         # 3 padding bytes = 0x00
         
     def build_tuple(self):
         # Convert message elements into pack-able fields and form tuple
-        return (int(self.enable),
-                0x00,
-                0x0000)
+        return (int(self.enable),)
         
     def parse_tuple(self, fields):
         # Place unpacked but unconverted fields into message elements
@@ -355,16 +354,14 @@ class Mode(Message):
     def _init_message(self):
         # Define message type parameters
         self.msg_type = 0x82
-        self.msg_fmt = '>BBH'
+        self.msg_fmt = '>B3x'
         # Define message fields (setting to None helps raise Exceptions later)
         self.mode = None         # Mode ID (0-15)
         # 3 padding bytes = 0x00
 
     def build_tuple(self):
         # Convert message elements into pack-able fields and form tuple
-        return (int(self.mode),
-                0x00,
-                0x0000)
+        return (int(self.mode),)
 
     def parse_tuple(self, fields):
         # Place unpacked but unconverted fields into message elements
@@ -389,15 +386,14 @@ class LandAbort(Message):
     def _init_message(self):
         # Define message type parameters
         self.msg_type = 0x84
-        self.msg_fmt = '>hH'
+        self.msg_fmt = '>h2x'
         # Define message fields (setting to None helps raise Exceptions later)
         self.alt = None         # Waive-off altitude (approx +/-32000)
         # 2 padding bytes = 0x0000
 
     def build_tuple(self):
         # Convert message elements into pack-able fields and form tuple
-        return (int(self.alt),
-                0x0000)
+        return (int(self.alt),)
 
     def parse_tuple(self, fields):
         # Place unpacked but unconverted fields into message elements
@@ -429,15 +425,14 @@ class WaypointGoto(Message):
     def _init_message(self):
         # Define message type parameters
         self.msg_type = 0x86
-        self.msg_fmt = '>HH'
+        self.msg_fmt = '>H2x'
         # Define message fields (setting to None helps raise Exceptions later)
         self.index = None         # Waypoint index (0-65535)
         # 2 padding bytes = 0x0000
 
     def build_tuple(self):
         # Convert message elements into pack-able fields and form tuple
-        return (int(self.index),
-                0x0000)
+        return (int(self.index),)
 
     def parse_tuple(self, fields):
         # Place unpacked but unconverted fields into message elements
@@ -481,20 +476,35 @@ class FlightReady(Message):
         # Place unpacked but unconverted fields into message elements
         self.ready = bool(fields[0]) 
 
+class SetSubswarm(Message):
+    def _init_message(self):
+        # Define message type parameters
+        self.msg_type = 0x89
+        self.msg_fmt = '>B3x'
+        # Define message fields (setting to None helps raise Exceptions later)
+        self.subswarm = None         # New subswarm ID
+        # 3 padding bytes = 0x00
+
+    def build_tuple(self):
+        # Convert message elements into pack-able fields and form tuple
+        return (int(self.mode),)
+
+    def parse_tuple(self, fields):
+        # Place unpacked but unconverted fields into message elements
+        self.subswarm = int(fields[0]) 
+
 class PayloadHeartbeat(Message):
     def _init_message(self):
         # Define message type parameters
         self.msg_type = 0xFE
-        self.msg_fmt = '>BBH'
+        self.msg_fmt = '>B3x'
         # Define message fields (setting to None helps raise Exceptions later)
         self.enable = None         # Boolean
         # 3 padding bytes = 0x00
 
     def build_tuple(self):
         # Convert message elements into pack-able fields and form tuple
-        return (int(self.enable),
-                0x00,
-                0x0000)
+        return (int(self.enable),)
 
     def parse_tuple(self, fields):
         # Place unpacked but unconverted fields into message elements
