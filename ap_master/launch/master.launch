@@ -4,7 +4,10 @@
   <arg name="gps_arg" default="--gps-time-hack" if="$(arg gps)" />
   <arg name="gps_arg" default="" unless="$(arg gps)" />
 
+  <arg name="subswarm" default="0" />
+
   <param name="aircraft_id" type="int" value="$(arg id)" />
+  <param name="subswarm_id" type="int" value="$(arg subswarm)" />
   <param name="aircraft_name" type="str" value="$(arg name)" />
   <param name="rosbag_enable" type="bool" value="true" />
 

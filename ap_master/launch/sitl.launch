@@ -2,7 +2,10 @@
   <arg name="sitl" default="tcp:127.0.0.1:5762" />
   <arg name="dev" default="lo" />
 
+  <arg name="subswarm" default="0" />
+
   <param name="aircraft_id" type="int" value="$(arg id)" />
+  <param name="subswarm_id" type="int" value="$(arg subswarm)" /> 
   <param name="aircraft_name" type="str" value="$(arg name)" />
 
   <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--device $(arg sitl) --module acs --module param --module slave" />
