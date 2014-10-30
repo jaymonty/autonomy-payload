@@ -146,6 +146,12 @@ if __name__ == '__main__':
         rospy.logfatal("Could not initialize network socket")
         sys.exit(-1)
     
+    # If subswarm ID param is already set, use it; otherwise, init param
+    if rospy.has_param("subswarm_id"):
+        acs_sock.subswarm = rospy.get_param("subswarm_id")
+    else:
+        rospy.set_param("subswarm_id", acs_sock.subswarm)
+
     # Set up subscribers (ROS -> network)
     rospy.Subscriber("%s/send_flight_status"%ROS_BASENAME, 
                      apmsg.Status, sub_flight_status)
