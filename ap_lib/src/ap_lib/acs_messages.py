@@ -487,7 +487,7 @@ class SetSubswarm(Message):
 
     def build_tuple(self):
         # Convert message elements into pack-able fields and form tuple
-        return (int(self.mode),)
+        return (int(self.subswarm),)
 
     def parse_tuple(self, fields):
         # Place unpacked but unconverted fields into message elements
