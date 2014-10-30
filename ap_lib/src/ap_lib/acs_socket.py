@@ -30,32 +30,28 @@ class Socket():
     def __init__(self, my_id, udp_port, device=None, 
                  my_ip=None, bcast_ip=None, mapped_ids=None, send_only=False):
         # Instance variables
-        self.port = udp_port		# UDP port for send/recv
-        self.my_id = my_id		# Local entity ID (0..255 currently)
-        self.my_subswarm = 0		# Local entity subswarm ID
-        self.id_mapping = mapped_ids	# Mapping of IDs to IPs
-        self.my_ip = None		# Local entity IP address
-        self.bcast_ip = None		# Broadcast IP address
-        self.sock = None		# UDP socket
-        self.send_only = send_only	# Don't bind a port
+        self._port = udp_port		# UDP port for send/recv
+        self._id = my_id		# Local entity ID (0..255 currently)
+        self._subswarm = 0		# Local entity subswarm ID
+        self._idmap = mapped_ids	# Mapping of IDs to IPs
+        self._ip = my_ip		# Local entity IP address
+        self._bcast = bcast_ip		# Broadcast IP address
+        self._sock = None		# UDP socket
+        self._sendonly = send_only	# Don't bind a port
         
+        # If user did not specify both addresses,
         # Attempt to look up network device addressing information
-        if my_ip and bcast_ip:
-            # Trust what the caller provides
-            # NOTE: Use this for loopback/SITL cases
-            self.my_ip = my_ip
-            self.bcast_ip = bcast_ip
-        else:
+        if not my_ip or not bcast_ip:
             try:
-                self.my_ip = netifaces.ifaddresses(device)[2][0]['addr']
-                self.bcast_ip = netifaces.ifaddresses(device)[2][0]['broadcast']
+                self._ip = netifaces.ifaddresses(device)[2][0]['addr']
+                self._bcast = netifaces.ifaddresses(device)[2][0]['broadcast']
             except Exception:
                 raise Exception("Couldn't establish IP addressing information")
         
         # Build the socket
         try:
-            self.udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self.udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             if send_only:
                 # Allow a socket that can send but not receive
                 pass
@@ -63,19 +59,21 @@ class Socket():
                 # For now, assume that manual IP specification implies
                 #  an environment where we cannot bind to 0.0.0.0 (e.g. SITL)
                 # TODO: This is sure to bite us later on, but unclear where
-                self.udp_sock.bind((self.my_ip, self.port))
+                self._sock.bind((self._ip, self._port))
             else:
-                self.udp_sock.bind(('', self.port))
+                self._sock.bind(('', self._port))
         except Exception:
             raise Exception("Couldn't establish network socket")
 
     # Get and set subswarm ID in Pythonic property style
+    # NOTE: Apparently must reference internally by property name,
+    #  *not* by internal variable name. Not clear why.
     @property
     def subswarm(self):
-        return self.my_subswarm
+        return self._subswarm
     @subswarm.setter
     def subswarm(self, value):
-        self.my_subswarm = value
+        self._subswarm = value
 
     # 'msg' must be a valid Message subclass
     def send(self, msg):
@@ -83,22 +81,22 @@ class Socket():
             raise Exception("Parameter is not a Message")
         
         # Enforce sender ID and subswarm ID
-        msg.msg_src = self.my_id
-        msg.msg_sub = self.my_subswarm
+        msg.msg_src = self._id
+        msg.msg_sub = self.subswarm
         
         # If sending to a device with a known ID->IP mapping, use it;
         #  otherwise broadcast
-        dst_ip = self.bcast_ip
-        if self.id_mapping and (msg.msg_dst != Socket.ID_BCAST_ALL) \
-                           and (msg.msg_dst in self.id_mapping):
-            dst_ip = self.id_mapping[msg.msg_dst]
+        dst_ip = self._bcast
+        if self._idmap and (msg.msg_dst != Socket.ID_BCAST_ALL) \
+                       and (msg.msg_dst in self._idmap):
+            dst_ip = self._idmap[msg.msg_dst]
         
         try:
             # Pack message into byte string
             data = msg.serialize()
             
             # Send it, return number of bytes sent (per sendto())
-            return self.udp_sock.sendto(data, (dst_ip, self.port))
+            return self._sock.sendto(data, (dst_ip, self._port))
 
         # Print any exception for user's awareness
         except Exception as ex:
@@ -110,14 +108,14 @@ class Socket():
     #  - False - A message arrived, but one to be ignored
     #  - None - No valid message arrived
     def recv(self, buffsize=1024):
-        if self.send_only:
+        if self._sendonly:
             raise Exception("Attempted to receive on send-only socket")
 
         if not buffsize:
             raise Exception("Invalid receive buffer size")
         
         try:
-            data, (ip, port) = self.udp_sock.recvfrom(buffsize, socket.MSG_DONTWAIT)
+            data, (ip, port) = self._sock.recvfrom(buffsize, socket.MSG_DONTWAIT)
             # Mostly likely due to no packets being available
             if not data:
                 return None
@@ -129,7 +127,7 @@ class Socket():
         #  there may be more packets to receive
         try:
             # Ignore packets we sent (we see our own broadcasts)
-            if ip == self.my_ip:
+            if ip == self._ip:
                 return False
             
             # Parse message
@@ -138,10 +136,10 @@ class Socket():
                 return False
             
             # Is it meant for us?
-            if not (msg.msg_dst == self.my_id or \
+            if not (msg.msg_dst == self._id or \
                     msg.msg_dst == Socket.ID_BCAST_ALL or \
                     (msg.msg_dst & acs_messages.SUBSWARM_MASK == acs_messages.SUBSWARM_MASK and \
-                     msg.msg_dst & acs_messages.SUBSWARM_BITS == self.my_subswarm)):
+                     msg.msg_dst & acs_messages.SUBSWARM_BITS == self.subswarm)):
                 return False
             
             # Add source IP and port, just in case someone wants them
