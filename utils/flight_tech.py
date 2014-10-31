@@ -145,7 +145,7 @@ def preflight_aircraft(sock, uavid, localip, uavip):
     ss.msg_secs = 0
     ss.msg_nsecs = 0
     ss.enable = True
-    ss.channel = "udp:%s:5556" % localip
+    ss.channel = "udp:%s:15554" % localip
     sock.send(ss)
 
     time.sleep(1)
