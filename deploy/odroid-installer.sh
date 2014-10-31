@@ -222,8 +222,8 @@ else
   check_fail "mavlink git clean"
   git checkout dev  # have the right branch checked out
   check_fail "mavlink git checkout dev"
-  git merge origin/dev  # bring in updates
-  check_fail "mavlink git merge origin/dev"
+  git reset --hard origin/dev  # bring in updates
+  check_fail "mavlink git reset"
 fi
 
 # Set dialect so we don't compile the universe
@@ -271,8 +271,8 @@ else
   check_fail "payload git clean"
   git checkout master  # have the right branch checked out
   check_fail "payload git checkout master"
-  git merge origin/master  # bring in updates
-  check_fail "payload git merge origin/master"
+  git reset --hard origin/master  # bring in updates
+  check_fail "payload git reset"
 fi
 
 # Clone or update the autopilot_bridge repo
@@ -291,8 +291,8 @@ else
   check_fail "mavbridge git clean"
   git checkout master  # have the right branch checked out
   check_fail "mavbridge git checkout master"
-  git merge origin/master  # bring in updates
-  check_fail "mavbridge git merge origin/master"
+  git reset --hard origin/master  # bring in updates
+  check_fail "mavbridge git reset"
 fi
 
 # Build all workspace packages
