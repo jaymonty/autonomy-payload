@@ -45,6 +45,34 @@ Example (use 'lo' for SITL):
 
 Use '--help' for all options. Note that '--repeat' can be used to repeat all received messages but with source ID = 255 (0xff).
 
+## repeater.py
+
+This, plus sitl\_ns.launch and some updates to the network bridge, offers an alternative to launch\_payload\_container.sh without needing containers (or root access). repeater.py can be configured to listen on loopback IP 127.0.1.1 at several UDP ports to traffic from those same port numbers at IP 127.0.0.1. When it hears a datagram from one of those ports, it repeats to all other ports. Thus, multiple payload instances can run at _different UDP ports on the same address_ and this utility will serve the same purpose as a broadcast address.
+
+Example usage:
+
+First, start repeater.py for however many payloads you wish to run:
+
+	python repeater.py 2
+
+Next, start SITLs as before with different -I values.
+
+Then, start corresponding payloads using roslaunch. These options are approximately what launch\_payload\_container.sh provides, plus a new option ns:=NAME, where name is the ROS group or "namespace" (not to be confused with Linux network namespaces):
+
+	roslaunch ap_master sitl_ns.launch id:=1 name:=sitl1 sitl:=tcp:127.0.0.1:5772 port:=5554 ns:=sitl1
+
+Do the same for the second payload instance, adjusting all parameters (note that repeater.py by default listens on 5554 and consecutively higher numbers):
+
+	roslaunch ap_master sitl_ns.launch id:=2 name:=sitl2 sitl:=tcp:127.0.0.1:5782 port:=5555 ns:=sitl2
+
+If you wish to run utilities such as net\_parser.py or flight\_tech.py, you will need to request an extra repeated port from repeater.py:
+
+	python repeater.py -e 1234 2
+
+and use the --port and --lo-reverse options in those utilities:
+
+	python net_parser.py --device lo --lo-reverse --port 1234
+
 ## slave\_setup.py
 
 Opens (or closes) a mavlink slave channel via the payload. Right now, slave channels should be UDP (TCP doesn't seem to work for providing a server, and there are no additional serial channels onboard).
