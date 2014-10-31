@@ -104,52 +104,59 @@ if __name__ == '__main__':
     # Grok args
     parser = OptionParser("aerial.py [options]")
     parser.add_option("--id", dest="acid", type='int',
-                      help="Aircraft ID (default to ROS param aircraft_id)", default=0)
+                      help="Aircraft ID (default to ROS param aircraft_id)", default=None)
     parser.add_option("--name", dest="acname",
-                      help="Aircraft Name (default to ROS param aircraft_name)", default='')
+                      help="Aircraft Name (default to ROS param aircraft_name)", default=None)
     parser.add_option("--device", dest="device", 
-                      help="Network device to use (default wlan0)", default="wlan0")
+                      help="Network device to use (default wlan0)", default=None)
     parser.add_option("--port", dest="port", type='int',
-                      help="UDP port (default 5554)", default=5554)
+                      help="UDP port (default 5554)", default=None)
     (opts, args) = parser.parse_args()
-    
+
     # Initialize ROS
     rospy.init_node(ROS_BASENAME)
-    
-    # Make sure ID and Name are set
-    if opts.acid > 0:
-        aircraft_id = opts.acid
-    elif rospy.has_param("aircraft_id"):
-        aircraft_id = rospy.get_param("aircraft_id")
-    else:
-        rospy.logfatal("Aircraft ID not specified and no aircraft_id param")
-        sys.exit(-1)
-    if opts.acname != '':
-        aircraft_name = opts.acname
-    elif rospy.has_param("aircraft_name"):
-        aircraft_name = rospy.get_param("aircraft_name")
-    else:
-        rospy.logfatal("Aircraft name not specified and no aircraft_name param")
-        sys.exit(-1)
+
+    # Prefer command line args, then ROS params, then default values, then FAIL
+    def get_arg(cmd_arg, ros_param, default, error_text):
+        if cmd_arg:
+            return cmd_arg
+        elif rospy.has_param(ros_param):
+            return rospy.get_param(ros_param)
+        elif default:
+            return default
+        else:
+            rospy.logfatal("Could not find setting for %s; aborting...")
+            sys.exit(-1)
+ 
+    # Find all arguments or abort
+    aircraft_id = get_arg(opts.acid, 'aircraft_id', None, 'Aircraft ID')
+    aircraft_name = get_arg(opts.acname, 'aircraft_name', None, 'Aircraft Name')
+    network_device = get_arg(opts.device, 'network_device', 'wlan0', 'Network Device')
+    network_port = get_arg(opts.port, 'network_port', 5554, 'Network Port')
 
     # Initialize socket
     # TODO: Create dictionary of IDs->IPs 
     try:
         loc_ip = None
         rem_ip = None
-        if opts.device == 'lo':
+        # Handle special case for loopback
+        if network_device == 'lo':
             loc_ip = '127.0.0.1'
             rem_ip = '127.0.1.1'
-        acs_sock = Socket(aircraft_id, opts.port, opts.device, 
+        acs_sock = Socket(aircraft_id, network_port, network_device, 
                           loc_ip, rem_ip, None)
     except Exception:
         rospy.logfatal("Could not initialize network socket")
         sys.exit(-1)
-    
+
     # If subswarm ID param is already set, use it; otherwise, init param
+    # and send publication to any subscribing nodes
     if rospy.has_param("subswarm_id"):
         acs_sock.subswarm = rospy.get_param("subswarm_id")
     else:
+        msg = std_msgs.msg.UInt8()
+        msg.data = message.subswarm
+        pub_set_subswarm.publish(msg)
         rospy.set_param("subswarm_id", acs_sock.subswarm)
 
     # Set up subscribers (ROS -> network)
@@ -157,7 +164,7 @@ if __name__ == '__main__':
                      apmsg.Status, sub_flight_status)
     rospy.Subscriber("%s/send_pose"%ROS_BASENAME, 
                      apmsg.Geodometry, sub_pose)
-    
+
     # Set up publishers (network -> ROS)
     pub_pose = rospy.Publisher("%s/recv_pose"%ROS_BASENAME, 
                                ap_msgs.SwarmVehicleState)
@@ -177,7 +184,7 @@ if __name__ == '__main__':
                                         std_msgs.msg.UInt16)
     pub_set_subswarm = rospy.Publisher("%s/recv_set_subswarm"%ROS_BASENAME,
                                        std_msgs.msg.UInt8)
-    
+
     # Loop , checking for incoming datagrams and sleeping
     # NOTE: If too many network messages come in, this loop
     #  might not get around to sleeping (which means subscriber
@@ -191,9 +198,9 @@ if __name__ == '__main__':
         if message == None:   # No packet to get, sleep a bit
             r.sleep()
             continue
-        
+
         # Aircraft -> Aircraft messages
-        
+
         if isinstance(message, acs_messages.Pose):
             try:
                 msg = ap_msgs.SwarmVehicleState()
@@ -223,9 +230,9 @@ if __name__ == '__main__':
                 pub_pose.publish(msg)
             except:
                 rospy.logwarn("Error processing received Pose")
-            
+
         # Ground -> Aircraft messages
-        
+
         elif isinstance(message, acs_messages.Heartbeat):
             try:
                 msg = apmsg.Heartbeat()
@@ -234,7 +241,7 @@ if __name__ == '__main__':
                 #rospy.loginfo("Ground-to-air: Heartbeat")
             except:
                 rospy.logwarn("Error processing command: Heartbeat")
-            
+
         elif isinstance(message, acs_messages.Arm):
             try:
                 msg = std_msgs.msg.Bool()
@@ -243,7 +250,7 @@ if __name__ == '__main__':
                 rospy.loginfo("Ground-to-air: Arm")
             except:
                 rospy.logwarn("Error processing command: Arm")
-            
+
         elif isinstance(message, acs_messages.Mode):
             try:
                 msg = std_msgs.msg.UInt8()
@@ -252,7 +259,7 @@ if __name__ == '__main__':
                 rospy.loginfo("Ground-to-air: Mode")
             except:
                 rospy.logwarn("Error processing command: Mode")
-            
+
         elif isinstance(message, acs_messages.Land):
             try:
                 msg = std_msgs.msg.Empty()
@@ -260,7 +267,7 @@ if __name__ == '__main__':
                 rospy.loginfo("Ground-to-air: Land")
             except:
                 rospy.logwarn("Error processing command: Land")
-            
+
         elif isinstance(message, acs_messages.LandAbort):
             try:
                 msg = std_msgs.msg.UInt16()
@@ -269,7 +276,7 @@ if __name__ == '__main__':
                 rospy.loginfo("Ground-to-air: LandAbort")
             except:
                 rospy.logwarn("Error processing command: LandAbort")
-            
+
         elif isinstance(message, acs_messages.GuidedGoto):
             try:
                 msg = apmsg.LLA()
@@ -280,7 +287,7 @@ if __name__ == '__main__':
                 rospy.loginfo("Ground-to-air: GuidedGoto")
             except:
                 rospy.logwarn("Error processing command: GuidedGoto")
-            
+
         elif isinstance(message, acs_messages.WaypointGoto):
             try:
                 msg = std_msgs.msg.UInt16()
@@ -289,7 +296,7 @@ if __name__ == '__main__':
                 rospy.loginfo("Ground-to-air: WaypointGoto")
             except:
                 rospy.logwarn("Error processing command: WaypointGoto")
-            
+
         elif isinstance(message, acs_messages.SlaveSetup):
             try:
                 srv = rospy.ServiceProxy('autopilot/slave_setup', 
@@ -298,7 +305,7 @@ if __name__ == '__main__':
                 rospy.loginfo("Ground-to-air: SlaveSetup")
             except Exception as ex:
                 rospy.logwarn("Error processing command: SlaveSetup")
-            
+
         elif isinstance(message, acs_messages.FlightReady):
             try:
                 rospy.set_param("flight_ready", message.ready)
@@ -325,7 +332,7 @@ if __name__ == '__main__':
                 rospy.loginfo("Ground-to-air: PayloadHeartbeat")
             except Exception as ex:
                 rospy.logwarn("Error processing command: PayloadHeartbeat")
-            
+
         elif isinstance(message, acs_messages.PayloadShutdown):
             try:
                 res = os.system("sudo halt")
@@ -334,5 +341,5 @@ if __name__ == '__main__':
                 rospy.loginfo("Ground-to-air: PayloadShutdown")
             except:
                 rospy.logwarn("Error processing command: PayloadShutdown")
-            
-        
+
+
