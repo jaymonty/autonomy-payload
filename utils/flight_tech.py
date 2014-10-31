@@ -181,6 +181,9 @@ if __name__ == '__main__':
                       help="Network device to listen on", default='')
     parser.add_option("--port", dest="port", type="int",
                       help="Network port to listen on", default=5554)
+    parser.add_option("--lo-reverse", dest="lo_reverse",
+                      action="store_true", default=False,
+                      help="If using lo, reverse the addresses")
     (opts, args) = parser.parse_args()
 
     # NOTE: This is a hack to work with SITL
@@ -189,14 +192,16 @@ if __name__ == '__main__':
     if opts.device == 'lo':
         my_ip = '127.0.1.1'
         bcast_ip = '127.0.0.1'
+        if opts.lo_reverse:
+            (my_ip, bcast_ip) = (bcast_ip, my_ip)
 
     # Establish socket to aircraft
     try:
         sock = Socket(0xff, opts.port, opts.device, my_ip, bcast_ip)
-        # NOTE: The next two lines are probably not the most pythonic
+        # NOTE: The next two lines are *definitely* not the most pythonic
         #  (shouldn't just grab class data members)
-        my_ip = sock.my_ip
-        bcast_ip = sock.bcast_ip
+        my_ip = sock._ip
+        bcast_ip = sock._bcast
     except Exception:
         print "Couldn't start up socket on interface '%s'" % opts.device
         sys.exit(1)

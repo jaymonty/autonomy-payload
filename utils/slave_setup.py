@@ -23,6 +23,9 @@ if __name__ == '__main__':
                       help="channel to enable", default='')
     parser.add_option("--disable", dest="disable",
                       help="channel to disable", default='')
+    parser.add_option("--lo-reverse", dest="lo_reverse",
+                      action="store_true", default=False,
+                      help="If using lo, reverse the addresses")
     (opts, args) = parser.parse_args()
 
     # Validate params
@@ -45,6 +48,8 @@ if __name__ == '__main__':
     if opts.device == 'lo':
         my_ip = '127.0.1.1'
         bcast_ip = '127.0.0.1'
+        if opts.lo_reverse:
+            (my_ip, bcast_ip) = (bcast_ip, my_ip)
 
     try:
         sock = Socket(0xff, opts.port, opts.device, my_ip, bcast_ip, send_only=True)
