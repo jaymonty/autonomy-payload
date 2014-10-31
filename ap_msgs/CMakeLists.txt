@@ -21,6 +21,7 @@ add_message_files(
   SwarmStateStamped.msg
   SwarmVehicleState.msg
   WaypointListStamped.msg
+  FormationOrder.msg
 )
 
 ## Generate added messages and services with any dependencies listed here
