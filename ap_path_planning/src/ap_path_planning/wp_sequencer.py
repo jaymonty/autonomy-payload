@@ -22,19 +22,18 @@ import rospy
 
 # Import ROS message and service types
 import std_msgs.msg as stdmsg
-from geometry_msgs.msg import PoseWithCovarianceStamped
-from nav_msgs.msg import Odometry
 
 # Project-specific imports
-from autopilot_bridge.msg import LLA
 from ap_lib.nodeable import *
 from ap_lib.gps_utils import *
-import ap_msgs.msg as apm
+import ap_msgs.msg as apmsg
+import autopilot_bridge.msg as apbrg
 
 
 # Base name for node topics and services
 NODE_BASENAME = 'wp_sequencer'
 AP_BASENAME = 'autopilot'
+CTRLR_BASENAME = 'controllers'
 
 
 # Other global constants
@@ -70,7 +69,7 @@ class WaypointSequencer(Nodeable):
     def __init__(self, nodeName=NODE_BASENAME, waypoints=[], \
                  captureDistance=CAPTURE_DISTANCE):
         Nodeable.__init__(self, nodeName)
-        self.currentWP = LLA()
+        self.currentWP = apbrg.LLA()
         self.pose = None
         self.setSequence(waypoints)
         self.isRunning = False
@@ -88,21 +87,21 @@ class WaypointSequencer(Nodeable):
     # object subscribes to the acs_pose topic for current position
     # updates, the wp_sequencer_run topic for start and stop commands, and
     # the wp_list topic to receive new waypoint sequence lists
-    # @param params: list as follows: [ odometry_base_name ]
-    def callbackSetup(self, params=[ AP_BASENAME ]):
-        rospy.Subscriber("%s/acs_pose"%params[0], Odometry, self.updatePose)
-        rospy.Subscriber("%s/wp_sequencer_run"%self.nodeName, stdmsg.Bool, \
+    # @param params: list as follows: [ odometry_base_name, controller_base_name ]
+    def callbackSetup(self, params=[ AP_BASENAME, CTRLR_BASENAME ]):
+        rospy.Subscriber("%s/acs_pose"%params[0], apbrg.Geodometry, \
+                         self.updatePose)
+        rospy.Subscriber("%s/wp_sequencer_run"%params[1], stdmsg.Bool, \
                          self.processRunMsg)
-        rospy.Subscriber("%s/wp_list"%self.nodeName, apm.WaypointListStamped, \
+        rospy.Subscriber("%s/wp_list"%params[1], apmsg.WaypointListStamped, \
                          self.receiveWaypointList)
-
 
 
     # Establishes the publishers for the WaypointSequencer object.  The object
     # publishes waypoint commands (LLA message) to the payload_waypoint topic
     # @param params: list as follows: [ autopilot_base_name ]
     def publisherSetup(self, params=[ AP_BASENAME ]):
-        self.wpPublisher = rospy.Publisher("%s/payload_waypoint"%params[0], LLA)
+        self.wpPublisher = rospy.Publisher("%s/payload_waypoint"%params[0], apbrg.LLA)
 
 
     # Executes one iteration of the timed loop for the WaypointSequencer
@@ -201,10 +200,10 @@ class WaypointSequencer(Nodeable):
 
     # Handles new pose information for this aircraft so that the vehicle
     # can determine where it is relative to the current waypoint
-    # @param poseMsg: PoseWithCovarianceStamped object with the new pose
+    # @param poseMsg: Geodometry object with the new pose
     def updatePose(self, poseMsg):
-        self.pose = [ poseMsg.pose.pose.position.x, \
-                      poseMsg.pose.pose.position.y ]
+        self.pose = [ poseMsg.pose.pose.position.lat, \
+                      poseMsg.pose.pose.position.lon ]
 
 
     # Handles start and stop commands written to the ROS topic
