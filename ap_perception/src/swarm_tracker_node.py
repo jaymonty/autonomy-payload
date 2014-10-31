@@ -5,7 +5,7 @@
 # Duane Davis, 2014
 #
 # Instantiates a single SwarmTracker object, registers as a ROS
-# node and executes a 1hz control loop 
+# node and executes a 10hz control loop 
 #-----------------------------------------------------------------------
 
 # Import a bunch of libraries
@@ -26,19 +26,14 @@ from ap_perception.swarm_tracker import *
 if __name__ == '__main__':
     # Parse command line arguments
     parser = ArgumentParser("rosrun ap_perception swarm_tracker.py")
-    parser.add_argument('-n', "--nodename", dest="nodename", \
-                        help="Name for the ROS node to register as", \
-                        default=NODE_BASENAME)
     parser.add_argument('-id', "--aircraft", dest="acft", \
                         help="ID (integer) of this aircraft", default=1)
     args = parser.parse_args(args=rospy.myargv(argv=sys.argv)[1:])
 
     if args.acft == 1 and rospy.has_param("aircraft_id"):
         args.acft = rospy.get_param("aircraft_id")
-    if args.nodename == NODE_BASENAME and rospy.has_param("name"):
-        args.nodename == rospy.get_param("name")
 
-    swarm_tracker = SwarmTracker(int(args.acft), args.nodename)
+    swarm_tracker = SwarmTracker(int(args.acft), NODE_BASENAME)
     swarm_tracker.runAsNode(10.0, [], [ SELF_ODOM_BASENAME, \
                                         NET_ODOM_BASENAME ], [])
 
