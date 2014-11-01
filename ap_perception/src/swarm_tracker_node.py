@@ -30,10 +30,13 @@ if __name__ == '__main__':
                         help="ID (integer) of this aircraft", default=1)
     args = parser.parse_args(args=rospy.myargv(argv=sys.argv)[1:])
 
+    subSwarmID = 0
     if args.acft == 1 and rospy.has_param("aircraft_id"):
         args.acft = rospy.get_param("aircraft_id")
+    if rospy.has_param("subswarm_id"):
+        subSwarmID = int(rospy.get_param("subswarm_id"))
 
-    swarm_tracker = SwarmTracker(int(args.acft), NODE_BASENAME)
+    swarm_tracker = SwarmTracker(int(args.acft), subSwarmID, NODE_BASENAME)
     swarm_tracker.runAsNode(10.0, [], [ SELF_ODOM_BASENAME, \
-                                        NET_ODOM_BASENAME ], [])
+                                        NET_BASENAME ], [])
 
