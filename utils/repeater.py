@@ -23,7 +23,7 @@ def create_sock(ip, port):
         print "Opened listening socket at port %u" % port
     except Exception as ex:
         print "Error opening socket at port %u: %s" % (port, ex.args[0])
-        shut_down_socks(socks)
+        shut_down_socks()
         sys.exit(-1)
 
 def shut_down_socks():
