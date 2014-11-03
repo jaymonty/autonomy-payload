@@ -24,16 +24,20 @@ Example:
 
 	python ground_heartbeat.py --device wlan0
 
-## launch\_payload\_container.sh
+## launch\_payload.sh
 
-Launches an instance of the payload in a network namespace container. Creates a virtual interface pair, gives one end a 192.168.2.x/24 address inside the container, and attaches the other end to a software bridge (sitl\_bridge). If the bridge doesn't exist, it will be created. Finally, it launches sitl.launch with reasonable parameters.
+Launches an instance of the payload in one of two ways:
 
-This script takes one numeric positional argument that should equal the "-I" (instance) argument to sim\_vehicle.sh. It further takes an optional argument (specified before the positional argument) that specifies the user to run the payload software as.
+* using a calculated offset for the network bridge's UDP port. In this case, communication between multiple payload instances on a single computer relies on a UDP relay, such as repeater.py (see below).
+
+* using a network namespace container. Creates a virtual interface pair, gives one end a 192.168.2.x/24 address inside the container, and attaches the other end to a software bridge (sitl\_bridge). If the bridge doesn't exist, it will be created. Finally, it launches sitl.launch with reasonable parameters.
+
+This script takes one numeric positional argument that should equal the "-I" (instance) argument to sim\_vehicle.sh. It further takes optional argument -C to run using containers and -R to specify the user to run the payload software as (only applicable when using -C).
 
 Example usage with optional user specification:
 
 	(terminal 1): sim_vehicle.sh -I 2 -v ArduPlane -L McMillan --aircraft testFolder
-	(terminal 2): ./launch_payload_container.sh acsuser 2
+	(terminal 2): ./launch_payload.sh -C -R acsuser 2
 
 ## net\_parser.py
 

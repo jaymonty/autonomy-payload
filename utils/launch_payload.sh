@@ -11,7 +11,7 @@ cat <<EOF
 Usage: $0 [options] instance_id
 Options:
     -C                      Start a linux container for this payload SITL
-    -R                      Username to run ROS as
+    -R                      Username to run ROS as (container mode only)
 EOF
 }
 
