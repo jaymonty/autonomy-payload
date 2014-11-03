@@ -38,8 +38,34 @@ ROS_BASENAME = 'network'
 # Ugly global data
 
 acs_sock = None     # socket
-aircraft_id = 0     # aircraft numeric ID
 aircraft_name = ''  # aircraft friendly name
+
+#-----------------------------------------------------------------------
+# Handler for subswarm ID updates
+
+def update_subswarm_id(sub_id, publish=True):
+    # Make sure publisher exists
+    if not hasattr(update_subswarm_id, 'pub'):
+        update_subswarm_id.pub = rospy.Publisher("%s/update_subswarm"%ROS_BASENAME,
+                                                 std_msgs.msg.UInt8)
+
+    # Update socket
+    acs_sock.subswarm = sub_id
+
+    # Publish for nodes that want immediate notification
+    # NOTE: this shouldn't be necessary when updating from ROS-land, since
+    #  other subscribers will hear the message that causes this update
+    if publish:
+        msg = std_msgs.msg.UInt8()
+        msg.data = sub_id
+        update_subswarm_id.pub.publish(msg)
+
+    # Set param for nodes that want to query later
+    rospy.set_param("subswarm_id", sub_id)
+
+def subscribe_subswarm_id(msg):
+    if msg.data != acs_sock.subswarm:
+        update_subswarm_id(msg.data, False)
 
 #-----------------------------------------------------------------------
 # Subscribers (ROS -> Network)
@@ -117,7 +143,7 @@ if __name__ == '__main__':
     rospy.init_node(ROS_BASENAME)
 
     # Prefer command line args, then ROS params, then default values, then FAIL
-    def get_arg(cmd_arg, ros_param, default, error_text):
+    def get_arg(cmd_arg, ros_param, default, error_text='<unknown>'):
         if cmd_arg:
             return cmd_arg
         elif rospy.has_param(ros_param):
@@ -125,7 +151,7 @@ if __name__ == '__main__':
         elif default:
             return default
         else:
-            rospy.logfatal("Could not find setting for %s; aborting...")
+            rospy.logfatal("Could not find setting for %s; aborting..." % error_text)
             sys.exit(-1)
  
     # Find all arguments or abort
@@ -149,21 +175,19 @@ if __name__ == '__main__':
         rospy.logfatal("Could not initialize network socket")
         sys.exit(-1)
 
-    # If subswarm ID param is already set, use it; otherwise, init param
-    # and send publication to any subscribing nodes
+    # If subswarm ID param is already set, use it
+    # Make sure publisher/param/value are all initialized regardless
     if rospy.has_param("subswarm_id"):
         acs_sock.subswarm = rospy.get_param("subswarm_id")
-    else:
-        msg = std_msgs.msg.UInt8()
-        msg.data = message.subswarm
-        pub_set_subswarm.publish(msg)
-        rospy.set_param("subswarm_id", acs_sock.subswarm)
+    update_subswarm_id(acs_sock.subswarm)
 
     # Set up subscribers (ROS -> network)
     rospy.Subscriber("%s/send_flight_status"%ROS_BASENAME, 
                      apmsg.Status, sub_flight_status)
     rospy.Subscriber("%s/send_pose"%ROS_BASENAME, 
                      apmsg.Geodometry, sub_pose)
+    rospy.Subscriber("%s/update_subswarm"%ROS_BASENAME, 
+                     std_msgs.msg.UInt8, subscribe_subswarm_id)
 
     # Set up publishers (network -> ROS)
     pub_pose = rospy.Publisher("%s/recv_pose"%ROS_BASENAME, 
@@ -182,8 +206,6 @@ if __name__ == '__main__':
                                       apmsg.LLA)
     pub_waypoint_goto = rospy.Publisher("%s/recv_waypoint_goto"%ROS_BASENAME, 
                                         std_msgs.msg.UInt16)
-    pub_set_subswarm = rospy.Publisher("%s/recv_set_subswarm"%ROS_BASENAME,
-                                       std_msgs.msg.UInt8)
 
     # Loop , checking for incoming datagrams and sleeping
     # NOTE: If too many network messages come in, this loop
@@ -315,11 +337,7 @@ if __name__ == '__main__':
 
         elif isinstance(message, acs_messages.SetSubswarm):
             try:
-                acs_sock.subswarm = message.subswarm
-                msg = std_msgs.msg.UInt8()
-                msg.data = message.subswarm
-                pub_set_subswarm.publish(msg)
-                rospy.set_param("subswarm_id", message.subswarm)
+                update_subswarm_id(message.subswarm)
                 rospy.loginfo("Ground-to-air: SetSubswarm")
             except Exception as ex:
                 rospy.logwarn("Error processing command: SetSubswarm")
