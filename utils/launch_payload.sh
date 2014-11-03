@@ -16,7 +16,7 @@ EOF
 }
 
 USE_CONTAINER=0
-ROS_USER_TO_USER=$USER
+ROS_USER_TO_USE=$USER
 
 #parse options
 while getopts ":R:Ch" opt; do
