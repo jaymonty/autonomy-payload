@@ -345,7 +345,7 @@ class SwarmTracker(Nodeable):
                          self.updateOwnPose)
         rospy.Subscriber("%s/recv_pose"%params[1], SwarmVehicleState, \
                          self.updateSwarmPose)
-        rospy.Subscriber("%s/recv_set_subswarm"%params[1], 
+        rospy.Subscriber("%s/update_subswarm"%params[1], 
                          std_msgs.msg.UInt8, self.setSubSwarm)
 
 
