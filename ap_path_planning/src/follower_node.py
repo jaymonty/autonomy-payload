@@ -52,15 +52,18 @@ if __name__ == '__main__':
     else:
         print "Please supply either base altitude or separation altitude (--use-base-alt BASE_ALT or --use-alt-sep ALT_SEP)"
         sys.exit(1)
-    
+
     if args.follow_aircraft is None: 
         print "Please supply target aircraft \(--target AIRCRAFT_ID\)"
         sys.exit(1) 
     followID = int(args.follow_aircraft)
 
+    if args.own_acft == None and rospy.has_param("aircraft_id"):
+        args.own_acft = rospy.get_param("aircraft_id")
     if args.own_aircraft is None:
         print "Please supply own aircraft ID \(--id AIRCRAFT_ID\)"
         sys.exit(1)
+
     ownAC = int(args.own_aircraft)
     distance = float(args.distance)
     offset = float(args.offset)
