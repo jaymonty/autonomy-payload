@@ -68,10 +68,11 @@ class SwarmTrackerSubscriber(object):
         for msgElement in swarmMsg.swarm:
             if msgElement.vehicle_id in lastSwarm:
                 element = lastSwarm[msgElement.vehicle_id]
-                element.updateState(msgElement.state)
+                element.updateState(msgElement.state, msgElement.subswarm_id)
                 self.swarm[msgElement.vehicle_id] = element
             else:
                 element = SwarmElement(msgElement.vehicle_id, \
+                                       msgElement.subswarm_id, \
                                        msgElement.state)
                 self.swarm[msgElement.vehicle_id] = element
         del lastSwarm
