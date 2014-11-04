@@ -31,8 +31,8 @@ AP_BASENAME = 'autopilot'         # Default base name for autopilot topics
 BASE_ALT_MODE = 0  # enumeration indicating base altitude mode
 ALT_SEP_MODE = 1   # enumeration indicating altitude separation mode
 
-OVERSHOOT = 40   # default "ahead" distance to place waypoint to avoid capture
-FOLLOW_DISTANCE = 50  # default distance behind the lead to place the follow point
+OVERSHOOT = 100.0      # default "ahead" distance to place waypoint to avoid capture
+FOLLOW_DISTANCE = 50.0 # default distance behind the lead to place the follow point
 
 
 # Object that creates or receives waypoint sequences and monitors the
@@ -83,8 +83,8 @@ class FollowController(nodeable.Nodeable):
         self.ownAlt = None
         self.ownRelAlt = None
         self.swarmSubscriber = None
-        self.DBUG_PRINT = True
-        self.WARN_PRINT = True
+#        self.DBUG_PRINT = True
+#        self.WARN_PRINT = True
 
 
     #-------------------------------------------------
@@ -166,6 +166,11 @@ class FollowController(nodeable.Nodeable):
             self.log_warn("Must specify base altitude or altitude separation mode")
             return
 
+        if (followAC == self.ownID):
+            self.isActive = False
+            self.log_warn("attempt to order aircraft to follow itself")
+            return
+
         self.followID = followAC
         self.rFollow = followDist
         self.rOvershoot = overshoot
@@ -175,11 +180,16 @@ class FollowController(nodeable.Nodeable):
         self.log_dbug("formation command: ldr=%d, range=%f, offset=%f"%(followAC, followDist, offset))
 
 
-    # Activates or deactivates the controller
+    # Activates or deactivates the controller.  Will not activate if leader ID
+    # is the same as the following aircraft (can't follow itself!)
     # @param activate: Boolean value to activate or deactivate the controller
     def set_active(self, activate):
-        self.isActive = activate
-        self.log_dbug("activation command: " + str(activate))
+        if activate and self.followID == self.ownID:
+            self.isActive = False
+            self.log_warn("attempt to activate follower node to follow self")
+        else:
+            self.isActive = activate
+            self.log_dbug("activation command: " + str(activate))
 
 
     # Compute a target waypoint to  with overshoot

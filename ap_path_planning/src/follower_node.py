@@ -63,8 +63,12 @@ if __name__ == '__main__':
     if args.own_aircraft is None:
         print "Please supply own aircraft ID \(--id AIRCRAFT_ID\)"
         sys.exit(1)
-
     ownAC = int(args.own_aircraft)
+
+    if followID == ownAC:
+        print "Attempt to set leader and follower to the same ID"
+        sys.exit(1)
+
     distance = float(args.distance)
     offset = float(args.offset)
     overshoot = float(args.overshoot)
