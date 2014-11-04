@@ -3,6 +3,8 @@
   <arg name="dev" default="lo" />
   <arg name="port" default="5554" />
   <arg name="subswarm" default="0" />
+  <arg name="bag" default="0" />  <!-- Generate ROS bag files -->
+  <arg name="viz" default="0" />  <!-- Run the vizualizer -->
 
   <group ns="$(arg ns)" >
     <param name="aircraft_id" type="int" value="$(arg id)" />
@@ -10,6 +12,9 @@
     <param name="network_device" type="str" value="$(arg dev)" />
     <param name="network_port" type="int" value="$(arg port)" />
     <param name="subswarm_id" type="int" value="$(arg subswarm)" />
+    <group if="$(arg bag)">
+      <param name="rosbag_enable" type="bool" value="true" />
+    </group>
 
     <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--device $(arg sitl) --module acs --module param --module slave" />
     <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" >
@@ -27,6 +32,9 @@
       <remap from="network/recv_waypoint_goto" to="autopilot/waypoint_goto" />
     </node>
     <node name="swarm_tracker" pkg="ap_perception" type="swarm_tracker_node.py" output="screen" args="" />
+    <group if="$(arg viz)">
+      <node name="multi_viz" pkg="ap_perception" type="multi_viz.py" output="screen" args="" />
+    </group>
     <node name="run_once" pkg="ap_tasks" type="run_once.py" output="screen" args="" />
   </group>
 </launch>
