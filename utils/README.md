@@ -51,7 +51,7 @@ Use '--help' for all options. Note that '--repeat' can be used to repeat all rec
 
 ## repeater.py
 
-This, plus sitl\_ns.launch and some updates to the network bridge, offers an alternative to launch\_payload\_container.sh without needing containers (or root access). repeater.py can be configured to listen on loopback IP 127.0.1.1 at several UDP ports to traffic from those same port numbers at IP 127.0.0.1. When it hears a datagram from one of those ports, it repeats to all other ports. Thus, multiple payload instances can run at _different UDP ports on the same address_ and this utility will serve the same purpose as a broadcast address.
+This, plus sitl\_ns.launch and some updates to the network bridge, works with launch\_payload.sh in its default, non-container mode to relay messages between instances. repeater.py can be configured to listen on loopback IP 127.0.1.1 at several UDP ports to traffic from those same port numbers at IP 127.0.0.1. When it hears a datagram from one of those ports, it repeats to all other ports. Thus, multiple payload instances can run at _different UDP ports on the same address_ and this utility will serve the same purpose as a broadcast address.
 
 Example usage:
 
@@ -63,11 +63,11 @@ Next, start SITLs as before with different -I values.
 
 Then, start corresponding payloads using roslaunch. These options are approximately what launch\_payload\_container.sh provides, plus a new option ns:=NAME, where name is the ROS group or "namespace" (not to be confused with Linux network namespaces):
 
-	roslaunch ap_master sitl_ns.launch id:=1 name:=sitl1 sitl:=tcp:127.0.0.1:5772 port:=5554 ns:=sitl1
+	roslaunch ap_master sitl_ns.launch id:=1 name:=sitl1 sitl:=tcp:127.0.0.1:5772 port:=5555 ns:=sitl1
 
 Do the same for the second payload instance, adjusting all parameters (note that repeater.py by default listens on 5554 and consecutively higher numbers):
 
-	roslaunch ap_master sitl_ns.launch id:=2 name:=sitl2 sitl:=tcp:127.0.0.1:5782 port:=5555 ns:=sitl2
+	roslaunch ap_master sitl_ns.launch id:=2 name:=sitl2 sitl:=tcp:127.0.0.1:5782 port:=5556 ns:=sitl2
 
 If you wish to run utilities such as net\_parser.py or flight\_tech.py, you will need to request an extra repeated port from repeater.py:
 
@@ -76,6 +76,10 @@ If you wish to run utilities such as net\_parser.py or flight\_tech.py, you will
 and use the --port and --lo-reverse options in those utilities:
 
 	python net_parser.py --device lo --lo-reverse --port 1234
+
+To use repeater.py with actual aircraft, specify a real-world broadcast IP and port using -I and -P, respectively:
+
+	python repeater.py -I 192.168.2.255 -P 5554 2
 
 ## slave\_setup.py
 
