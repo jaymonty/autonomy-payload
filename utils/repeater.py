@@ -43,7 +43,7 @@ def shut_down_socks():
 if __name__ == '__main__':
     # Grok args
     parser = ArgumentParser("python %s" % sys.argv[0])
-    parser.add_argument('-b', '--base-port', dest='base_port', default=5554,
+    parser.add_argument('-b', '--base-port', dest='base_port', default=5555,
                         type=int, help='Lowest port number to use')
     parser.add_argument('-e', '--extra-port', dest='extra_ports', default=[],
                         action='append', type=int, help='Open this extra port')
