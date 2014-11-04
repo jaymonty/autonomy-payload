@@ -58,8 +58,8 @@ if __name__ == '__main__':
         sys.exit(1) 
     followID = int(args.follow_aircraft)
 
-    if args.own_acft == None and rospy.has_param("aircraft_id"):
-        args.own_acft = rospy.get_param("aircraft_id")
+    if args.own_aircraft == None and rospy.has_param("aircraft_id"):
+        args.own_aircraft = rospy.get_param("aircraft_id")
     if args.own_aircraft is None:
         print "Please supply own aircraft ID \(--id AIRCRAFT_ID\)"
         sys.exit(1)
