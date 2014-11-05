@@ -19,19 +19,16 @@ import std_msgs.msg as stdmsg
 import math
 from ap_lib import gps_utils
 from ap_lib import nodeable
-
+from ap_lib.controller import *
 
 # Base name for node topics and services
 NODE_BASENAME = 'follow_controller'
 TRKR_BASENAME = 'swarm_tracker'   # Default base name for swarm tracker topics
-CTRLR_BASENAME = 'controllers'    # Default base name for controller topics
 AP_BASENAME = 'autopilot'         # Default base name for autopilot topics
 
 #Global variables (constants)
 BASE_ALT_MODE = 0  # enumeration indicating base altitude mode
 ALT_SEP_MODE = 1   # enumeration indicating altitude separation mode
-
-FOLLOW_CTRLR = 2
 
 OVERSHOOT = 100.0      # default "ahead" distance to place waypoint to avoid capture
 FOLLOW_DISTANCE = 50.0 # default distance behind the lead to place the follow point
@@ -41,7 +38,6 @@ FOLLOW_DISTANCE = 50.0 # default distance behind the lead to place the follow po
 # vehicle's progress through the series of waypoints
 #
 # Class member variables:
-#   controllerID: identifier (int) for this controller
 #   ownID:  ID of this aircraft
 #   ownLat: latitude of this aircraft
 #   ownLon: longitude of this aircraft
@@ -57,14 +53,22 @@ FOLLOW_DISTANCE = 50.0 # default distance behind the lead to place the follow po
 #   rFollow: target following distance from the leader aircraft (meters)
 #   rOffset: clockwise angle (radians) from direct astern for the follow point
 #   rOvershoot: overshoot distance for avoiding loiter behavior (meters)
-#   swarmSubscriber: subscriber object for the swarm state message topic
 #   wpPublisher: publisher object for computed waypoints to be sent to the autopilot
+#
+# Inherited from Controller:
+#   controllerID: identifier (int) for this particular controller
 #   statusPublisher: publisher object for controller status
 #   statusStamp: timestamp of the last status message publication
 #   sequence: number of waypoint sequences that have been ordered
 #   is_ready: set to True when a waypoint sequence has been loaded
 #   is_active: set to True is the waypoint sequencer is running
-class FollowController(nodeable.Nodeable):
+#
+# Inherited from Nodeable:
+#   nodeName:  Name of the node to start or node in which the object is
+#   timer: ROS rate object that controls the timing loop
+#   DBUG_PRINT: set true to force screen debug messages (default FALSE)
+#   WARN_PRINT: set false to force screen warning messages (default FALSE) 
+class FollowController(Controller):
 
     # Class initializer initializes class variables.
     # This assumes that the object is already running within an initialized
@@ -75,24 +79,13 @@ class FollowController(nodeable.Nodeable):
     # not check ranges, magnitudes, or signs.
     # @param nodename: name of the ROS node in which this object exists
     # @param ownAC: ID (int) of this aircraft
-    # @param followAC: ID of the aircraft to be followed
-    # @param followDist: distance behind the lead aircraft to aim for
-    # @param offset: clockwise angle from (radians) directly astern to aim for
-    # @param overshoot: distance ahead of follow point to drive to (avoid capture)
-    # @param altMode: altitude mode (BASE_ALT_MODE or ALT_SEP_MODE)
-    # @param ctrlAlt: control altitude (follow altitude or vertical separation)
     def __init__(self, nodename, ownAC):
-        nodeable.Nodeable.__init__(self, nodename)
-        self.controllerID = FOLLOW_CTRLR
+        Controller.__init__(self, nodename, FOLLOW_CTRLR)
         self.ownID = ownAC
-        self.sequence = 0
-        self.is_ready = False
-        self.is_active = False
         self.ownLat = None
         self.ownLon = None
         self.ownAlt = None
         self.ownRelAlt = None
-        self.swarmSubscriber = None
         self.followID = None
         self.followLat = None
         self.followLon = None
@@ -139,18 +132,7 @@ class FollowController(nodeable.Nodeable):
     # The loop computes a target waypoint and publishes it to the
     # /autopilot/payload_waypoint ROS topic.
     def executeTimedLoop(self):
-        if self.statusStamp == None: self.statusStamp = rospy.Time.now()
-        time = rospy.Time.now()
-        interval = (time.secs + (time.nsecs / 1e9)) - \
-                   (self.statusStamp.secs + (self.statusStamp.nsecs / 1e9))
-        if interval >= 1.0:
-            self.statusStamp = time
-            status = apmsg.ControllerState()
-            status.controller_id = self.controllerID
-            status.sequence = self.sequence
-            status.is_ready = self.is_ready
-            status.is_active = self.is_active
-            self.statusPublisher.publish(status)
+        self.sendStatusMessage()
 
         if not self.is_active or self.ownLat is None:
             return
@@ -274,7 +256,7 @@ class FollowController(nodeable.Nodeable):
     # @param formMsg: message containing formation requirements (FormationOrder)
     def process_formation_order(self, formMsg):
         self.reset(formMsg.leader_id, formMsg.range, formMsg.offset_angle, \
-                   formMsg.overshoot, formMsg.alt_mode, formMsg.ctrl_alt)
+                   formMsg.overshoot, formMsg.alt_mode, formMsg.control_alt)
 
 
     # Handle incoming swarm_state messages

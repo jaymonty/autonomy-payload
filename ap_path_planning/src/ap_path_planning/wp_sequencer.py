@@ -25,6 +25,7 @@ import std_msgs.msg as stdmsg
 
 # Project-specific imports
 from ap_lib.nodeable import *
+from ap_lib.controller import *
 from ap_lib.gps_utils import *
 import ap_msgs.msg as apmsg
 import autopilot_bridge.msg as apbrg
@@ -33,34 +34,38 @@ import autopilot_bridge.msg as apbrg
 # Base name for node topics and services
 NODE_BASENAME = 'wp_sequencer'
 AP_BASENAME = 'autopilot'
-CTRLR_BASENAME = 'controllers'
 
 
 # Other global constants
 CAPTURE_DISTANCE = 110.0
-
-WP_SEQUENCE_CTRLR = 1
 
 
 # Object that creates or receives waypoint sequences and monitors the
 # vehicle's progress through the series of waypoints
 #
 # Class member variables:
-#   nodeName: name of the ROS node with which this object is associated
-#   controllerID: identifier (int) for this controller
 #   wpList: list (queue) of waypoints being followed
 #   currentWP: waypoint to which the vehicle is currently transiting
 #   pose: current vehicle position
 #   wpPublisher: publisher object for publishing waypoint commands
-#   statusPublisher: publisher object for controller status
-#   statusStamp: timestamp of the last status message publication
 #   captureDistance: distance from waypoint considered captured
 #   listComplete: set to True when the last waypoint is reached
+#   readyNextWP: set to True when the next waypoint can be issued
+#
+# Inherited from Controller:
+#   controllerID: identifier (int) for this particular controller
+#   statusPublisher: publisher object for controller status
+#   statusStamp: timestamp of the last status message publication
 #   sequence: number of waypoint sequences that have been ordered
 #   is_ready: set to True when a waypoint sequence has been loaded
 #   is_active: set to True is the waypoint sequencer is running
-#   readyNextWP: set to True when the next waypoint can be issued
-class WaypointSequencer(Nodeable):
+#
+# Inherited from Nodeable:
+#   nodeName:  Name of the node to start or node in which the object is
+#   timer: ROS rate object that controls the timing loop
+#   DBUG_PRINT: set true to force screen debug messages (default FALSE)
+#   WARN_PRINT: set false to force screen warning messages (default FALSE) 
+class WaypointSequencer(Controller):
 
 
     # Class initializer initializes variables, subscribes to required
@@ -75,13 +80,10 @@ class WaypointSequencer(Nodeable):
     # @param captureDistance: distance from a waypoint considered good enough
     def __init__(self, nodeName=NODE_BASENAME, waypoints=[], \
                  captureDistance=CAPTURE_DISTANCE):
-        Nodeable.__init__(self, nodeName)
-        self.controllerID = WP_SEQUENCE_CTRLR
+        Controller.__init__(self, nodeName, WP_SEQUENCE_CTRLR)
         self.currentWP = apbrg.LLA()
         self.pose = None
-        self.sequence = 0
         self.setSequence(waypoints)
-        self.is_active = False
         self.captureDistance = captureDistance
         self.statusStamp = None
 #        self.DBUG_PRINT = True
@@ -119,19 +121,7 @@ class WaypointSequencer(Nodeable):
     # object. When "on", checks to see if the current waypoint has been
     # reached, and if so, issues the next one.
     def executeTimedLoop(self):
-        if self.statusStamp == None: self.statusStamp = rospy.Time.now()
-        time = rospy.Time.now()
-        interval = (time.secs + (time.nsecs / 1e9)) - \
-                   (self.statusStamp.secs + (self.statusStamp.nsecs / 1e9))
-        if interval >= 1.0:
-            self.statusStamp = time
-            status = apmsg.ControllerState()
-            status.controller_id = self.controllerID
-            status.sequence = self.sequence
-            status.is_ready = self.is_ready
-            status.is_active = self.is_active
-            self.statusPublisher.publish(status)
-
+        self.sendStatusMessage()
         if (self.is_active and not self.listComplete):
             self.checkReadyNextWP()
             if self.readyNextWP:  self.incrementWP()
