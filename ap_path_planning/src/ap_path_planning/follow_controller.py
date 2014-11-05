@@ -31,6 +31,8 @@ AP_BASENAME = 'autopilot'         # Default base name for autopilot topics
 BASE_ALT_MODE = 0  # enumeration indicating base altitude mode
 ALT_SEP_MODE = 1   # enumeration indicating altitude separation mode
 
+FOLLOW_CTRLR = 2
+
 OVERSHOOT = 100.0      # default "ahead" distance to place waypoint to avoid capture
 FOLLOW_DISTANCE = 50.0 # default distance behind the lead to place the follow point
 
@@ -39,6 +41,7 @@ FOLLOW_DISTANCE = 50.0 # default distance behind the lead to place the follow po
 # vehicle's progress through the series of waypoints
 #
 # Class member variables:
+#   controllerID: identifier (int) for this controller
 #   ownID:  ID of this aircraft
 #   ownLat: latitude of this aircraft
 #   ownLon: longitude of this aircraft
@@ -56,6 +59,8 @@ FOLLOW_DISTANCE = 50.0 # default distance behind the lead to place the follow po
 #   rOvershoot: overshoot distance for avoiding loiter behavior (meters)
 #   swarmSubscriber: subscriber object for the swarm state message topic
 #   wpPublisher: publisher object for computed waypoints to be sent to the autopilot
+#   statusPublisher: publisher object for controller status
+#   statusStamp: timestamp of the last status message publication
 #   sequence: number of waypoint sequences that have been ordered
 #   is_ready: set to True when a waypoint sequence has been loaded
 #   is_active: set to True is the waypoint sequencer is running
@@ -78,6 +83,7 @@ class FollowController(nodeable.Nodeable):
     # @param ctrlAlt: control altitude (follow altitude or vertical separation)
     def __init__(self, nodename, ownAC):
         nodeable.Nodeable.__init__(self, nodename)
+        self.controllerID = FOLLOW_CTRLR
         self.ownID = ownAC
         self.sequence = 0
         self.is_ready = False
@@ -99,8 +105,9 @@ class FollowController(nodeable.Nodeable):
         self.rOffset = None
         self.altMode = None
         self.ctrlAlt = None
-        self.DBUG_PRINT = True
-        self.WARN_PRINT = True
+        self.statusStamp = None
+#        self.DBUG_PRINT = True
+#        self.WARN_PRINT = True
 
 
     #-------------------------------------------------
@@ -122,15 +129,29 @@ class FollowController(nodeable.Nodeable):
 
     # Sets up publishers for the FollowController object.  The object publishes
     # autopilot_bridge.LLA messages to the payload_waypoint topic
-    # @param params: list as follows: [ autopilot_base_name ]
-    def publisherSetup(self, params=[ AP_BASENAME]):
+    # @param params: list as follows: [ autopilot_base_name, controllers_base_name ]
+    def publisherSetup(self, params=[ AP_BASENAME, CTRLR_BASENAME ]):
         self.wpPublisher = rospy.Publisher("%s/payload_waypoint"%params[0], apbrg.LLA)
+        self.statusPublisher = rospy.Publisher("%s/status"%params[1], apmsg.ControllerState)
 
 
     # Executes one iteration of the timed loop for the FollowController object
     # The loop computes a target waypoint and publishes it to the
     # /autopilot/payload_waypoint ROS topic.
     def executeTimedLoop(self):
+        if self.statusStamp == None: self.statusStamp = rospy.Time.now()
+        time = rospy.Time.now()
+        interval = (time.secs + (time.nsecs / 1e9)) - \
+                   (self.statusStamp.secs + (self.statusStamp.nsecs / 1e9))
+        if interval >= 1.0:
+            self.statusStamp = time
+            status = apmsg.ControllerState()
+            status.controller_id = self.controllerID
+            status.sequence = self.sequence
+            status.is_ready = self.is_ready
+            status.is_active = self.is_active
+            self.statusPublisher.publish(status)
+
         if not self.is_active or self.ownLat is None:
             return
 

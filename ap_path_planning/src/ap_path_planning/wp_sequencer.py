@@ -39,16 +39,21 @@ CTRLR_BASENAME = 'controllers'
 # Other global constants
 CAPTURE_DISTANCE = 110.0
 
+WP_SEQUENCE_CTRLR = 1
+
 
 # Object that creates or receives waypoint sequences and monitors the
 # vehicle's progress through the series of waypoints
 #
 # Class member variables:
 #   nodeName: name of the ROS node with which this object is associated
+#   controllerID: identifier (int) for this controller
 #   wpList: list (queue) of waypoints being followed
 #   currentWP: waypoint to which the vehicle is currently transiting
 #   pose: current vehicle position
 #   wpPublisher: publisher object for publishing waypoint commands
+#   statusPublisher: publisher object for controller status
+#   statusStamp: timestamp of the last status message publication
 #   captureDistance: distance from waypoint considered captured
 #   listComplete: set to True when the last waypoint is reached
 #   sequence: number of waypoint sequences that have been ordered
@@ -71,12 +76,14 @@ class WaypointSequencer(Nodeable):
     def __init__(self, nodeName=NODE_BASENAME, waypoints=[], \
                  captureDistance=CAPTURE_DISTANCE):
         Nodeable.__init__(self, nodeName)
+        self.controllerID = WP_SEQUENCE_CTRLR
         self.currentWP = apbrg.LLA()
         self.pose = None
         self.sequence = 0
         self.setSequence(waypoints)
         self.is_active = False
         self.captureDistance = captureDistance
+        self.statusStamp = None
 #        self.DBUG_PRINT = True
 #        self.WARN_PRINT = True
 
@@ -102,15 +109,29 @@ class WaypointSequencer(Nodeable):
 
     # Establishes the publishers for the WaypointSequencer object.  The object
     # publishes waypoint commands (LLA message) to the payload_waypoint topic
-    # @param params: list as follows: [ autopilot_base_name ]
-    def publisherSetup(self, params=[ AP_BASENAME ]):
+    # @param params: list as follows: [ autopilot_base_name, controller_base_name ]
+    def publisherSetup(self, params=[ AP_BASENAME, CTRLR_BASENAME ]):
         self.wpPublisher = rospy.Publisher("%s/payload_waypoint"%params[0], apbrg.LLA)
+        self.statusPublisher = rospy.Publisher("%s/status"%params[1], apmsg.ControllerState)
 
 
     # Executes one iteration of the timed loop for the WaypointSequencer
     # object. When "on", checks to see if the current waypoint has been
     # reached, and if so, issues the next one.
     def executeTimedLoop(self):
+        if self.statusStamp == None: self.statusStamp = rospy.Time.now()
+        time = rospy.Time.now()
+        interval = (time.secs + (time.nsecs / 1e9)) - \
+                   (self.statusStamp.secs + (self.statusStamp.nsecs / 1e9))
+        if interval >= 1.0:
+            self.statusStamp = time
+            status = apmsg.ControllerState()
+            status.controller_id = self.controllerID
+            status.sequence = self.sequence
+            status.is_ready = self.is_ready
+            status.is_active = self.is_active
+            self.statusPublisher.publish(status)
+
         if (self.is_active and not self.listComplete):
             self.checkReadyNextWP()
             if self.readyNextWP:  self.incrementWP()

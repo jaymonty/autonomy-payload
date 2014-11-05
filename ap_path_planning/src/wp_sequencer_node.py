@@ -21,5 +21,6 @@ import ap_path_planning.wp_sequencer as wpseq
 if __name__ == '__main__':
     # ROS and object initialization
     sequencer = wpseq.WaypointSequencer(wpseq.NODE_BASENAME, [])
-    sequencer.runAsNode(10.0, [], [ wpseq.AP_BASENAME, wpseq.CTRLR_BASENAME ], [ wpseq.AP_BASENAME ])
+    sequencer.runAsNode(10.0, [], [ wpseq.AP_BASENAME, wpseq.CTRLR_BASENAME ], \
+                                  [ wpseq.AP_BASENAME, wpseq.CTRLR_BASENAME ])
 
