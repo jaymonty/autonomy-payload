@@ -56,6 +56,9 @@ FOLLOW_DISTANCE = 50.0 # default distance behind the lead to place the follow po
 #   rOvershoot: overshoot distance for avoiding loiter behavior (meters)
 #   swarmSubscriber: subscriber object for the swarm state message topic
 #   wpPublisher: publisher object for computed waypoints to be sent to the autopilot
+#   sequence: number of waypoint sequences that have been ordered
+#   is_ready: set to True when a waypoint sequence has been loaded
+#   is_active: set to True is the waypoint sequencer is running
 class FollowController(nodeable.Nodeable):
 
     # Class initializer initializes class variables.
@@ -73,18 +76,31 @@ class FollowController(nodeable.Nodeable):
     # @param overshoot: distance ahead of follow point to drive to (avoid capture)
     # @param altMode: altitude mode (BASE_ALT_MODE or ALT_SEP_MODE)
     # @param ctrlAlt: control altitude (follow altitude or vertical separation)
-    def __init__(self, nodename, ownAC, followAC, followDist, offset, overshoot, altMode, ctrlAlt):
+    def __init__(self, nodename, ownAC):
         nodeable.Nodeable.__init__(self, nodename)
-        self.reset(followAC, followDist, overshoot, offset, altMode, ctrlAlt)
         self.ownID = ownAC
-        self.isActive = False
+        self.sequence = 0
+        self.is_ready = False
+        self.is_active = False
         self.ownLat = None
         self.ownLon = None
         self.ownAlt = None
         self.ownRelAlt = None
         self.swarmSubscriber = None
-#        self.DBUG_PRINT = True
-#        self.WARN_PRINT = True
+        self.followID = None
+        self.followLat = None
+        self.followLon = None
+        self.followAlt = None
+        self.followRelAlt = None
+        self.followVx = None
+        self.followVy = None
+        self.rFollow = None
+        self.rOvershoot = None
+        self.rOffset = None
+        self.altMode = None
+        self.ctrlAlt = None
+        self.DBUG_PRINT = True
+        self.WARN_PRINT = True
 
 
     #-------------------------------------------------
@@ -115,7 +131,7 @@ class FollowController(nodeable.Nodeable):
     # The loop computes a target waypoint and publishes it to the
     # /autopilot/payload_waypoint ROS topic.
     def executeTimedLoop(self):
-        if not self.isActive or self.ownLat is None:
+        if not self.is_active or self.ownLat is None:
             return
 
         target_wp = self.compute_follow_wp()
@@ -162,12 +178,14 @@ class FollowController(nodeable.Nodeable):
         self.followVy = None
 
         if (altMode != BASE_ALT_MODE) and (altMode != ALT_SEP_MODE):
-            self.isActive = False
+            self.is_active = False
+            self.is_ready = False
             self.log_warn("Must specify base altitude or altitude separation mode")
             return
 
         if (followAC == self.ownID):
-            self.isActive = False
+            self.is_active = False
+            self.is_ready = False
             self.log_warn("attempt to order aircraft to follow itself")
             return
 
@@ -177,6 +195,8 @@ class FollowController(nodeable.Nodeable):
         self.rOffset = offset
         self.altMode = altMode
         self.ctrlAlt = ctrlAlt
+        self.is_ready = True
+        self.sequence += 1
         self.log_dbug("formation command: ldr=%d, range=%f, offset=%f"%(followAC, followDist, offset))
 
 
@@ -184,11 +204,15 @@ class FollowController(nodeable.Nodeable):
     # is the same as the following aircraft (can't follow itself!)
     # @param activate: Boolean value to activate or deactivate the controller
     def set_active(self, activate):
-        if activate and self.followID == self.ownID:
-            self.isActive = False
+        if not self.is_ready:
+            self.is_active = False
+            self.log_warn("attempt to activate uninitialized follow node")
+        elif activate and self.followID == self.ownID:
+            self.is_ready = False
+            self.is_active = False
             self.log_warn("attempt to activate follower node to follow self")
         else:
-            self.isActive = activate
+            self.is_active = activate
             self.log_dbug("activation command: " + str(activate))
 
 
@@ -256,4 +280,8 @@ class FollowController(nodeable.Nodeable):
                 self.followVx = swarmAC.state.twist.twist.linear.x
                 self.followVy = swarmAC.state.twist.twist.linear.y
                 leaderUpdated = True
+        if self.is_active and not leaderUpdated:
+            self.is_ready = False
+            self.is_active = False
+            self.log_warn("leader aircraft not present in swarm update")
 

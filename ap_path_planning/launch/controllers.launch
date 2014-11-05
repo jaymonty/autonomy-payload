@@ -1,0 +1,6 @@
+<launch>
+  <param name="aircraft_id" type="int" value="$(arg id)" />
+
+  <node name="follower_controller" pkg="ap_path_planning" type="follower_node.py" output="screen" args="" />
+  <node name="wp_sequencer" pkg="ap_path_planning" type="wp_sequencer_node.py" output="screen" args="" />
+</launch>

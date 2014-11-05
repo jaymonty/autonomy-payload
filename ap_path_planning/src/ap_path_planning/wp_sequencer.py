@@ -50,8 +50,10 @@ CAPTURE_DISTANCE = 110.0
 #   pose: current vehicle position
 #   wpPublisher: publisher object for publishing waypoint commands
 #   captureDistance: distance from waypoint considered captured
-#   listComplete: set to true when the last waypoint is reached
-#   isRunning: set to True is the waypoint sequencer is running
+#   listComplete: set to True when the last waypoint is reached
+#   sequence: number of waypoint sequences that have been ordered
+#   is_ready: set to True when a waypoint sequence has been loaded
+#   is_active: set to True is the waypoint sequencer is running
 #   readyNextWP: set to True when the next waypoint can be issued
 class WaypointSequencer(Nodeable):
 
@@ -71,8 +73,9 @@ class WaypointSequencer(Nodeable):
         Nodeable.__init__(self, nodeName)
         self.currentWP = apbrg.LLA()
         self.pose = None
+        self.sequence = 0
         self.setSequence(waypoints)
-        self.isRunning = False
+        self.is_active = False
         self.captureDistance = captureDistance
 #        self.DBUG_PRINT = True
 #        self.WARN_PRINT = True
@@ -108,7 +111,7 @@ class WaypointSequencer(Nodeable):
     # object. When "on", checks to see if the current waypoint has been
     # reached, and if so, issues the next one.
     def executeTimedLoop(self):
-        if (self.isRunning and not self.listComplete):
+        if (self.is_active and not self.listComplete):
             self.checkReadyNextWP()
             if self.readyNextWP:  self.incrementWP()
 
@@ -127,9 +130,13 @@ class WaypointSequencer(Nodeable):
         try:
             self.wpList = deque(newWaypoints)
             if len(self.wpList) > 0:
+                self.sequence += 1
+                self.is_ready = True
                 self.readyNextWP = True
                 self.listComplete = False
             else:
+                self.is_ready = False
+                self.is_active = False
                 self.readyNextWP = False
                 self.listComplete = True
             self.log_dbug("set waypoint sequence: " + str(newWaypoints))
@@ -138,6 +145,8 @@ class WaypointSequencer(Nodeable):
                           str(newWaypoints))
             self.wpList = deque()
             self.listComplete = True  # If there's been an error--quit!
+            self.is_ready = False
+            self.is_active = False
 
 
     # Adds a single waypoint to the end of the current list
@@ -145,6 +154,7 @@ class WaypointSequencer(Nodeable):
     def addWaypoint(self, newWaypoint):
         self.wpList.append(newWaypoint)
         self.listComplete = False
+        self.is_ready = True
 
 
     # Pops the first sequence from the waypoint list and updates
@@ -163,7 +173,9 @@ class WaypointSequencer(Nodeable):
         else:
             self.log_dbug("reached last waypoint in sequence")
             self.listComplete = True
-            
+            self.is_ready = False
+            self.is_active = False
+
 
     # Checks to see if it is time to issue the next waypoint
     def checkReadyNextWP(self):
@@ -183,15 +195,20 @@ class WaypointSequencer(Nodeable):
             print exc
             self.readyNextWP = False
             self.listComplete = True
+            self.is_ready = False
+            self.is_active = False
             return False
 
 
     # Starts or stops the waypoint sequencer object.  At instantiation,
-    # the WaypointSequencer isRunning variable is set to False (no waypoints
+    # the WaypointSequencer is_active variable is set to False (no waypoints
     # issued).  It can be set to True or False using this method)
     # @param newRunState:  True or False to start or stop object run state
-    def startSequencer(self, newRunState):
-        self.isRunning = newRunState
+    def set_active(self, newRunState):
+        if self.is_ready:
+            self.is_active = newRunState
+        else:
+            self.log_warn("wp sequencer not initialized, cannot set active state")
 
 
     #-----------------------------------------
@@ -209,7 +226,7 @@ class WaypointSequencer(Nodeable):
     # Handles start and stop commands written to the ROS topic
     # @param runMsg: ROS message (std_msgs/Bool) with the start/stop command
     def processRunMsg(self, runMsg):
-        self.startSequencer(runMsg.data)
+        self.set_active(runMsg.data)
         self.log_dbug("received start/stop message=" + str(runMsg.data))
 
 
