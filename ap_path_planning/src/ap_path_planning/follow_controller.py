@@ -117,7 +117,7 @@ class FollowController(Controller):
         rospy.Subscriber("%s/follower_run"%params[1], 
                          stdmsg.Bool, self.process_run_message)
         rospy.Subscriber("%s/set_form_params"%params[1],
-                         apmsg.FormationOrder, self.process_formation_order)
+                         apmsg.FormationOrderStamped, self.process_formation_order)
 
 
     # Sets up publishers for the FollowController object.  The object publishes
@@ -169,10 +169,9 @@ class FollowController(Controller):
     # @param followAC: ID of the aircraft to be followed
     # @param followDist: distance behind the lead aircraft to aim for
     # @param offset: angle from astern (radians) for the point
-    # @param overshoot: distance (meters) ahead of follow point to drive to (avoid capture)
     # @param altMode: altitude mode (BASE_ALT_MODE or ALT_SEP_MODE)
     # @param ctrlAlt: control altitude (follow altitude or vertical separation)
-    def reset(self, followAC, followDist, offset, overshoot, altMode, ctrlAlt):
+    def reset(self, followAC, followDist, offset, altMode, ctrlAlt):
         self.followLat = None
         self.followLon = None
         self.followAlt = None
@@ -194,7 +193,7 @@ class FollowController(Controller):
 
         self.followID = followAC
         self.rFollow = followDist
-        self.rOvershoot = overshoot
+        self.rOvershoot = OVERSHOOT
         self.rOffset = offset
         self.altMode = altMode
         self.ctrlAlt = ctrlAlt
@@ -234,7 +233,7 @@ class FollowController(Controller):
         leader_course = math.atan2(self.followVy, self.followVx);
         trail_lat, trail_lon = \
             gps_utils.gps_newpos(self.followLat, self.followLon, \
-                                 (leader_course - math.pi + self.rOffset), self.rFollow)
+                                 (leader_course + self.rOffset), self.rFollow)
 
         # Project line forward from the follow point to avoid waypoint capture
         follow_course = gps_utils.gps_bearing(self.ownLat, self.ownLon, trail_lat, trail_lon)
@@ -253,10 +252,10 @@ class FollowController(Controller):
 
 
     # Process incoming formation order message
-    # @param formMsg: message containing formation requirements (FormationOrder)
+    # @param formMsg: message containing formation requirements (FormationOrderStamped)
     def process_formation_order(self, formMsg):
-        self.reset(formMsg.leader_id, formMsg.range, formMsg.offset_angle, \
-                   formMsg.overshoot, formMsg.alt_mode, formMsg.control_alt)
+        self.reset(formMsg.order.leader_id, formMsg.order.range, formMsg.order.angle, \
+                   formMsg.order.alt_mode, formMsg.order.control_alt)
 
 
     # Handle incoming swarm_state messages

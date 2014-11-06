@@ -22,6 +22,7 @@ add_message_files(
   SwarmVehicleState.msg
   WaypointListStamped.msg
   FormationOrder.msg
+  FormationOrderStamped.msg
   ControllerState.msg
 )
 
