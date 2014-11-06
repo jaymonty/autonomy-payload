@@ -15,7 +15,7 @@ import os
 import sys
 
 # Load in ACS libraries
-import ap_lib.acs_messages as acs_messages
+import ap_lib.acs_messages as messages
 from ap_lib.acs_socket import Socket
 
 # General ROS imports
@@ -72,7 +72,7 @@ def subscribe_subswarm_id(msg):
 
 def sub_flight_status(msg):
     global acs_sock, aircraft_name
-    message = acs_messages.FlightStatus()
+    message = messages.FlightStatus()
     message.msg_dst = Socket.ID_BCAST_ALL  # TODO: Send to ground
     message.msg_secs = msg.header.stamp.secs
     message.msg_nsecs = msg.header.stamp.nsecs
@@ -104,7 +104,7 @@ def sub_flight_status(msg):
 
 def sub_pose(msg):
     global acs_sock
-    message = acs_messages.Pose()
+    message = messages.Pose()
     message.msg_dst = Socket.ID_BCAST_ALL
     message.msg_secs = msg.header.stamp.secs
     message.msg_nsecs = msg.header.stamp.nsecs
@@ -171,8 +171,8 @@ if __name__ == '__main__':
             rem_ip = '127.0.1.1'
         acs_sock = Socket(aircraft_id, network_port, network_device, 
                           loc_ip, rem_ip, None)
-    except Exception:
-        rospy.logfatal("Could not initialize network socket")
+    except Exception as ex:
+        rospy.logfatal("aerial: %s" % ex.args[0])
         sys.exit(-1)
 
     # If subswarm ID param is already set, use it
@@ -223,7 +223,7 @@ if __name__ == '__main__':
 
         # Aircraft -> Aircraft messages
 
-        if isinstance(message, acs_messages.Pose):
+        if isinstance(message, messages.Pose):
             try:
                 msg = ap_msgs.SwarmVehicleState()
                 msg.vehicle_id = message.msg_src
@@ -255,7 +255,7 @@ if __name__ == '__main__':
 
         # Ground -> Aircraft messages
 
-        elif isinstance(message, acs_messages.Heartbeat):
+        elif isinstance(message, messages.Heartbeat):
             try:
                 msg = apmsg.Heartbeat()
                 msg.counter = message.counter
@@ -264,7 +264,7 @@ if __name__ == '__main__':
             except:
                 rospy.logwarn("Error processing command: Heartbeat")
 
-        elif isinstance(message, acs_messages.Arm):
+        elif isinstance(message, messages.Arm):
             try:
                 msg = std_msgs.msg.Bool()
                 msg.data = message.enable
@@ -273,7 +273,7 @@ if __name__ == '__main__':
             except:
                 rospy.logwarn("Error processing command: Arm")
 
-        elif isinstance(message, acs_messages.Mode):
+        elif isinstance(message, messages.Mode):
             try:
                 msg = std_msgs.msg.UInt8()
                 msg.data = message.mode
@@ -282,7 +282,7 @@ if __name__ == '__main__':
             except:
                 rospy.logwarn("Error processing command: Mode")
 
-        elif isinstance(message, acs_messages.Land):
+        elif isinstance(message, messages.Land):
             try:
                 msg = std_msgs.msg.Empty()
                 pub_land.publish(msg)
@@ -290,7 +290,7 @@ if __name__ == '__main__':
             except:
                 rospy.logwarn("Error processing command: Land")
 
-        elif isinstance(message, acs_messages.LandAbort):
+        elif isinstance(message, messages.LandAbort):
             try:
                 msg = std_msgs.msg.UInt16()
                 msg.data = message.alt
@@ -299,7 +299,7 @@ if __name__ == '__main__':
             except:
                 rospy.logwarn("Error processing command: LandAbort")
 
-        elif isinstance(message, acs_messages.GuidedGoto):
+        elif isinstance(message, messages.GuidedGoto):
             try:
                 msg = apmsg.LLA()
                 msg.lat = message.lat
@@ -310,7 +310,7 @@ if __name__ == '__main__':
             except:
                 rospy.logwarn("Error processing command: GuidedGoto")
 
-        elif isinstance(message, acs_messages.WaypointGoto):
+        elif isinstance(message, messages.WaypointGoto):
             try:
                 msg = std_msgs.msg.UInt16()
                 msg.data = message.index
@@ -319,7 +319,7 @@ if __name__ == '__main__':
             except:
                 rospy.logwarn("Error processing command: WaypointGoto")
 
-        elif isinstance(message, acs_messages.SlaveSetup):
+        elif isinstance(message, messages.SlaveSetup):
             try:
                 srv = rospy.ServiceProxy('autopilot/slave_setup', 
                                          apsrv.SlaveSetup)
@@ -328,21 +328,21 @@ if __name__ == '__main__':
             except Exception as ex:
                 rospy.logwarn("Error processing command: SlaveSetup")
 
-        elif isinstance(message, acs_messages.FlightReady):
+        elif isinstance(message, messages.FlightReady):
             try:
                 rospy.set_param("flight_ready", message.ready)
                 rospy.loginfo("Ground-to-air: FlightReady")
             except Exception as ex:
                 rospy.logwarn("Error processing command: FlightReady")
 
-        elif isinstance(message, acs_messages.SetSubswarm):
+        elif isinstance(message, messages.SetSubswarm):
             try:
                 update_subswarm_id(message.subswarm)
                 rospy.loginfo("Ground-to-air: SetSubswarm")
             except Exception as ex:
                 rospy.logwarn("Error processing command: SetSubswarm")
 
-        elif isinstance(message, acs_messages.PayloadHeartbeat):
+        elif isinstance(message, messages.PayloadHeartbeat):
             try:
                 srv = rospy.ServiceProxy('safety/set_health_state',
                                          ap_srvs.SetBoolean)
@@ -351,7 +351,7 @@ if __name__ == '__main__':
             except Exception as ex:
                 rospy.logwarn("Error processing command: PayloadHeartbeat")
 
-        elif isinstance(message, acs_messages.PayloadShutdown):
+        elif isinstance(message, messages.PayloadShutdown):
             try:
                 res = os.system("sudo halt")
                 if res != 0:
