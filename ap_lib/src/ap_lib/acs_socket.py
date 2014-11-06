@@ -15,7 +15,7 @@ import socket
 import struct
 
 # Message definitions
-from ap_lib import acs_messages
+import ap_lib.acs_messages as messages
 
 #-----------------------------------------------------------------------
 # Socket class
@@ -62,8 +62,8 @@ class Socket():
                 self._sock.bind((self._ip, self._port))
             else:
                 self._sock.bind(('', self._port))
-        except Exception:
-            raise Exception("Couldn't establish network socket")
+        except Exception as ex:
+            raise Exception("Socket init error: %s" % ex.args[0])
 
     # Get and set subswarm ID in Pythonic property style
     # NOTE: Apparently must reference internally by property name,
@@ -131,15 +131,15 @@ class Socket():
                 return False
             
             # Parse message
-            msg = acs_messages.parse(data)
+            msg = messages.Message.parse(data)
             if not msg:
                 return False
             
             # Is it meant for us?
             if not (msg.msg_dst == self._id or \
                     msg.msg_dst == Socket.ID_BCAST_ALL or \
-                    (msg.msg_dst & acs_messages.SUBSWARM_MASK == acs_messages.SUBSWARM_MASK and \
-                     msg.msg_dst & acs_messages.SUBSWARM_BITS == self.subswarm)):
+                    (msg.msg_dst & messages.SUBSWARM_MASK == messages.SUBSWARM_MASK and \
+                     msg.msg_dst & messages.SUBSWARM_BITS == self.subswarm)):
                 return False
             
             # Add source IP and port, just in case someone wants them
