@@ -3,7 +3,7 @@
 from PySide.QtCore import *
 from PySide.QtGui import *
 
-from ap_lib import acs_messages
+import ap_lib.acs_messages as messages
 from ap_lib.acs_socket import Socket
 
 from optparse import OptionParser
@@ -104,7 +104,7 @@ class UAVListWidget(QListWidget):
             # Break if no message, skip non-FlightStatus messages
             if msg is None:
                 break
-            if not isinstance(msg, acs_messages.FlightStatus):
+            if not isinstance(msg, messages.FlightStatus):
                 continue
 
             # Color code based on status
@@ -140,7 +140,7 @@ class UAVListWidget(QListWidget):
 def preflight_aircraft(sock, uavid, localip, uavip):
     # Open a slave mavlink channel to the aircraft
     # NOTE: This is done unreliably, so it might fail and we won't know :(
-    ss = acs_messages.SlaveSetup()
+    ss = messages.SlaveSetup()
     ss.msg_dst = int(uavid)
     ss.msg_secs = 0
     ss.msg_nsecs = 0
@@ -159,7 +159,7 @@ def preflight_aircraft(sock, uavid, localip, uavip):
 
 def set_aircraft_ready(sock, uavid, localip, uavip, ready):
     # Toggle the aircraft to be flight-ready, or not, based on 'uavstat'
-    fr = acs_messages.FlightReady()
+    fr = messages.FlightReady()
     fr.msg_dst = int(uavid)
     fr.msg_secs = 0
     fr.msg_nsecs = 0
@@ -168,7 +168,7 @@ def set_aircraft_ready(sock, uavid, localip, uavip, ready):
 
 def shutdown_aircraft(sock, uavid, localip, uavip):
     # Send a command to shut down the payload
-    ps = acs_messages.PayloadShutdown()
+    ps = messages.PayloadShutdown()
     ps.msg_dst = int(uavid)
     ps.msg_secs = 0
     ps.msg_nsecs = 0

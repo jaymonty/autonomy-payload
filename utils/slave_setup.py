@@ -4,7 +4,7 @@ from optparse import OptionParser
 import sys
 
 # Load in ACS libraries
-import ap_lib.acs_messages as acs_messages
+import ap_lib.acs_messages as messages
 from ap_lib.acs_socket import Socket
 
 #-----------------------------------------------------------------------
@@ -57,7 +57,7 @@ if __name__ == '__main__':
         print "Sorry, couldn't start up the listening socket"
         sys.exit(1)
 
-    ss = acs_messages.SlaveSetup()
+    ss = messages.SlaveSetup()
     ss.msg_dst = opts.target
     ss.msg_secs = 0
     ss.msg_nsecs = 0

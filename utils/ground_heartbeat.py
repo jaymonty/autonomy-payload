@@ -6,7 +6,7 @@ import sys
 import time
 
 # Load in ACS libraries
-import ap_lib.acs_messages as acs_messages
+import ap_lib.acs_messages as messages
 from ap_lib.acs_socket import Socket
 
 #-----------------------------------------------------------------------
@@ -42,12 +42,14 @@ if __name__ == '__main__':
     counter = 0
 
     while True:
-        message = acs_messages.Heartbeat()
+        message = messages.Heartbeat()
         message.msg_dst = Socket.ID_BCAST_ALL
         message.msg_secs = 0
         message.msg_nsecs = 0
         message.counter = counter
+
         sock.send(message)
+        print "Heartbeat sent (%u)" % counter
 
         counter += 1
         time.sleep(1)
