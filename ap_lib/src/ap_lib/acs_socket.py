@@ -132,8 +132,6 @@ class Socket():
             
             # Parse message
             msg = messages.Message.parse(data)
-            if not msg:
-                return False
             
             # Is it meant for us?
             if not (msg.msg_dst == self._id or \
@@ -150,6 +148,6 @@ class Socket():
             
         # Any other unhandled conditions are printed for our awareness
         except Exception as ex:
-            print(ex.args[0])
+            print("sock recv: %s" % ex.args[0])
             return False
 

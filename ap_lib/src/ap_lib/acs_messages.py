@@ -80,16 +80,14 @@ class Message(object):
     def parse(data):
         # Make sure we at least have a full header
         if len(data) < Message.hdr_size:
-            # print "invalid packet length"
-            return None
+            raise Exception("invalid packet length")
 
         # Parse header fields
         try:
             msg_type, msg_sub, msg_src, msg_dst, msg_secs, msg_msecs = \
                 struct.unpack_from(Message.hdr_fmt, data, 0)
-        except:
-            #print "header bad"
-            return None
+        except Exception as ex:
+            raise Exception("bad header: %s" % ex.args[0])
 
         # Create corresponding subtype
         if msg_type == 0x00:
@@ -121,8 +119,7 @@ class Message(object):
         elif msg_type == 0xFF:
             msg = PayloadShutdown()
         else:
-            #print "unknown type: %02X" % msg_type
-            return None
+            raise Exception("unknown type: %02X" % msg_type)
 
         # Populate header fields
         msg.msg_type = msg_type
@@ -135,9 +132,8 @@ class Message(object):
         # Parse payload fields
         try:
             msg._unpack(data[Message.hdr_size:])
-        except:
-            #print "payload bad"
-            return None
+        except Exception as ex:
+            raise Exception("bad payload: %s" % ex.args[0])
 
         return msg
 
