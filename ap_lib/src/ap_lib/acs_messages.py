@@ -483,30 +483,34 @@ class SetController(Message):
 
 class FollowerSetup(Message):
     msg_type = 0x8B
-    msg_fmt = '>hhhBB'
+    msg_fmt = '>BBhhhh2x'
 
     def _init_message(self):
-        self.follow_range = None    # Distance behind leader (meters)
-        self.offset_angle = None    # Offset angle from leader (radians, 0=astern)
-        self.control_alt = None     # Relative or absolute altitude (meters)
         self.leader_id = None       # ID of aircraft to follow
         self.alt_mode = None        # 0=absolute, 1=relative
+        self.seq = None             # Task sequence number (optional but should increment)
+        self.follow_range = None    # Distance behind leader (meters)
+        self.offset_angle = None    # Relative bearing to leader (radians)
+        self.control_alt = None     # Relative or absolute altitude (meters)
+        # 2 padding bytes
 
     def _pack(self):
-        tupl = (int(self.follow_range),
-                int(self.offset_angle * 1e2),
-                int(self.control_alt),
-                self.leader_id,
-                self.alt_mode)
+        tupl = (self.leader_id,
+                self.alt_mode,
+                self.seq,
+                int(self.follow_range),
+                int(self.offset_angle * 1e3),
+                int(self.control_alt))
         return struct.pack(type(self).msg_fmt, *tupl)
 
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.follow_range = float(fields[0])
-        self.offset_angle = float(fields[1]) / 1e2
-        self.control_alt = float(fields[3])
-        self.leader_id = fields[4]
-        self.alt_mode = fields[5]
+        self.leader_id = fields[0]
+        self.alt_mode = fields[1]
+        self.seq = fields[2]
+        self.follow_range = float(fields[3])
+        self.offset_angle = float(fields[4]) / 1e3
+        self.control_alt = float(fields[5])
 
 class WPSequencerSetup(Message):
     msg_type = 0x8C
