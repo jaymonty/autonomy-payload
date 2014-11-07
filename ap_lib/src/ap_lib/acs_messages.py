@@ -114,6 +114,12 @@ class Message(object):
             msg = FlightReady()
         elif msg_type == 0x89:
             msg = SetSubswarm()
+        elif msg_type == 0x8A:
+            msg = SetController()
+        elif msg_type == 0x8B:
+            msg = FollowerSetup()
+        elif msg_type == 0x8C:
+            msg = WPSequencerSetup()
         elif msg_type == 0xFE:
             msg = PayloadHeartbeat()
         elif msg_type == 0xFF:
@@ -484,6 +490,77 @@ class SetSubswarm(Message):
     def _unpack(self, data):
         fields = struct.unpack_from(self.msg_fmt, data, 0)
         self.subswarm = int(fields[0]) 
+
+class SetController(Message):
+    def _init_message(self):
+        self.msg_type = 0x8A
+        self.msg_fmt = '>B3x'
+
+        self.controller = None     # Numeric ID of controller type
+        # 3 padding bytes
+
+    def _pack(self):
+        tupl = (int(self.controller),)
+        return struct.pack(self.msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(self.msg_fmt, data, 0)
+        self.controller = int(fields[0]) 
+
+class FollowerSetup(Message):
+    def _init_message(self):
+        self.msg_type = 0x8B
+        self.msg_fmt = '>hhhBB'
+
+        self.follow_range = None    # Distance behind leader (meters)
+        self.offset_angle = None    # Offset angle from leader (radians, 0=astern)
+        self.control_alt = None     # Relative or absolute altitude (meters)
+        self.leader_id = None       # ID of aircraft to follow
+        self.alt_mode = None        # 0=absolute, 1=relative
+
+    def _pack(self):
+        tupl = (int(self.follow_range),
+                int(self.offset_angle * 1e2),
+                int(self.control_alt),
+                self.leader_id,
+                self.alt_mode)
+        return struct.pack(self.msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(self.msg_fmt, data, 0)
+        self.follow_range = float(fields[0])
+        self.offset_angle = float(fields[1]) / 1e2
+        self.control_alt = float(fields[3])
+        self.leader_id = fields[4]
+        self.alt_mode = fields[5]
+
+class WPSequencerSetup(Message):
+    def _init_message(self):
+        self.msg_type = 0x8C
+        self.msg_fmt_base = '>BxH'
+        self.msg_fmt_wp = '>lll'
+
+        # 1 byte                 # Count of LLA tuples in wp_list (0-255)
+        # 1 padding byte
+        self.seq = None          # Task sequence number (optional but should increment)
+        self.wp_list = []        # List of LLA tuples (degrees, degrees, meters)
+
+    def _pack(self):
+        tupl = (len(self.wp_list), self.seq)
+        for lla in self.wp_list:
+            tupl += (int(lla[0] * 1e7),
+                     int(lla[1] * 1e7),
+                     int(lla[2] * 1e3))
+        fmt = self.msg_fmt_base + len(self.wp_list) * self.msg_fmt_wp.lstrip('>')
+        return struct.pack(fmt, tupl)
+
+    def _unpack(self, data):
+        (wp_count, self.seq) = struct.unpack_from(self.msg_fmt_base, data, 0)
+        offset = struct.calcsize(self.msg_fmt_base)
+        for wp in wp_count:
+            lla = struct.unpack_from(self.msg_fmt_wp, data, offset)
+            wp_list.append(lla)
+            offset += struct.calcsize(self.msg_fmt_wp)
 
 class PayloadHeartbeat(Message):
     def _init_message(self):
