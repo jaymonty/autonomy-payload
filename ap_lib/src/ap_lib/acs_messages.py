@@ -140,12 +140,12 @@ class Example(Message):
                 self.baz)
 
         # Pack into a byte string
-        return struct.pack(self.msg_fmt, *tupl)
+        return struct.pack(type(self).msg_fmt, *tupl)
         
     def _unpack(self, data):
         # Unpack message contents (can do this incrementally for
         #  variable-length messages)
-        tupl = struct.unpack_from(self.msg_fmt, data)
+        tupl = struct.unpack_from(type(self).msg_fmt, data)
         
         # Place unpacked but unconverted fields into message elements
         self.foo = tupl[0] / 1e03
