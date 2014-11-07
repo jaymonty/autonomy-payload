@@ -206,6 +206,12 @@ if __name__ == '__main__':
                                       apmsg.LLA)
     pub_waypoint_goto = rospy.Publisher("%s/recv_waypoint_goto"%ROS_BASENAME, 
                                         std_msgs.msg.UInt16)
+    pub_set_controller = rospy.Publisher("%s/recv_set_controller"%ROS_BASENAME,
+                                         std_msgs.msg.UInt8)
+    pub_follower_setup = rospy.Publisher("%s/recv_follower_setup"%ROS_BASENAME,
+                                         ap_msgs.FormationOrderStamped)
+    pub_wpsequencer_setup = rospy.Publisher("%s/recv_wpsequencer_setup"%ROS_BASENAME,
+                                            ap_msgs.WaypointListStamped)
 
     # Loop , checking for incoming datagrams and sleeping
     # NOTE: If too many network messages come in, this loop
@@ -341,6 +347,48 @@ if __name__ == '__main__':
                 rospy.loginfo("Ground-to-air: SetSubswarm")
             except Exception as ex:
                 rospy.logwarn("Error processing command: SetSubswarm")
+
+        elif isinstance(message, messages.SetController):
+            try:
+                msg = std_msgs.UInt8()
+                msg.data = message.controller
+                pub_set_controller.publish(msg)
+                rospy.loginfo("Ground-to-air: SetController")
+            except:
+                rospy.logwarn("Error processing command: SetController")
+
+        elif isinstance(message, messages.FollowerSetup):
+            try:
+                msg = ap_msgs.FormationOrderStamped()
+                msg.header.seq = message.seq
+                msg.header.stamp = rospy.Time(message.msg_secs, message.msg_nsecs)
+                msg.header.frame_id = 'base_footprint'
+                msg.order.leader_id = message.leader_id
+                msg.order.range = message.follow_range
+                msg.order.angle = message.offset_angle
+                msg.order.alt_mode = message.alt_mode
+                msg.order.control_alt = message.control_alt
+                pub_follower_setup.publish(msg)
+                rospy.loginfo("Ground-to-air: FollowerSetup")
+            except:
+                rospy.logwarn("Error processing command: FollowerSetup")
+
+        elif isinstance(message, messages.WPSequencerSetup):
+            try:
+                msg = ap_msgs.WaypointListStamped()
+                msg.header.seq = message.seq
+                msg.header.stamp = rospy.Time(message.msg_secs, message.msg_nsecs)
+                msg.header.frame_id = 'base_footprint'
+                for wp in message.wp_list:
+                    lla = apmsg.LLA()
+                    lla.lat = wp[0]
+                    lla.lon = wp[1]
+                    lla.alt = wp[2]
+                    msg.waypoints.append(lla)
+                pub_wpsequencer_setup.publish(msg)
+                rospy.loginfo("Ground-to-air: WPSequencerSetup")
+            except:
+                rospy.logwarn("Error processing command: WPSequencerSetup")
 
         elif isinstance(message, messages.PayloadHeartbeat):
             try:
