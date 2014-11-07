@@ -45,13 +45,17 @@ class Message(object):
     hdr_size = struct.calcsize(hdr_fmt)
 
     def __init__(self):
-        # Initialize common elements
-        self.msg_type = None	# See type cases above
+        # Initialize instance msg_type from class msg_type
+        # (done for compatibility only)
+        self.msg_type = type(self).msg_type
+
+        # Initialize other header fields
         self.msg_src = None	# Source ID (1-223 currently)
         self.msg_sub = None	# Source subswarm ID (0-30 currently)
         self.msg_dst = None	# Destination ID (1-255 currently)
         self.msg_secs = None	# Epoch seconds
         self.msg_nsecs = None	# Epoch nanoseconds (truncated to ms)
+
         # Add source IP and port, just for received messages (not serialized)
         self.msg_src_ip = None
         self.msg_src_port = None
@@ -62,7 +66,7 @@ class Message(object):
     # Serialize a Message subtype
     def serialize(self):
         # Pack header
-        hdr_tupl = (self.msg_type,
+        hdr_tupl = (type(self).msg_type,
                     self.msg_sub & SUBSWARM_BITS,
                     self.msg_src,
                     self.msg_dst,
@@ -90,45 +94,12 @@ class Message(object):
             raise Exception("bad header: %s" % ex.args[0])
 
         # Create corresponding subtype
-        if msg_type == 0x00:
-            msg = FlightStatus()
-        elif msg_type == 0x01:
-            msg = Pose()
-        elif msg_type == 0x80:
-            msg = Heartbeat()
-        elif msg_type == 0x81:
-            msg = Arm()
-        elif msg_type == 0x82:
-            msg = Mode()
-        elif msg_type == 0x83:
-            msg = Land()
-        elif msg_type == 0x84:
-            msg = LandAbort()
-        elif msg_type == 0x85:
-            msg = GuidedGoto()
-        elif msg_type == 0x86:
-            msg = WaypointGoto()
-        elif msg_type == 0x87:
-            msg = SlaveSetup()
-        elif msg_type == 0x88:
-            msg = FlightReady()
-        elif msg_type == 0x89:
-            msg = SetSubswarm()
-        elif msg_type == 0x8A:
-            msg = SetController()
-        elif msg_type == 0x8B:
-            msg = FollowerSetup()
-        elif msg_type == 0x8C:
-            msg = WPSequencerSetup()
-        elif msg_type == 0xFE:
-            msg = PayloadHeartbeat()
-        elif msg_type == 0xFF:
-            msg = PayloadShutdown()
-        else:
+        typelist = {sc.msg_type : sc for sc in Message.__subclasses__()}
+        if msg_type not in typelist:
             raise Exception("unknown type: %02X" % msg_type)
+        msg = typelist[msg_type]()
 
         # Populate header fields
-        msg.msg_type = msg_type
         msg.msg_src = msg_src
         msg.msg_sub = msg_sub & SUBSWARM_BITS
         msg.msg_dst = msg_dst
@@ -149,14 +120,14 @@ class Message(object):
 # Example message type follows; copy and modify to need
 '''
 class Example(Message):
+    # Define message type
+    msg_type = 0x34	# See type cases above
+
+    # If message is fixed-length, can define something like self.msg_fmt.
+    # Nothing outside this class uses this, so do what makes sense here.
+    msg_fmt = '>HH8s'
+
     def _init_message(self):
-        # Define message type
-        self.msg_type = 0x34	# See type cases above
-
-        # If message is fixed-length, can define something like self.msg_fmt.
-        # Nothing outside this class uses this, so do what makes sense here.
-        self.msg_fmt = '>HH8s'
-
         # Define message fields (setting to None helps raise Exceptions later)
         self.foo = None         # Decimal foo's (e.g., 123.456)
         self.bar = None		# Integer bar's (e.g., 789)
@@ -183,10 +154,11 @@ class Example(Message):
 '''
 
 class FlightStatus(Message):
+    # Define message type parameters
+    msg_type = 0x00
+    msg_fmt = '>HBBHHhhHH16s'
+
     def _init_message(self):
-        # Define message type parameters
-        self.msg_type = 0x00
-        self.msg_fmt = '>HBBHHhhHH16s'
         # Define message fields (setting to None helps raise Exceptions later)
         self.mode = None	# Aircraft guidance mode (0-15, see enum)
         self.armed = None	# Boolean: Throttle Armed?
@@ -240,11 +212,11 @@ class FlightStatus(Message):
                 self.name)
 
         # Pack into a byte string
-        return struct.pack(self.msg_fmt, *tupl)
+        return struct.pack(type(self).msg_fmt, *tupl)
         
     def _unpack(self, data):
         # Unpack payload into fields
-        fields = struct.unpack_from(self.msg_fmt, data, 0)
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
 
         # Place unpacked but unconverted fields into message elements
         self.mode = fields[0] >> 12
@@ -273,10 +245,11 @@ class FlightStatus(Message):
         self.name = str(fields[9]).strip(chr(0x0))
 
 class Pose(Message):
+    # Define message type parameters
+    msg_type = 0x01
+    msg_fmt = '>lllllllhhhhhh'
+
     def _init_message(self):
-        # Define message type parameters
-        self.msg_type = 0x01
-        self.msg_fmt = '>lllllllhhhhhh'
         # Define message fields (setting to None helps raise Exceptions later)
         self.lat = None		# Decimal degrees (e.g. 35.123456)
         self.lon = None		# Decimal degrees (e.g. -120.123456)
@@ -309,11 +282,11 @@ class Pose(Message):
                 int(self.vaz * 1e02))
 
         # Pack into a byte string
-        return struct.pack(self.msg_fmt, *tupl)
+        return struct.pack(type(self).msg_fmt, *tupl)
         
     def _unpack(self, data):
         # Unpack payload into fields
-        fields = struct.unpack_from(self.msg_fmt, data, 0)
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
 
         # Place unpacked but unconverted fields into message elements
         self.lat = fields[0] / 1e07
@@ -331,56 +304,57 @@ class Pose(Message):
         self.vaz = fields[12] / 1e02
 
 class Heartbeat(Message):
-    def _init_message(self):
-        self.msg_type = 0x80
-        self.msg_fmt = '>L'
+    msg_type = 0x80
+    msg_fmt = '>L'
 
+    def _init_message(self):
         self.counter = None         # User-definable counter (UInt32)
 
     def _pack(self):
         tupl = (int(self.counter),)
-        return struct.pack(self.msg_fmt, *tupl)
+        return struct.pack(type(self).msg_fmt, *tupl)
 
     def _unpack(self, data):
-        fields = struct.unpack_from(self.msg_fmt, data, 0)
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.counter = int(fields[0]) 
 
 class Arm(Message):
-    def _init_message(self):
-        self.msg_type = 0x81
-        self.msg_fmt = '>B3x'
+    msg_type = 0x81
+    msg_fmt = '>B3x'
 
+    def _init_message(self):
         self.enable = None         # Boolean
         # 3 padding bytes = 0x00
         
     def _pack(self):
         tupl = (int(self.enable),)
-        return struct.pack(self.msg_fmt, *tupl)
+        return struct.pack(type(self).msg_fmt, *tupl)
         
     def _unpack(self, data):
-        fields = struct.unpack_from(self.msg_fmt, data, 0)
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.enable = bool(fields[0])
 
 class Mode(Message):
-    def _init_message(self):
-        self.msg_type = 0x82
-        self.msg_fmt = '>B3x'
+    msg_type = 0x82
+    msg_fmt = '>B3x'
 
+    def _init_message(self):
         self.mode = None         # Mode ID (0-15)
         # 3 padding bytes = 0x00
 
     def _pack(self):
         tupl = (int(self.mode),)
-        return struct.pack(self.msg_fmt, *tupl)
+        return struct.pack(type(self).msg_fmt, *tupl)
 
     def _unpack(self, data):
-        fields = struct.unpack_from(self.msg_fmt, data, 0)
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.mode = int(fields[0]) 
 
 class Land(Message):
+    msg_type = 0x83
+
     def _init_message(self):
-        self.msg_type = 0x83
-        self.msg_fmt = ''
+        pass
 
     def _pack(self):
         return ''
@@ -389,26 +363,26 @@ class Land(Message):
         pass
 
 class LandAbort(Message):
-    def _init_message(self):
-        self.msg_type = 0x84
-        self.msg_fmt = '>h2x'
+    msg_type = 0x84
+    msg_fmt = '>h2x'
 
+    def _init_message(self):
         self.alt = None         # Waive-off altitude (approx +/-32000)
         # 2 padding bytes = 0x0000
 
     def _pack(self):
         tupl = (int(self.alt),)
-        return struct.pack(self.msg_fmt, *tupl)
+        return struct.pack(type(self).msg_fmt, *tupl)
 
     def _unpack(self, data):
-        fields = struct.unpack_from(self.msg_fmt, data, 0)
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.alt = int(fields[0]) 
 
 class GuidedGoto(Message):
-    def _init_message(self):
-        self.msg_type = 0x85
-        self.msg_fmt = '>lll'
+    msg_type = 0x85
+    msg_fmt = '>lll'
 
+    def _init_message(self):
         self.lat = None		# Decimal degrees (e.g. 35.123456)
         self.lon = None		# Decimal degrees (e.g. -120.123456)
         self.alt = None		# Decimal meters MSL (WGS84)
@@ -417,101 +391,101 @@ class GuidedGoto(Message):
         tupl = (int(self.lat * 1e07),
                 int(self.lon * 1e07),
                 int(self.alt * 1e03))
-        return struct.pack(self.msg_fmt, *tupl)
+        return struct.pack(type(self).msg_fmt, *tupl)
 
     def _unpack(self, data):
-        fields = struct.unpack_from(self.msg_fmt, data, 0)
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.lat = fields[0] / 1e07
         self.lon = fields[1] / 1e07
         self.alt = fields[2] / 1e03
 
 class WaypointGoto(Message):
-    def _init_message(self):
-        self.msg_type = 0x86
-        self.msg_fmt = '>H2x'
+    msg_type = 0x86
+    msg_fmt = '>H2x'
 
+    def _init_message(self):
         self.index = None         # Waypoint index (0-65535)
         # 2 padding bytes = 0x0000
 
     def _pack(self):
         tupl = (int(self.index),)
-        return struct.pack(self.msg_fmt, *tupl)
+        return struct.pack(type(self).msg_fmt, *tupl)
 
     def _unpack(self, data):
-        fields = struct.unpack_from(self.msg_fmt, data, 0)
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.index = int(fields[0])
 
 class SlaveSetup(Message):
-    def _init_message(self):
-        self.msg_type = 0x87
-        self.msg_fmt = '>B100p'
+    msg_type = 0x87
+    msg_fmt = '>B100p'
 
+    def _init_message(self):
         self.enable = None         # Boolean
         self.channel = None        # Pascal String
 
     def _pack(self):
         tupl = (int(self.enable),
                 str(self.channel))
-        return struct.pack(self.msg_fmt, *tupl)
+        return struct.pack(type(self).msg_fmt, *tupl)
 
     def _unpack(self, data):
-        fields = struct.unpack_from(self.msg_fmt, data, 0)
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.enable = bool(fields[0]) 
         self.channel = str(fields[1])
 
 class FlightReady(Message):
-    def _init_message(self):
-        self.msg_type = 0x88
-        self.msg_fmt = '>B3x'
+    msg_type = 0x88
+    msg_fmt = '>B3x'
 
+    def _init_message(self):
         self.raedy = None         # Boolean
         # 3 padding bytes = 0x00
 
     def _pack(self):
         tupl = (int(self.ready),)
-        return struct.pack(self.msg_fmt, *tupl)
+        return struct.pack(type(self).msg_fmt, *tupl)
 
     def _unpack(self, data):
-        fields = struct.unpack_from(self.msg_fmt, data, 0)
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.ready = bool(fields[0]) 
 
 class SetSubswarm(Message):
-    def _init_message(self):
-        self.msg_type = 0x89
-        self.msg_fmt = '>B3x'
+    msg_type = 0x89
+    msg_fmt = '>B3x'
 
+    def _init_message(self):
         self.subswarm = None         # New subswarm ID
         # 3 padding bytes = 0x00
 
     def _pack(self):
         tupl = (int(self.subswarm),)
-        return struct.pack(self.msg_fmt, *tupl)
+        return struct.pack(type(self).msg_fmt, *tupl)
 
     def _unpack(self, data):
-        fields = struct.unpack_from(self.msg_fmt, data, 0)
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.subswarm = int(fields[0]) 
 
 class SetController(Message):
-    def _init_message(self):
-        self.msg_type = 0x8A
-        self.msg_fmt = '>B3x'
+    msg_type = 0x8A
+    msg_fmt = '>B3x'
 
+    def _init_message(self):
         self.controller = None     # Numeric ID of controller type
         # 3 padding bytes
 
     def _pack(self):
         tupl = (int(self.controller),)
-        return struct.pack(self.msg_fmt, *tupl)
+        return struct.pack(type(self).msg_fmt, *tupl)
 
     def _unpack(self, data):
-        fields = struct.unpack_from(self.msg_fmt, data, 0)
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.controller = int(fields[0]) 
 
 class FollowerSetup(Message):
-    def _init_message(self):
-        self.msg_type = 0x8B
-        self.msg_fmt = '>hhhBB'
+    msg_type = 0x8B
+    msg_fmt = '>hhhBB'
 
+    def _init_message(self):
         self.follow_range = None    # Distance behind leader (meters)
         self.offset_angle = None    # Offset angle from leader (radians, 0=astern)
         self.control_alt = None     # Relative or absolute altitude (meters)
@@ -524,10 +498,10 @@ class FollowerSetup(Message):
                 int(self.control_alt),
                 self.leader_id,
                 self.alt_mode)
-        return struct.pack(self.msg_fmt, *tupl)
+        return struct.pack(type(self).msg_fmt, *tupl)
 
     def _unpack(self, data):
-        fields = struct.unpack_from(self.msg_fmt, data, 0)
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.follow_range = float(fields[0])
         self.offset_angle = float(fields[1]) / 1e2
         self.control_alt = float(fields[3])
@@ -535,11 +509,13 @@ class FollowerSetup(Message):
         self.alt_mode = fields[5]
 
 class WPSequencerSetup(Message):
-    def _init_message(self):
-        self.msg_type = 0x8C
-        self.msg_fmt_base = '>BxH'
-        self.msg_fmt_wp = '>lll'
+    msg_type = 0x8C
+    msg_fmt_base = '>BxH'
+    msg_fmt_base_sz = struct.calcsize(msg_fmt_base)
+    msg_fmt_wp = '>lll'
+    msg_fmt_wp_sz = struct.calcsize(msg_fmt_wp)
 
+    def _init_message(self):
         # 1 byte                 # Count of LLA tuples in wp_list (0-255)
         # 1 padding byte
         self.seq = None          # Task sequence number (optional but should increment)
@@ -551,36 +527,39 @@ class WPSequencerSetup(Message):
             tupl += (int(lla[0] * 1e7),
                      int(lla[1] * 1e7),
                      int(lla[2] * 1e3))
-        fmt = self.msg_fmt_base + len(self.wp_list) * self.msg_fmt_wp.lstrip('>')
+        fmt = type(self).msg_fmt_base + \
+              len(self.wp_list) * type(self).msg_fmt_wp.lstrip('>')
         return struct.pack(fmt, tupl)
 
     def _unpack(self, data):
-        (wp_count, self.seq) = struct.unpack_from(self.msg_fmt_base, data, 0)
-        offset = struct.calcsize(self.msg_fmt_base)
+        (wp_count, self.seq) = struct.unpack_from(type(self).msg_fmt_base, data, 0)
+        offset = type(self).msg_fmt_base_sz
         for wp in wp_count:
-            lla = struct.unpack_from(self.msg_fmt_wp, data, offset)
+            lla = struct.unpack_from(type(self).msg_fmt_wp, data, offset)
             wp_list.append(lla)
-            offset += struct.calcsize(self.msg_fmt_wp)
+            offset += type(self).msg_fmt_wp_sz
 
 class PayloadHeartbeat(Message):
-    def _init_message(self):
-        self.msg_type = 0xFE
-        self.msg_fmt = '>B3x'
+    msg_type = 0xFE
+    msg_fmt = '>B3x'
 
+    def _init_message(self):
         self.enable = None         # Boolean
         # 3 padding bytes = 0x00
 
     def _pack(self):
         tupl = (int(self.enable),)
-        return struct.pack(self.msg_fmt, *tupl)
+        return struct.pack(type(self).msg_fmt, *tupl)
 
     def _unpack(self, data):
-        fields = struct.unpack_from(self.msg_fmt, data, 0)
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.enable = bool(fields[0])
 
 class PayloadShutdown(Message):
+    msg_type = 0xFF
+
     def _init_message(self):
-        self.msg_type = 0xFF
+        pass
 
     def _pack(self):
         return ''
