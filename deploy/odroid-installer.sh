@@ -71,9 +71,6 @@ done
 # Update locale settings
 sudo update-locale LANG=C LANGUAGE=C LC_ALL=C LC_MESSAGES=POSIX
 
-# Remove unneeded packages
-sudo apt-get --assume-yes remove flash-kernel
-
 # Disable automatic apt tasks
 sudo rm /etc/cron.daily/apt
 
@@ -151,6 +148,9 @@ function install_base_software
 # Update package lists
 sudo apt-get update
 check_fail "apt-get update"
+
+# Remove unneeded packages
+sudo apt-get --assume-yes remove flash-kernel
 
 # Upgrade existing packages
 sudo apt-get --assume-yes upgrade
