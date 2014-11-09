@@ -533,14 +533,14 @@ class WPSequencerSetup(Message):
                      int(lla[2] * 1e3))
         fmt = type(self).msg_fmt_base + \
               len(self.wp_list) * type(self).msg_fmt_wp.lstrip('>')
-        return struct.pack(fmt, tupl)
+        return struct.pack(fmt, *tupl)
 
     def _unpack(self, data):
         (wp_count, self.seq) = struct.unpack_from(type(self).msg_fmt_base, data, 0)
         offset = type(self).msg_fmt_base_sz
-        for wp in wp_count:
+        for wp in range(wp_count):
             lla = struct.unpack_from(type(self).msg_fmt_wp, data, offset)
-            wp_list.append(lla)
+            self.wp_list.append(lla)
             offset += type(self).msg_fmt_wp_sz
 
 class PayloadHeartbeat(Message):
