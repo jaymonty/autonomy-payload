@@ -350,7 +350,7 @@ if __name__ == '__main__':
 
         elif isinstance(message, messages.SetController):
             try:
-                msg = std_msgs.UInt8()
+                msg = std_msgs.msg.UInt8()
                 msg.data = message.controller
                 pub_set_controller.publish(msg)
                 rospy.loginfo("Ground-to-air: SetController")
