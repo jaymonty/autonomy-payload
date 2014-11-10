@@ -67,7 +67,6 @@ CAPTURE_DISTANCE = 110.0
 #   WARN_PRINT: set false to force screen warning messages (default FALSE) 
 class WaypointSequencer(Controller):
 
-
     # Class initializer initializes variables, subscribes to required
     # ROS topics, and creates required ros publishers.  Initializer
     # assumes that the object is already running within an initialized
@@ -125,6 +124,17 @@ class WaypointSequencer(Controller):
         if (self.is_active and not self.listComplete):
             self.checkReadyNextWP()
             if self.readyNextWP:  self.incrementWP()
+
+
+    # Starts or stops the waypoint sequencer object.  At instantiation,
+    # the WaypointSequencer is_active variable is set to False (no waypoints
+    # issued).  It can be set to True or False using this method)
+    # @param newRunState:  True or False to start or stop object run state
+    def set_active(self, newRunState):
+        if self.is_ready:
+            self.is_active = newRunState
+        else:
+            self.log_warn("wp sequencer not initialized, cannot set active state")
 
 
     #--------------------------
@@ -209,17 +219,6 @@ class WaypointSequencer(Controller):
             self.is_ready = False
             self.is_active = False
             return False
-
-
-    # Starts or stops the waypoint sequencer object.  At instantiation,
-    # the WaypointSequencer is_active variable is set to False (no waypoints
-    # issued).  It can be set to True or False using this method)
-    # @param newRunState:  True or False to start or stop object run state
-    def set_active(self, newRunState):
-        if self.is_ready:
-            self.is_active = newRunState
-        else:
-            self.log_warn("wp sequencer not initialized, cannot set active state")
 
 
     #-----------------------------------------
