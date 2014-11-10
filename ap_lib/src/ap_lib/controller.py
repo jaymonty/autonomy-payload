@@ -59,6 +59,13 @@ class Controller(nodeable.Nodeable):
     # Parent class virtual functions implemented in subclasses
     #---------------------------------------------------------
 
+    # Virtual method used to activates or deactivates the controller.
+    # Implement at the subclass level to ensure class-specific requirements
+    # @param activate: Boolean value to activate or deactivate the controller
+    def set_active(self, activate):
+        pass
+
+
     #---------------------------------------------------------
     # Class-specific methods implementing class functionality
     #---------------------------------------------------------

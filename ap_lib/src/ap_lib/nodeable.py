@@ -40,7 +40,9 @@ class Nodeable(object):
     # Registers as a ROS node, calls the setup functions, and runs a
     # timing loop for the object's required processing
     # @param rate: rate (hz) of the node's timing loop
-    # @param 
+    # @param serviceParams: list of arbitrary parameters to set up services
+    # @param callbackParams: list of arbitrary parameters to set up callbacks
+    # @param publisherParams: list of arbitrary parameters to set up publishers
     def runAsNode(self, rate=10.0, serviceParams=[], callbackParams=[], \
                   publisherParams=[]):
         # Initialize ROS node & set up callbacks, services and publishers
