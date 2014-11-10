@@ -43,6 +43,7 @@ FOLLOW_DISTANCE = 50.0 # default distance behind the lead to place the follow po
 #   ownLon: longitude of this aircraft
 #   ownAlt: altitude of this aircraft
 #   ownRelAlt: altitude of this aircraft relative to launch altitude
+#   ownBaseAlt: altitude from which relative altitude is measured
 #   followID: ID of the leader aircraft (follow this one)
 #   followLat: latitude of the aircraft being followed
 #   followLon: longitude of the aircraft being followed
@@ -67,7 +68,18 @@ FOLLOW_DISTANCE = 50.0 # default distance behind the lead to place the follow po
 #   nodeName:  Name of the node to start or node in which the object is
 #   timer: ROS rate object that controls the timing loop
 #   DBUG_PRINT: set true to force screen debug messages (default FALSE)
-#   WARN_PRINT: set false to force screen warning messages (default FALSE) 
+#   WARN_PRINT: set false to force screen warning messages (default FALSE)
+#
+# Class member functions:
+#   callBackSetup: implementation of the Nodeable virtual function
+#   publisherSetup: implementation of the Nodeable virtual function
+#   executeTimedLoop: implementation of the Nodeable virtual function
+#   set_active: implementation of the Controller virtual function
+#   reset: used to set follow control parameters
+#   compute_follow_wp: computes a target waypoint to achieve follow behavior
+#   process_run_message: callback for messages to the run topic
+#   process_formation_order: callback for messages to the formation order topic
+#   swarm_callback: callback for swarm state messages
 class FollowController(Controller):
 
     # Class initializer initializes class variables.
@@ -86,6 +98,7 @@ class FollowController(Controller):
         self.ownLon = None
         self.ownAlt = None
         self.ownRelAlt = None
+        self.baseAlt = None
         self.followID = None
         self.followLat = None
         self.followLon = None
@@ -147,17 +160,36 @@ class FollowController(Controller):
             lla.alt = None
 
             # Set altitude of command (base alt or offset from leader altitude)
+            # NOTE:  The autopilot expects issued orders to use RELATIVE altitude
+            #        Don't use absolute (MSL) altitude in the LLA message!!!
             if self.altMode == BASE_ALT_MODE:
-                lla.alt = self.ctrlAlt
+                lla.alt = self.ctrlAlt - self.baseAlt
+#                lla.alt = self.ctrlAlt
             elif self.altMode == ALT_SEP_MODE:
-                lla.alt = self.followAlt + self.ctrlAlt
-
+                lla.alt = self.followAlt + self.ctrlAlt - self.baseAlt
             if lla.alt is not None: #verify valid altitude data
                 self.wpPublisher.publish(lla)
                 self.log_dbug("Sent to (%0.06f, %0.06f, %0.03f (leader alt: %0.03f))" \
                               %(lla.lat, lla.lon, lla.alt, self.followAlt))
             else:
                 self.log_warn("Altitude control mode invalid")
+
+
+    # Activates or deactivates the controller.  Will not activate if leader ID
+    # is the same as the following aircraft (can't follow itself!)
+    # @param activate: Boolean value to activate or deactivate the controller
+    def set_active(self, activate):
+        if not self.is_ready:
+            self.is_active = False
+            self.log_warn("attempt to activate uninitialized follow node")
+        # This should never be true, but just in case
+        elif activate and self.followID == self.ownID:
+            self.is_ready = False
+            self.is_active = False
+            self.log_warn("attempt to activate follower node to follow self")
+        else:
+            self.is_active = activate
+            self.log_dbug("activation command: " + str(activate))
 
 
     #--------------------------
@@ -200,22 +232,6 @@ class FollowController(Controller):
         self.is_ready = True
         self.sequence += 1
         self.log_dbug("formation command: ldr=%d, range=%f, offset=%f"%(followAC, followDist, offset))
-
-
-    # Activates or deactivates the controller.  Will not activate if leader ID
-    # is the same as the following aircraft (can't follow itself!)
-    # @param activate: Boolean value to activate or deactivate the controller
-    def set_active(self, activate):
-        if not self.is_ready:
-            self.is_active = False
-            self.log_warn("attempt to activate uninitialized follow node")
-        elif activate and self.followID == self.ownID:
-            self.is_ready = False
-            self.is_active = False
-            self.log_warn("attempt to activate follower node to follow self")
-        else:
-            self.is_active = activate
-            self.log_dbug("activation command: " + str(activate))
 
 
     # Compute a target waypoint to  with overshoot
@@ -272,6 +288,7 @@ class FollowController(Controller):
                 self.ownLon = swarmAC.state.pose.pose.position.lon
                 self.ownAlt = swarmAC.state.pose.pose.position.alt
                 self.ownRelAlt = swarmAC.state.pose.pose.position.rel_alt
+                self.baseAlt = self.ownAlt - self.ownRelAlt
                 selfUpdated = True
 
             elif swarmAC.vehicle_id == self.followID:
