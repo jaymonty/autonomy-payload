@@ -13,7 +13,7 @@
 
 # ACS-specific imports
 import ap_path_planning.wp_sequencer as wpseq
-
+from autopilot_bridge.msg import LLA
 
 #---------------------------------------------
 # Runs a node for a single wp_sequencer object

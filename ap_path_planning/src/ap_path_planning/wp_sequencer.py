@@ -41,10 +41,13 @@ CAPTURE_DISTANCE = 110.0
 
 
 # Object that creates or receives waypoint sequences and monitors the
-# vehicle's progress through the series of waypoints
+# vehicle's progress through the series of waypoints.  Individual 
+# waypoints are specified using LLA message object containing latitude,
+# longitude, and altitude (MSL) 
 #
 # Class member variables:
 #   wpList: list (queue) of waypoints being followed
+#   baseAlt: altitude (MSL) from which relative altitudes are computed
 #   currentWP: waypoint to which the vehicle is currently transiting
 #   pose: current vehicle position
 #   wpPublisher: publisher object for publishing waypoint commands
@@ -82,6 +85,7 @@ class WaypointSequencer(Controller):
         Controller.__init__(self, nodeName, WP_SEQUENCE_CTRLR)
         self.currentWP = apbrg.LLA()
         self.pose = None
+        self.baseAlt = 0.0
         self.setSequence(waypoints)
         self.captureDistance = captureDistance
         self.statusStamp = None
@@ -146,7 +150,7 @@ class WaypointSequencer(Controller):
     # commenced.  If the new sequence contains no waypoints, any
     # existing sequence will be deleted, but any current sequenced
     # waypoint that was previously commanded will remain in effect
-    # newWaypoints: list of waypoints in the desired traversal order
+    # newWaypoints: list of waypoints (LLA) in the desired traversal order
     def setSequence(self, newWaypoints):
         try:
             self.wpList = deque(newWaypoints)
@@ -171,7 +175,7 @@ class WaypointSequencer(Controller):
 
 
     # Adds a single waypoint to the end of the current list
-    # @param newWaypoint:  the waypoint to be added to the list
+    # @param newWaypoint:  the waypoint (LLA) to be added to the list
     def addWaypoint(self, newWaypoint):
         self.wpList.append(newWaypoint)
         self.listComplete = False
@@ -183,10 +187,8 @@ class WaypointSequencer(Controller):
     def incrementWP(self):
         self.readyNextWP = False
         if (len(self.wpList) > 0):
-            nextWP = self.wpList.popleft()
-            self.currentWP.lat = nextWP[0]
-            self.currentWP.lon = nextWP[1]
-            self.currentWP.alt = nextWP[2]
+            self.currentWP = self.wpList.popleft()
+            self.currentWP.alt = self.currentWP.alt - self.baseAlt # convert to rel_alt
             self.wpPublisher.publish(self.currentWP)
             self.log_dbug("issuing new wpt: lat=" + str(self.currentWP.lat) +\
                                          ", lon=" + str(self.currentWP.lon) +\
@@ -231,6 +233,8 @@ class WaypointSequencer(Controller):
     def updatePose(self, poseMsg):
         self.pose = [ poseMsg.pose.pose.position.lat, \
                       poseMsg.pose.pose.position.lon ]
+        self.baseAlt = poseMsg.pose.pose.position.alt - \
+                       poseMsg.pose.pose.position.rel_alt
 
 
     # Handles start and stop commands written to the ROS topic
@@ -243,8 +247,9 @@ class WaypointSequencer(Controller):
     # Handles waypoint lists written to the ROS topic
     # @param wptMsg: ROS message (WaypointListStamped) with the waypoint list
     def receiveWaypointList(self, wpMsg):
-        wpts = []
-        for wpt in wptList.waypoints:
-           wpts.append([ wpt.lat, wpt.lon, wpt.alt ])
-        setSequence(wpts)
+        self.setSequence(spMsg.waypoints)
+#        wpts = []
+#        for wpt in wptList.waypoints:
+#           wpts.append([ wpt.lat, wpt.lon, wpt.alt ])
+#        setSequence(wpts)
 
