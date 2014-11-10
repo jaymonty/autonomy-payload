@@ -289,12 +289,18 @@ class SwarmElement(object):
 # is maintained in a dictionary object with 1 record for each swarm member.
 #
 # Class member variables:
-#   nodeName: name of the ROS node with which this object is associated
 #   ownID:  ID (integer) of this particular aircraft
 #   subSwarmID:  ID (integer) of the subswarm this vehicle is a part of
+#   baseAlt: Altitude from which rel_alt values are calculated for all AC
 #   swarm: Dictionary of records for individual aircraft in the swarm
 #   swarmPublisher: Object for publishing swarm state to the ROS topic
 #   swarmMessage: Container for swarm states to be published to the ROS topic
+#
+# Inherited from Nodeable:
+#   nodeName:  name of the node to start or node in which the object is
+#   timer: ROS rate object that controls the timing loop
+#   DBUG_PRINT: set true to force screen debug messages (default FALSE)
+#   WARN_PRINT: set false to force screen warning messages (default FALSE) 
 #
 # Class methods
 #   callbackSetup: Nodeable class virtual implementation to set up subscriptions
@@ -305,7 +311,7 @@ class SwarmElement(object):
 #   drSwarm: computes a DR position for every aircraft in the swarm
 #
 # TODO:  As functionality is added and additional information is available
-# the functionality of this object will be increased accordingly
+#        the functionality of this object will be increased accordingly
 class SwarmTracker(Nodeable):
 
     # Class initializer initializes variables, subscribes to required
@@ -320,6 +326,7 @@ class SwarmTracker(Nodeable):
         Nodeable.__init__(self, nodeName)
         self.ownID = ownID
         self.subSwarmID = subswarm
+        self.baseAlt = 0.0
         self.swarm = dict()
         initState = apbrg.Geodometry()
         initState.pose.pose.orientation.w = 1.0
@@ -393,6 +400,8 @@ class SwarmTracker(Nodeable):
             element = self.swarm[self.ownID]
             element.updateState(stateMsg, self.subSwarmID)
             element.subSwarmID = self.subSwarmID
+            self.baseAlt = element.state.pose.pose.position.alt - \
+                           element.state.pose.pose.position.rel_alt
             self.log_dbug("update self: " + element.getAsString())
         except Exception as ex:
             self.log_warn("Self update callback error: " + ex.args[0])
@@ -411,9 +420,12 @@ class SwarmTracker(Nodeable):
                          float(updateElement.state.header.stamp.nsecs) / float(1e9)
                 if poseTime < elTime: return # older than latest data
                 updateElement.updateState(poseMsg.state, poseMsg.subswarm_id)
+                updateElement.state.pose.pose.position.rel_alt = \
+                    updateElement.state.pose.pose.position.alt - self.baseAlt
             else:  # Create and initialize a new element if this is the first report
                 newElement = \
-                    SwarmElement(poseMsg.vehicle_id, poseMsg.subswarm_id, poseMsg.state)
+                    SwarmElement(poseMsg.vehicle_id, poseMsg.subswarm_id, \
+                                 poseMsg.state, self.swarm[self.ownID].state.pose.pose.position.rel_alt)
                 self.swarm[poseMsg.vehicle_id] = newElement
 
             element = self.swarm[poseMsg.vehicle_id]
