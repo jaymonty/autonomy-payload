@@ -400,9 +400,12 @@ class SwarmTracker(Nodeable):
             element = self.swarm[self.ownID]
             element.updateState(stateMsg, self.subSwarmID)
             element.subSwarmID = self.subSwarmID
-            self.baseAlt = element.state.pose.pose.position.alt - \
-                           element.state.pose.pose.position.rel_alt
-            self.log_dbug("update self: " + element.getAsString())
+            newBaseAlt = element.state.pose.pose.position.alt - \
+                         element.state.pose.pose.position.rel_alt
+            if abs(newBaseAlt - self.baseAlt) > 0.001:
+                self.baseAlt = newBaseAlt
+                rospy.set_param("base_alt", self.baseAlt)
+                self.log_dbug("update self: " + element.getAsString())
         except Exception as ex:
             self.log_warn("Self update callback error: " + ex.args[0])
 
