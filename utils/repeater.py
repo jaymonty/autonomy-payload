@@ -51,14 +51,18 @@ if __name__ == '__main__':
                         help='IP that the payloads listen on')
     parser.add_argument('-r', '--repeater-ip', dest='repeater_ip', default='127.0.1.1',
                         help='IP that the repeater listens on')
-    parser.add_argument('-I', '--broadcast-ip', dest='broadcast_ip', default=None,
-                        help='Real-network broadcast IP to use')
-    parser.add_argument('-P', '--broadcast-port', dest='broadcast_port', default=None,
+    parser.add_argument('-D', '--broadcast-device', dest='bcast_dev', default=None,
+                        help='Real-network broadcast device to use')
+    parser.add_argument('-P', '--broadcast-port', dest='bcast_port', default=None,
                         type=int, help='Real-network broadcast port to use')
     parser.add_argument('-B', '--buffer-size', dest='buffer_size', default=2048,
                         type=int, help='Receive buffer size in bytes')
     parser.add_argument('num_ports', type=int, help='Number of ports to open')
     args = parser.parse_args()
+
+    # If using a real network device, need to know device's IP for later
+    realdev_ip = None
+    realdev_bcast = None
 
     # Attempt to stand up all sockets
     socks = {}
@@ -66,9 +70,16 @@ if __name__ == '__main__':
         create_sock(args.repeater_ip, args.payload_ip, port)
     for port in args.extra_ports:
         create_sock(args.repeater_ip, args.payload_ip, port)
-    if args.broadcast_ip is not None and args.broadcast_port is not None:
-        create_sock('0.0.0.0', args.broadcast_ip, args.broadcast_port)
-    elif args.broadcast_ip is not None or args.broadcast_port is not None:
+    if args.bcast_dev is not None and args.bcast_port is not None:
+        try:
+            import netifaces
+            realdev_ip = netifaces.ifaddresses(args.bcast_dev)[2][0]['addr']
+            realdev_bcast = netifaces.ifaddresses(args.bcast_dev)[2][0]['broadcast']
+            create_sock('0.0.0.0', realdev_bcast, args.bcast_port)
+        except Exception as ex:
+            print "Failed to set up real-network broadcast: " + ex.args[0]
+            sys.exit(-1)
+    elif args.bcast_dev is not None or args.bcast_port is not None:
         print "Warning: you must specify an IP *and* port for real-network broadcast."
 
     # Loop, waiting for a socket to have data to read, and repeat out all other ports
@@ -91,6 +102,10 @@ if __name__ == '__main__':
                 data, (recv_ip, recv_port) = socks[r][0].recvfrom(args.buffer_size)
             except Exception as ex:
                 print "Receive error (%u): %s" % (port, ex.args[0])
+                continue
+
+            # If using real device, check that this isn't a reflected broadcast
+            if realdev_ip is not None and realdev_ip == recv_ip:
                 continue
 
             # Iterate through all sockets and relay message
