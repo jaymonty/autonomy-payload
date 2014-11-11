@@ -100,7 +100,7 @@ class Socket():
 
         # Print any exception for user's awareness
         except Exception as ex:
-            print ex.args[0]
+            print(ex.args[0])
             return False
 
     # Return values:
@@ -148,6 +148,6 @@ class Socket():
             
         # Any other unhandled conditions are printed for our awareness
         except Exception as ex:
-            print("sock recv: %s" % ex.args[0])
+            print("sock recv: " + ex.args[0])
             return False
 
