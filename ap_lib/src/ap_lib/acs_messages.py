@@ -71,7 +71,8 @@ class Message(object):
                     self.msg_src,
                     self.msg_dst,
                     self.msg_secs,
-                    self.msg_nsecs / 1e6)
+                    int(self.msg_nsecs / 1e6))
+
         data = struct.pack(Message.hdr_fmt, *hdr_tupl)
 
         # Pack any payload
