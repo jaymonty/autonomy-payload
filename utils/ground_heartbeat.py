@@ -19,6 +19,8 @@ if __name__ == '__main__':
                       help="Network device to send on", default='')
     parser.add_option("--port", dest="port", type="int",
                       help="Network port to send to", default=5554)
+    parser.add_option("--rate", dest="rate", type="int",
+                      help="Rate at which to send (Hz)", default=2)
     parser.add_option("--lo-reverse", dest="lo_reverse",
                       action="store_true", default=False,
                       help="If using lo, reverse the addresses")
@@ -39,18 +41,17 @@ if __name__ == '__main__':
         print "Sorry, couldn't start up the sending socket"
         sys.exit(1)
     
-    counter = 0
+    message = messages.Heartbeat()
+    message.msg_dst = Socket.ID_BCAST_ALL
+    message.msg_secs = 0
+    message.msg_nsecs = 0
+    message.counter = 0
 
     while True:
-        message = messages.Heartbeat()
-        message.msg_dst = Socket.ID_BCAST_ALL
-        message.msg_secs = 0
-        message.msg_nsecs = 0
-        message.counter = counter
-
         sock.send(message)
-        print "Heartbeat sent (%u)" % counter
+        print "Heartbeat sent (%u)" % message.counter
 
-        counter += 1
-        time.sleep(1)
+        message.counter += 1
+
+        time.sleep(1.0 / float(opts.rate))
 
