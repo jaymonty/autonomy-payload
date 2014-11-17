@@ -21,6 +21,8 @@ from ap_lib import controller
 #-----------------------------------------------------------------------
 # Class definitions
 
+# This class encapsulates the interaction with a specific controller.
+# It should only be used from within the ControllerSelector class.
 class ControllerType(object):
     def __init__(self, c_id, c_name, c_topic_base):
         self.id = c_id
@@ -29,6 +31,7 @@ class ControllerType(object):
         self._run_pub = rospy.Publisher("%s/%s_run" % (c_topic_base, c_name),
                                         std_msgs.Bool)
 
+        # A dummy message to use until a status message is received
         self.status = payload_msgs.ControllerState()
         self.status.controller_id = c_id
         self.status.sequence = 0
@@ -37,17 +40,24 @@ class ControllerType(object):
 
         self.status_last = rospy.Time()
 
+    # Called when a new status message is received that matches the ID
+    # of this controller type
     def update_status(self, status):
         if status.controller_id != self.id:
             raise Exception("Cannot update status with mismatched id")
         self.status = status
         self.status_last = rospy.Time.now()
 
+    # Activate or deactive this controller type
     def set_active(self, active):
         msg = std_msgs.Bool()
         msg.data = active
         self._run_pub.Publish(msg)
 
+# This is the class we interface with. It allows adding controller types,
+# which means creating objects that encapsulate the interface to controllers,
+# and handling incoming messages. It also (should) implement all the state
+# checks necessary to ensuring a safe transition into or between controllers.
 class ControllerSelector(object):
     ros_basename = 'ctlr_select'
 
@@ -57,12 +67,15 @@ class ControllerSelector(object):
         self._basename = basename
         self._loiter_wp_param = loiter_wp
 
+        # Maintain the controller types by ID
         self._controllers = {}
         self._current_mode = 0
 
+        # Want to know autopilot status during state checks
         self._ap_status = None
         self._ap_status_last = rospy.Time()
 
+       # TODO: define an overall status message
 #        self._pub_status = rospy.Publisher("%s/selector_status" % basename,
 #                                           createmessagetype)
         self._pub_wpindex = rospy.Publisher("%s/autopilot_wpindex" % basename,
@@ -77,8 +90,8 @@ class ControllerSelector(object):
         rospy.Subscriber("%s/autopilot_status" % basename,
                          mavbridge_msgs.Status,
                          self._sub_ap_status)
-                        
 
+    # Add a new controller type by ID and name
     def add_controller(self, c_id, c_name):
         if c_id in self._controllers:
             raise Exception("Attempted to redefine controller %u (%s) as %s" % \
@@ -90,6 +103,8 @@ class ControllerSelector(object):
             raise Exception("Failed to define controller %u (%s): %s" % \
                             (c_id, c_name, ex.args[0]))
 
+    # Handle mode change messages
+    # TODO: consider reimplementing as a service instead
     def _sub_ctlr_mode(self, msg):
         mode = msg.data
         stale_time = rospy.Time.now() - rospy.Duration(3)
@@ -122,6 +137,11 @@ class ControllerSelector(object):
                 raise Exception("Requested controller is already active")
     
             # Get inifinite loiter waypoint index
+            # TODO: Rather than use a blindly-set parameter, use the waypoint
+            # services that mavbridge provides to get all waypoints, check that
+            # the *last* waypoint is of infinite loiter type, if so record its
+            # index and if not create and add one nearby the current position
+            # or at a predefined "safe" position, and note that index.
             if not rospy.has_param(self._loiter_wp_param):
                 raise Exception("Infinite loiter waypoint parameter not defined")
             try:
@@ -130,42 +150,55 @@ class ControllerSelector(object):
                 raise Exception("Error getting infinite waypoint index: %s" % ex.args[0])
     
             # Shut down any other active controllers
+            # TODO: Check that other controllers successfully deactivated
+            # TODO: Define a "safe" behavior for the aircraft to adopt
+            # while in-between controllers
             for c in self._controllers:
                 if self._controllers[c].status.is_active:
                     self._controllers[c].set_active(False)
     
             # Make sure the autopilot is using the infinite loiter waypoint
+            # TODO: Once "safe" behavior is defined above, make sure this step
+            # doesn't intefere with or negate that behavior
             if self._ap_status.mode != loiter_wp:
                 wpindex = std_msgs.UInt16()
                 wpindex.data = loiter_wp
                 self._pub_wpindex.Publish(wpindex)
                 # TODO: loop, sleeping and checking that index took,
-                # or timing out and recovering
+                # or timing out and recovering to a "safe" behavior
     
             # Activate controller
             self._controllers[mode].set_active(True)
             # TODO: loop, sleeping and checking that mode took,
-            # or timing out and recovering
+            # or timing out and recovering to a "safe" behavior
 
-            # Update state
+            # Update internal state
             self._current_mode = mode
 
         except Exception as ex:
             rospy.log_warn("Set Control Mode: " + ex.args[0])
             # TODO: Implement "safe" recovery into known state
 
+    # Handle controller status messages
     def _sub_ctlr_status(self, msg):
         if msg.controller_id not in self._controllers:
             raise Exception("Received status message from unknown controller type")
         self._controllers[msg.controller_id].update_status(msg)
 
+    # Handle autopilot status messages
     def _sub_ap_status(self, msg):
         self._ap_status = msg
         self._ap_status_last = rospy.Time.now()
 
+    # Loop!
     def loop(self, rate):
         r = rospy.Rate(rate)
         while not rospy.is_shutdown():
+            # TODO: Consider performing status checks even when a controller
+            # is active, and potentially deactivating it if the aircraft is
+            # not in good shape. Unclear what this would look like.
+
+            # TODO: Implement overall status message
             # Publish selector status message
 #            status = createmessagetype()
 #            status.a_field = None
@@ -187,5 +220,6 @@ if __name__ == '__main__':
     ctlrsel.add_controller(controller.FOLLOW_CTRLR, "follower")
 
     # Start loop
+    # TODO: Is this fast enough?
     ctlrsel.loop(1.0)
 
