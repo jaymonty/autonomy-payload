@@ -147,13 +147,11 @@ class FollowController(Controller):
         self.statusPublisher = rospy.Publisher("%s/status"%params[1], apmsg.ControllerState)
 
 
-    # Executes one iteration of the timed loop for the FollowController object
+    # Executes one iteration of the controller for the FollowController object
     # The loop computes a target waypoint and publishes it to the
     # /autopilot/payload_waypoint ROS topic.
-    def executeTimedLoop(self):
-        self.sendStatusMessage()
-
-        if not self.is_active or self.ownLat is None:
+    def runController(self):
+        if self.ownLat is None:
             return
 
         target_wp = self.compute_follow_wp()
@@ -180,23 +178,6 @@ class FollowController(Controller):
                 self.log_warn("Altitude control mode invalid")
 
 
-    # Activates or deactivates the controller.  Will not activate if leader ID
-    # is the same as the following aircraft (can't follow itself!)
-    # @param activate: Boolean value to activate or deactivate the controller
-    def set_active(self, activate):
-        if not self.is_ready:
-            self.is_active = False
-            self.log_warn("attempt to activate uninitialized follow node")
-        # This should never be true, but just in case
-        elif activate and self.followID == self.ownID:
-            self.is_ready = False
-            self.is_active = False
-            self.log_warn("attempt to activate follower node to follow self")
-        else:
-            self.is_active = activate
-            self.log_dbug("activation command: " + str(activate))
-
-
     #--------------------------
     # Object-specific functions
     #--------------------------
@@ -217,14 +198,12 @@ class FollowController(Controller):
         self.followVy = None
 
         if (altMode != BASE_ALT_MODE) and (altMode != ALT_SEP_MODE):
-            self.is_active = False
-            self.is_ready = False
+            self.set_ready_state(False)
             self.log_warn("Must specify base altitude or altitude separation mode")
             return
 
         if (followAC == self.ownID):
-            self.is_active = False
-            self.is_ready = False
+            self.set_ready_state(False)
             self.log_warn("attempt to order aircraft to follow itself")
             return
 
@@ -234,9 +213,9 @@ class FollowController(Controller):
         self.rOffset = offset
         self.altMode = altMode
         self.ctrlAlt = ctrlAlt
-        self.is_ready = True
         self.sequence += 1
-        self.log_dbug("formation command: ldr=%d, range=%f, offset=%f"%(followAC, followDist, offset))
+        self.set_ready_state(True)
+        self.log_dbug("formatio-n command: ldr=%d, range=%f, offset=%f"%(followAC, followDist, offset))
 
 
     # Compute a target waypoint to  with overshoot
@@ -270,7 +249,7 @@ class FollowController(Controller):
 
 
     #---------------------------------_--------
-    # ROS Subscriber callbacks for this object
+    # ROS Subscriber callbacks -for this object
     #-----------------------------------------
 
     # Handle incoming run message
@@ -312,7 +291,6 @@ class FollowController(Controller):
                 self.followVy = swarmAC.state.twist.twist.linear.y
                 leaderUpdated = True
         if self.is_active and not leaderUpdated:
-            self.is_ready = False
-            self.is_active = False
+            self.set_ready_state(False)
             self.log_warn("leader aircraft not present in swarm update")
 

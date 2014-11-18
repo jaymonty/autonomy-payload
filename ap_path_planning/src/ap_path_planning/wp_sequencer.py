@@ -124,21 +124,8 @@ class WaypointSequencer(Controller):
     # object. When "on", checks to see if the current waypoint has been
     # reached, and if so, issues the next one.
     def executeTimedLoop(self):
-        self.sendStatusMessage()
-        if (self.is_active and not self.listComplete):
-            self.checkReadyNextWP()
-            if self.readyNextWP:  self.incrementWP()
-
-
-    # Starts or stops the waypoint sequencer object.  At instantiation,
-    # the WaypointSequencer is_active variable is set to False (no waypoints
-    # issued).  It can be set to True or False using this method)
-    # @param newRunState:  True or False to start or stop object run state
-    def set_active(self, newRunState):
-        if self.is_ready:
-            self.is_active = newRunState
-        else:
-            self.log_warn("wp sequencer not initialized, cannot set active state")
+        self.checkReadyNextWP()
+        if self.readyNextWP: self.incrementWP()
 
 
     #--------------------------
@@ -156,22 +143,20 @@ class WaypointSequencer(Controller):
             self.wpList = deque(newWaypoints)
             if len(self.wpList) > 0:
                 self.sequence += 1
-                self.is_ready = True
                 self.readyNextWP = True
                 self.listComplete = False
+                self.set_ready_state(True)
             else:
-                self.is_ready = False
-                self.is_active = False
                 self.readyNextWP = False
                 self.listComplete = True
+                self.set_ready_state(False)
             self.log_dbug("set waypoint sequence: " + str(newWaypoints))
         except Exception as exc:
             self.log_warn("exception resetting waypoint sequence: " + \
                           str(newWaypoints))
             self.wpList = deque()
             self.listComplete = True  # If there's been an error--quit!
-            self.is_ready = False
-            self.is_active = False
+            self.set_ready_state(False)
 
 
     # Adds a single waypoint to the end of the current list
@@ -179,7 +164,7 @@ class WaypointSequencer(Controller):
     def addWaypoint(self, newWaypoint):
         self.wpList.append(newWaypoint)
         self.listComplete = False
-        self.is_ready = True
+        self.set_ready_state(True)
 
 
     # Pops the first sequence from the waypoint list and updates
@@ -196,8 +181,7 @@ class WaypointSequencer(Controller):
         else:
             self.log_dbug("reached last waypoint in sequence")
             self.listComplete = True
-            self.is_ready = False
-            self.is_active = False
+            self.set_ready_state(False)
 
 
     # Checks to see if it is time to issue the next waypoint
@@ -218,8 +202,7 @@ class WaypointSequencer(Controller):
             print exc
             self.readyNextWP = False
             self.listComplete = True
-            self.is_ready = False
-            self.is_active = False
+            self.set_ready_state(False)
             return False
 
 
@@ -248,8 +231,4 @@ class WaypointSequencer(Controller):
     # @param wptMsg: ROS message (WaypointListStamped) with the waypoint list
     def receiveWaypointList(self, wpMsg):
         self.setSequence(spMsg.waypoints)
-#        wpts = []
-#        for wpt in wptList.waypoints:
-#           wpts.append([ wpt.lat, wpt.lon, wpt.alt ])
-#        setSequence(wpts)
 

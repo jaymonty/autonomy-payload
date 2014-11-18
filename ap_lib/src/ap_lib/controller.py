@@ -55,20 +55,59 @@ class Controller(nodeable.Nodeable):
         self.statusInterval = None
 
 
-    #---------------------------------------------------------
-    # Parent class virtual functions implemented in subclasses
-    #---------------------------------------------------------
+    #-------------------------------------------------------------------
+    # Virtual methods of this class (must be implement in child classes)
+    #-------------------------------------------------------------------
 
-    # Virtual method used to activates or deactivates the controller.
-    # Implement at the subclass level to ensure class-specific requirements
-    # @param activate: Boolean value to activate or deactivate the controller
-    def set_active(self, activate):
+    # Runs one iteration of the controller, to include processing
+    # object-specific data and publishing required control messages
+    def runController(self):
         pass
+
+
+    #-------------------------------------------------
+    # Implementation of parent class virtual functions
+    #-------------------------------------------------
+
+    # Runs a timed single loop of the controller.  If (and only if) the
+    # controller is ready and active, the object-specific control
+    # method will be called.  Status messages will be published regardless
+    def executeTimedLoop(self):
+        self.sendStatusMessage()
+        if self.is_ready and self.is_active:
+            self.runController()
 
 
     #---------------------------------------------------------
     # Class-specific methods implementing class functionality
     #---------------------------------------------------------
+
+    # Activates or deactivates the controller
+    # Will not activate a controller that is not "ready"
+    # @param activate: Boolean value to activate or deactivate the controller
+    def set_active(self, activate):
+        if not self.is_ready:
+            self.is_active = False
+            self.log_warn("attempt to activate uninitialized controller")
+        else:
+            self.is_active = activate
+            self.log_dbug("activation command: " + str(activate))
+        return self.is_active
+
+
+    # Sets the controller's ready state when new control inputs are received
+    # Will also ensure that the controller is deactivated if the ready state
+    # is set to false
+    # @param ready: Boolean value to set the controller's ready state
+    def set_ready_state(self, ready):
+        if ready:
+            self.is_ready = True
+            self.log_dbug("ready state set to 'True'")
+        else:
+            self.is_ready = False
+            self.is_active = False
+            self.log_dbug("ready state and active state set to 'False'")
+
 
     # Publishes a ControllerState message to the 
     def sendStatusMessage(self):
