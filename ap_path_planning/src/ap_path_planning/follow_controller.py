@@ -53,6 +53,9 @@ FOLLOW_DISTANCE = 50.0 # default distance behind the lead to place the follow po
 #   ctrlAlt: control altitude (base altitude or separation in meters)
 #   rFollow: target following distance from the leader aircraft (meters)
 #   rOffset: clockwise angle (radians) from direct astern for the follow point
+#   tgtLat: computed target latitude for the follow position
+#   tgtLon: computed target longitude for the follow position
+#   tgtCrs: computed vehicle course at the follow position (matches leader course)
 #   rOvershoot: overshoot distance for avoiding loiter behavior (meters)
 #   wpPublisher: publisher object for computed waypoints to be sent to the autopilot
 #
@@ -109,6 +112,9 @@ class FollowController(Controller):
         self.rFollow = None
         self.rOvershoot = None
         self.rOffset = None
+        self.tgtLat = None
+        self.tgtLon = None
+        self.tgtCrs = None
         self.altMode = None
         self.ctrlAlt = None
         self.statusStamp = None
@@ -164,7 +170,6 @@ class FollowController(Controller):
             #        Don't use absolute (MSL) altitude in the LLA message!!!
             if self.altMode == BASE_ALT_MODE:
                 lla.alt = self.ctrlAlt - self.baseAlt
-#                lla.alt = self.ctrlAlt
             elif self.altMode == ALT_SEP_MODE:
                 lla.alt = self.followAlt + self.ctrlAlt - self.baseAlt
             if lla.alt is not None: #verify valid altitude data
@@ -245,19 +250,26 @@ class FollowController(Controller):
             self.log_dbug("cannot compute target waypoint without leader data")
             return None
 
-        # Project line back from leader as the follow target
-        leader_course = math.atan2(self.followVy, self.followVx);
-        trail_lat, trail_lon = \
+        # Project line back from leader as the follow point
+        self.tgtCrs = math.atan2(self.followVy, self.followVx);
+        self.tgtLat, self.tgtLon = \
             gps_utils.gps_newpos(self.followLat, self.followLon, \
-                                 (leader_course + self.rOffset), self.rFollow)
+                                 (self.tgtCrs + self.rOffset), self.rFollow)
 
-        # Project line forward from the follow point to avoid waypoint capture
-        follow_course = gps_utils.gps_bearing(self.ownLat, self.ownLon, trail_lat, trail_lon)
-        tgt_dist = gps_utils.gps_distance(self.ownLat, self.ownLon, trail_lat, trail_lon)
-        return gps_utils.gps_newpos(self.ownLat, self.ownLon, follow_course, (tgt_dist + self.rOvershoot))
+        # Project line towards the follow point then project fwd in vehicle direction
+        if gps_utils.gps_distance(self.ownLat, self.ownLon, \
+                                  self.tgtLat, self.tgtLon) > self.rOvershoot:
+            to_follow_pt = \
+                gps_utils.gps_bearing(self.ownLat, self.ownLon, self.tgtLat, self.tgtLon)
+            self.tgtLat, self.tgtLon = \
+                gps_utils.gps_newpos(self.ownLat, self.ownLon, to_follow_pt, self.rOvershoot)
+        self.tgtLat, self.tgtLon = \
+            gps_utils.gps_newpos(self.tgtLat, self.tgtLon, self.tgtCrs, self.rOvershoot)
+
+        return (self.tgtLat, self.tgtLon)
 
 
-    #-----------------------------------------
+    #---------------------------------_--------
     # ROS Subscriber callbacks for this object
     #-----------------------------------------
 
