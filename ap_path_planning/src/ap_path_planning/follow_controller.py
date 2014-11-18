@@ -79,10 +79,10 @@ FOLLOW_DISTANCE = 50.0 # default distance behind the lead to place the follow po
 #   executeTimedLoop: implementation of the Nodeable virtual function
 #   set_active: implementation of the Controller virtual function
 #   reset: used to set follow control parameters
-#   compute_follow_wp: computes a target waypoint to achieve follow behavior
-#   process_run_message: callback for messages to the run topic
-#   process_formation_order: callback for messages to the formation order topic
-#   swarm_callback: callback for swarm state messages
+#   _compute_follow_wp: computes a target waypoint to achieve follow behavior
+#   _process_run_message: callback for messages to the run topic
+#   _process_formation_order: callback for messages to the formation order topic
+#   _swarm_callback: callback for swarm state messages
 class FollowController(Controller):
 
     # Class initializer initializes class variables.
@@ -132,11 +132,11 @@ class FollowController(Controller):
     # @param params: list as follows: [ swarm_tracker_base_name, controller_base_name ]
     def callbackSetup(self, params=[ TRKR_BASENAME, CTRLR_BASENAME ]):
         rospy.Subscriber("%s/swarm_state"%params[0], \
-                         apmsg.SwarmStateStamped, self.swarm_callback)
+                         apmsg.SwarmStateStamped, self._swarm_callback)
         rospy.Subscriber("%s/follower_run"%params[1], 
-                         stdmsg.Bool, self.process_run_message)
+                         stdmsg.Bool, self._process_run_message)
         rospy.Subscriber("%s/set_form_params"%params[1],
-                         apmsg.FormationOrderStamped, self.process_formation_order)
+                         apmsg.FormationOrderStamped, self._process_formation_order)
 
 
     # Sets up publishers for the FollowController object.  The object publishes
@@ -154,7 +154,7 @@ class FollowController(Controller):
         if self.ownLat is None:
             return
 
-        target_wp = self.compute_follow_wp()
+        target_wp = self._compute_follow_wp()
         # Only send if there is valid data to use
         if target_wp:
 
@@ -219,7 +219,7 @@ class FollowController(Controller):
 
 
     # Compute a target waypoint to  with overshoot
-    def compute_follow_wp(self):
+    def _compute_follow_wp(self):
         # Need data for both own aircraft and leader aircraft
         if (self.ownLat is None) or (self.ownLon is None):
             self.log_dbug("cannot compute target waypoint without self data")
@@ -254,20 +254,20 @@ class FollowController(Controller):
 
     # Handle incoming run message
     # @param startMsg: message activating or de-activating the controller (Boolean)
-    def process_run_message(self, startMsg):
+    def _process_run_message(self, startMsg):
         self.set_active(startMsg.data)
 
 
     # Process incoming formation order message
     # @param formMsg: message containing formation requirements (FormationOrderStamped)
-    def process_formation_order(self, formMsg):
+    def _process_formation_order(self, formMsg):
         self.reset(formMsg.order.leader_id, formMsg.order.range, formMsg.order.angle, \
                    formMsg.order.alt_mode, formMsg.order.control_alt)
 
 
     # Handle incoming swarm_state messages
     # @param swarmMsg: message containing swarm data (SwarmStateStamped)
-    def swarm_callback(self, swarmMsg):
+    def _swarm_callback(self, swarmMsg):
         selfUpdated = False
         leaderUpdated = False
         for swarmAC in swarmMsg.swarm:

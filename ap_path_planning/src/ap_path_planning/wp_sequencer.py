@@ -105,11 +105,11 @@ class WaypointSequencer(Controller):
     # @param params: list as follows: [ odometry_base_name, controller_base_name ]
     def callbackSetup(self, params=[ AP_BASENAME, CTRLR_BASENAME ]):
         rospy.Subscriber("%s/acs_pose"%params[0], apbrg.Geodometry, \
-                         self.updatePose)
+                         self._updatePose)
         rospy.Subscriber("%s/wp_sequencer_run"%params[1], stdmsg.Bool, \
-                         self.processRunMsg)
+                         self._processRunMsg)
         rospy.Subscriber("%s/wp_list"%params[1], apmsg.WaypointListStamped, \
-                         self.receiveWaypointList)
+                         self._receiveWaypointList)
 
 
     # Establishes the publishers for the WaypointSequencer object.  The object
@@ -124,8 +124,8 @@ class WaypointSequencer(Controller):
     # object. When "on", checks to see if the current waypoint has been
     # reached, and if so, issues the next one.
     def executeTimedLoop(self):
-        self.checkReadyNextWP()
-        if self.readyNextWP: self.incrementWP()
+        self._checkReadyNextWP()
+        if self.readyNextWP: self._incrementWP()
 
 
     #--------------------------
@@ -169,7 +169,7 @@ class WaypointSequencer(Controller):
 
     # Pops the first sequence from the waypoint list and updates
     # the currently commanded waypoint with the new value
-    def incrementWP(self):
+    def _incrementWP(self):
         self.readyNextWP = False
         if (len(self.wpList) > 0):
             self.currentWP = self.wpList.popleft()
@@ -185,7 +185,7 @@ class WaypointSequencer(Controller):
 
 
     # Checks to see if it is time to issue the next waypoint
-    def checkReadyNextWP(self):
+    def _checkReadyNextWP(self):
         try:
             if self.listComplete:  return False
             if self.readyNextWP:  return True
@@ -213,7 +213,7 @@ class WaypointSequencer(Controller):
     # Handles new pose information for this aircraft so that the vehicle
     # can determine where it is relative to the current waypoint
     # @param poseMsg: Geodometry object with the new pose
-    def updatePose(self, poseMsg):
+    def _updatePose(self, poseMsg):
         self.pose = [ poseMsg.pose.pose.position.lat, \
                       poseMsg.pose.pose.position.lon ]
         self.baseAlt = poseMsg.pose.pose.position.alt - \
@@ -222,13 +222,13 @@ class WaypointSequencer(Controller):
 
     # Handles start and stop commands written to the ROS topic
     # @param runMsg: ROS message (std_msgs/Bool) with the start/stop command
-    def processRunMsg(self, runMsg):
+    def _processRunMsg(self, runMsg):
         self.set_active(runMsg.data)
         self.log_dbug("received start/stop message=" + str(runMsg.data))
 
 
     # Handles waypoint lists written to the ROS topic
     # @param wptMsg: ROS message (WaypointListStamped) with the waypoint list
-    def receiveWaypointList(self, wpMsg):
+    def _receiveWaypointList(self, wpMsg):
         self.setSequence(spMsg.waypoints)
 
