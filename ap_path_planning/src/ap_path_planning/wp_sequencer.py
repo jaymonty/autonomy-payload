@@ -123,7 +123,7 @@ class WaypointSequencer(Controller):
     # Executes one iteration of the timed loop for the WaypointSequencer
     # object. When "on", checks to see if the current waypoint has been
     # reached, and if so, issues the next one.
-    def executeTimedLoop(self):
+    def runController(self):
         self._checkReadyNextWP()
         if self.readyNextWP: self._incrementWP()
 
