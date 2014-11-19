@@ -138,6 +138,10 @@ class UAVListWidget(QListWidget):
         self.itemSelectionChanged.emit()
 
 def preflight_aircraft(sock, uavid, localip, uavip):
+    # Some parameters
+    slave_port = 15554 + uavid  # Pick an aircraft-unique port
+    send_retry = 3              # Number of times to send enable/disable
+
     # Open a slave mavlink channel to the aircraft
     # NOTE: This is done unreliably, so it might fail and we won't know :(
     ss = messages.SlaveSetup()
@@ -145,9 +149,13 @@ def preflight_aircraft(sock, uavid, localip, uavip):
     ss.msg_secs = 0
     ss.msg_nsecs = 0
     ss.enable = True
-    ss.channel = "udp:%s:15554" % localip
-    sock.send(ss)
+    ss.channel = "udp:%s:%u" % (localip, slave_port)
 
+    # Send the message a few times, so even in bad network conditions one might get through
+    for i in range(send_retry):
+        sock.send(ss)
+
+    # Wait a moment so the aircraft can (hopefully) set up the channel
     time.sleep(1)
 
     # Start up a MAVProxy instance and connect to slave channel
@@ -155,7 +163,10 @@ def preflight_aircraft(sock, uavid, localip, uavip):
 
     # Shut down slave channel
     ss.enable = False
-    sock.send(ss)
+
+    # Send the message a few times, so even in bad network conditions one might get through
+    for i in range(send_retry):
+        sock.send(ss)
 
 def set_aircraft_ready(sock, uavid, localip, uavip, ready):
     # Toggle the aircraft to be flight-ready, or not, based on 'uavstat'
