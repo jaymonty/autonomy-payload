@@ -61,7 +61,7 @@ class UAVListWidget(QListWidget):
     STATE_OFFLINE = UAVState('OFFLINE', QBrush(QColor('red')))
     STATE_NOT_READY = UAVState('NOT READY', QBrush(QColor('yellow')))
     STATE_READY= UAVState('READY', QBrush(QColor.fromRgb(0,200,0)))
-    STATE_ACTIVE = UAVState('ACTIVE', QBrush(QColor.fromRgb(160,160,160)))
+    STATE_FLYING = UAVState('FLYING', QBrush(QColor.fromRgb(160,160,160)))
 
     # Time (in seconds) until UAVs go to "offline" status
     OFFLINE_TIME = 5.0
@@ -110,7 +110,7 @@ class UAVListWidget(QListWidget):
             # Color code based on status
             if msg.armed and msg.alt_rel > 20000:
                 # Armed ^ (Alt > 20m AGL) -> Active/Flying
-                state = UAVListWidget.STATE_ACTIVE
+                state = UAVListWidget.STATE_FLYING
             elif msg.ready:
                 state = UAVListWidget.STATE_READY
             else:
@@ -228,6 +228,18 @@ if __name__ == '__main__':
     lst = UAVListWidget(sock, win)
     layout.addWidget(lst)
 
+    # Provide color-key for states
+    hlayout = QHBoxLayout()
+    for st in [ UAVListWidget.STATE_OFFLINE, UAVListWidget.STATE_NOT_READY,
+                UAVListWidget.STATE_READY, UAVListWidget.STATE_FLYING ]:
+        lbl = QLabel(st.text)
+        plt = lbl.palette()
+        plt.setBrush(QPalette.Background, st.color)
+        lbl.setPalette(plt)
+        lbl.setAutoFillBackground(True)
+        hlayout.addWidget(lbl)
+    layout.addLayout(hlayout)
+
     # Status of currently-selected UAV
     # NOTE: The way updates are done is a bit hackish,
     #  relies on a signal being emitted by the UAVListWidget
@@ -271,7 +283,7 @@ if __name__ == '__main__':
     btShutdown = QPushButton("Shut Down Payload")
     def do_shutdown():
         item = lst.currentItem()
-        if item.ident <= 0 or item.state == UAVListWidget.STATE_ACTIVE:
+        if item.ident <= 0 or item.state == UAVListWidget.STATE_FLYING:
             return
         mbx = QMessageBox()
         mbx.setText("Shut down aircraft %d?" % item.ident)
