@@ -28,8 +28,6 @@ if __name__ == '__main__':
 
     # Initialize ROS node
     rospy.init_node(fctrl.NODE_BASENAME)
-    print "Follower node starting"
-
     follower = fctrl.FollowController(fctrl.NODE_BASENAME, ownAC)
     follower.runAsNode(2.0, [], [ fctrl.TRKR_BASENAME, fctrl.CTRLR_BASENAME ], \
                                 [ fctrl.AP_BASENAME, fctrl.CTRLR_BASENAME ])

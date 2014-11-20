@@ -52,8 +52,9 @@ class Nodeable(object):
         self.publisherSetup(publisherParams)
 
         # Set up the timing object and start the timing loop
-        self.log_dbug("starting " + self.nodeName)
         self.timer = rospy.Rate(rate)
+        self.log_dbug("starting " + self.nodeName)
+        print "Starting " + self.nodeName + " node"
         while not rospy.is_shutdown():
             self.timer.sleep()
             self.executeTimedLoop()
