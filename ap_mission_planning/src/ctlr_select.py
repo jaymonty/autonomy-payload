@@ -58,11 +58,20 @@ class ControllerType(object):
 # which means creating objects that encapsulate the interface to controllers,
 # and handling incoming messages. It also (should) implement all the state
 # checks necessary to ensuring a safe transition into or between controllers.
+#
+# Class member variables:
+#   _basename: ROS basename for topics associated with this node
+#   _controllers: dictionary object (int key) with controller objects
+#   _loiter_wp_param: ROS parameter containing the the loiter waypoint number
+#   _current_mode: currently active controller (int ID)
+#   _ap_status: status object for autopilot data (autopilot_bridge/Status)
+#   _ap_status_last: timestamp of the last ap_status update
+#   _pub_wpindex: publisher to send vehicle back to the "safe" loiter point
 class ControllerSelector(object):
-    ros_basename = 'ctlr_select'
+    ros_basename = 'controllers'
 
     def __init__(self,
-                 basename='ctlr_select',  # TODO: sync w class variable
+                 basename='controllers',  # TODO: sync w class variable
                  loiter_wp='payload_loiter_wp'):
         self._basename = basename
         self._loiter_wp_param = loiter_wp
@@ -78,16 +87,17 @@ class ControllerSelector(object):
        # TODO: define an overall status message
 #        self._pub_status = rospy.Publisher("%s/selector_status" % basename,
 #                                           createmessagetype)
-        self._pub_wpindex = rospy.Publisher("%s/autopilot_wpindex" % basename,
+        self._pub_wpindex = rospy.Publisher("autopilot/waypoint_goto",
                                             std_msgs.UInt16)
 
-        rospy.Subscriber("%s/controller_status" % basename,
+        rospy.Subscriber("%s/status" % basename,
                          payload_msgs.ControllerState,
                          self._sub_ctlr_status)
         rospy.Subscriber("%s/selector_mode" % basename,
                          std_msgs.UInt8,
                          self._sub_ctlr_mode)
-        rospy.Subscriber("%s/autopilot_status" % basename,
+#        rospy.Subscriber("%s/autopilot_status" % basename,
+        rospy.Subscriber("autopilot/status",
                          mavbridge_msgs.Status,
                          self._sub_ap_status)
 
@@ -176,7 +186,7 @@ class ControllerSelector(object):
             self._current_mode = mode
 
         except Exception as ex:
-            rospy.log_warn("Set Control Mode: " + ex.args[0])
+            rospy.logwarn("Set Control Mode: " + ex.args[0])
             # TODO: Implement "safe" recovery into known state
 
     # Handle controller status messages
@@ -189,6 +199,7 @@ class ControllerSelector(object):
     def _sub_ap_status(self, msg):
         self._ap_status = msg
         self._ap_status_last = rospy.Time.now()
+#        print "****Mark**** STATUS = " + str(self._ap_status.mode)
 
     # Loop!
     def loop(self, rate):
@@ -216,7 +227,7 @@ if __name__ == '__main__':
 
     # Initialize state machine
     ctlrsel = ControllerSelector()
-    ctlrsel.add_controller(controller.WP_SEQUENCE_CTRLR, "wpsequencer")
+    ctlrsel.add_controller(controller.WP_SEQUENCE_CTRLR, "wp_sequencer")
     ctlrsel.add_controller(controller.FOLLOW_CTRLR, "follower")
 
     # Start loop
