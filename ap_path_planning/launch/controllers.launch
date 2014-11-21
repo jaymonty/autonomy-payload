@@ -1,6 +1,8 @@
 <launch>
   <param name="aircraft_id" type="int" value="$(arg id)" />
+  <param name="payload_loiter_wp" type="int" value="$(arg loiter)" />
 
   <node name="follower_controller" pkg="ap_path_planning" type="follower_node.py" output="screen" args="" />
   <node name="wp_sequencer" pkg="ap_path_planning" type="wp_sequencer_node.py" output="screen" args="" />
+  <node name="ctlr_selector" pkg="ap_mission_planning" type="ctlr_select.py" output="screen" args="" />
 </launch>
