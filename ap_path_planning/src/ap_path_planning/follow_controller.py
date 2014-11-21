@@ -229,21 +229,27 @@ class FollowController(Controller):
             self.log_dbug("cannot compute target waypoint without leader data")
             return None
 
-        # Project line back from leader as the follow point
+        # Project back from leader to the follow point
         self.tgtCrs = math.atan2(self.followVy, self.followVx);
         self.tgtLat, self.tgtLon = \
             gps_utils.gps_newpos(self.followLat, self.followLon, \
                                  (self.tgtCrs + self.rOffset), self.rFollow)
 
-        # Project line towards the follow point then project fwd in vehicle direction
-        if gps_utils.gps_distance(self.ownLat, self.ownLon, \
-                                  self.tgtLat, self.tgtLon) > self.rOvershoot:
-            to_follow_pt = \
-                gps_utils.gps_bearing(self.ownLat, self.ownLon, self.tgtLat, self.tgtLon)
+        # If we're behind the lead acfg, shift forward from the follow point
+        # Don't do this if we're in front of the lead acft to avoid some weirdness
+        rel_fm_lead = gps_utils.normalize_angle( \
+                          gps_utils.gps_bearing(self.followLat, self.followLon, \
+                                                self.ownLat, self.ownLon) - \
+                          self.tgtCrs)
+        if abs(rel_fm_lead) > math.pi / 2.0:
+            if gps_utils.gps_distance(self.ownLat, self.ownLon, \
+                                      self.tgtLat, self.tgtLon) > self.rOvershoot:
+                to_follow_pt = \
+                    gps_utils.gps_bearing(self.ownLat, self.ownLon, self.tgtLat, self.tgtLon)
+                self.tgtLat, self.tgtLon = \
+                    gps_utils.gps_newpos(self.ownLat, self.ownLon, to_follow_pt, self.rOvershoot)
             self.tgtLat, self.tgtLon = \
-                gps_utils.gps_newpos(self.ownLat, self.ownLon, to_follow_pt, self.rOvershoot)
-        self.tgtLat, self.tgtLon = \
-            gps_utils.gps_newpos(self.tgtLat, self.tgtLon, self.tgtCrs, self.rOvershoot)
+                gps_utils.gps_newpos(self.tgtLat, self.tgtLon, self.tgtCrs, 2.0 * self.rOvershoot)
 
         return (self.tgtLat, self.tgtLon)
 

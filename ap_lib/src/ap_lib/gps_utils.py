@@ -79,3 +79,13 @@ def radius_at_latitude(lat):
     return EARTH_RADIUS * math.cos(math.radians(lat))
 
 
+def normalize_angle(angle, radians = True):
+    """normalizes an angle to the range ( -180, 180 ] """
+    if not radians:
+        angle = math.radians(angle)
+
+    while angle > math.pi: angle -= (2.0 * math.pi)
+    while angle <= -math.pi: angle += (2.0 * math.pi)
+
+    if radians: return angle
+    return math.degrees(angle)
