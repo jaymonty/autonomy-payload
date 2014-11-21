@@ -16,7 +16,10 @@ import rospy
 import std_msgs.msg as std_msgs
 import ap_msgs.msg as payload_msgs
 import autopilot_bridge.msg as mavbridge_msgs
+import autopilot_bridge.srv as mavbridge_srv 
 from ap_lib import controller
+
+INFINITE_LOITER_CMD = 17  # Autopilot command ID for infinite loiter waypoints
 
 #-----------------------------------------------------------------------
 # Class definitions
@@ -82,6 +85,8 @@ class ControllerType(object):
 #   _controllers: dictionary object (int key) with controller objects
 #   _loiter_wp_param: ROS parameter containing the the loiter waypoint number
 #   _loiter_wp_id: ID of loiter waypoint (issue to autopilot before starting a controller)
+#   _wp_list: list of waypoints from the autopilot
+#   _loiter_wps: list of loiter waypoint indices from the autopilot
 #   _current_mode: currently active controller (int ID)
 #   _ap_status: status object for autopilot data (autopilot_bridge/Status)
 #   _ap_status_last: timestamp of the last ap_status update
@@ -135,6 +140,7 @@ class ControllerSelector(object):
 #                                           createmessagetype)
         self._pub_wpindex = rospy.Publisher("autopilot/waypoint_goto",
                                             std_msgs.UInt16)
+        self._retrieve_ap_waypoints()
 
         rospy.Subscriber("%s/status" % basename,
                          payload_msgs.ControllerState,
@@ -174,29 +180,29 @@ class ControllerSelector(object):
     def _sub_ctlr_mode(self, msg):
         mode = msg.data
         stale_time = rospy.Time.now() - rospy.Duration(3)
-        
+
         try:
             # Is requested mode known to us?
             if mode not in self._controllers:
                 raise Exception("Unknown controller type")
-    
+
             # Have we heard from the autopilot recently?
             if self._ap_status is None or \
                self._ap_status_last < stale_time:
                 raise Exception("Unknown or stale autopilot status")
-    
+
             # Is the autopilot in AUTO?
             if self._ap_status.mode != mavbridge_msgs.Status.MODE_AUTO:
                 raise Exception("Autopilot not in AUTO")
-    
+
             # Have we heard from the requested controller recently?
             if self._controllers[mode].status_last < stale_time:
                 raise Exception("Unknown or stale controller status")
-    
+
             # Is the controller ready?
             if not self._controllers[mode].status.is_ready:
                 raise Exception("Requested controller is not ready")
-    
+
             # Is the controller not yet active?
             if self._controllers[mode].status.is_active:
                 # NOTE: Not really an error--it's idempotent!
@@ -215,11 +221,16 @@ class ControllerSelector(object):
                     raise Exception("Error getting infinite waypoint index: %s" % ex.args[0])
             elif self._loiter_wp_id == None:
                 raise Exception("Infinite loiter waypoint parameter not defined")
-    
+
             # Shut down any other active controllers
             # TODO: See item 4 in class header about "safe" waiting behavior
             self._deactivate_all_controllers()
     
+            # If we're not already in payload control, make sure we've got an
+            # up-to-date list of infinite loiter waypoints fromn the autopilot
+            if self._current_mode == controller.NO_PAYLOAD_CTRL:
+                self._retrieve_ap_waypoints()
+
             # Make sure the autopilot is using the infinite loiter waypoint
             # TODO: See item 5 in class header (infinite loiter/safe behavior conflict)
             if self._ap_status.mode != self._loiter_wp_id:
@@ -280,6 +291,24 @@ class ControllerSelector(object):
         for c in self._controllers:
             self._controllers[c].set_active(False)
         self._current_mode = controller.NO_PAYLOAD_CTRL
+
+
+    # Retrieves and processes all waypoints from the autopilot
+    # TODO:  make the service name more configurable
+    def _retrieve_ap_waypoints(self):
+        try:
+            wp_getall = rospy.ServiceProxy('autopilot/wp_getall', mavbridge_srv.WPGetAll)
+            self._wp_list = wp_getall().wp
+
+            # Identify all of the available infinite loiter waypoints
+            self._loiter_wps = []
+            for wp in self._wp_list:
+                if wp.command == INFINITE_LOITER_CMD:
+                    self._loiter_wps.append(wp.seq)
+
+        except Exception as ex:
+            self._loiter_wps = []
+            rospy.logwarn("Unable to load waypoints: " + ex.args[0])
 
 
     # Loop!

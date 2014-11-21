@@ -16,7 +16,7 @@
       <param name="rosbag_enable" type="bool" value="true" />
     </group>
 
-    <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--device $(arg sitl) --module acs --module param --module slave" />
+    <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--device $(arg sitl) --module acs --module param --module slave --module wp" />
     <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" >
       <remap from="safety/heartbeat" to="autopilot/heartbeat_onboard" />
     </node>
