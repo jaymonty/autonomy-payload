@@ -17,6 +17,7 @@ import ap_msgs.msg as apmsg
 
 # Global variables (constants)
 CTRLR_BASENAME = 'controllers' # Default base name for controller topics
+MIN_REL_ALT = 50.0 # Minimum relative altitude that a controller can order
 
 # Global constants for "known" controller types (essentially an enumeration)
 NO_PAYLOAD_CTRL = 0

@@ -174,10 +174,16 @@ class WaypointSequencer(Controller):
         if (len(self.wpList) > 0):
             self.currentWP = self.wpList.popleft()
             self.currentWP.alt = self.currentWP.alt - self.baseAlt # convert to rel_alt
-            self.wpPublisher.publish(self.currentWP)
-            self.log_dbug("issuing new wpt: lat=" + str(self.currentWP.lat) +\
-                                         ", lon=" + str(self.currentWP.lon) +\
-                                         ", alt=" + str(self.currentWP.alt))
+
+            # Make sure the wp is OK, and if so issue--if not kill everything!
+            if self.currentWP.alt >= MIN_REL_ALT:
+                self.wpPublisher.publish(self.currentWP)
+                self.log_dbug("issuing new wpt: lat=" + str(self.currentWP.lat) +\
+                                             ", lon=" + str(self.currentWP.lon) +\
+                                             ", alt=" + str(self.currentWP.alt))
+            else:
+                self.set_ready_state(False)
+                self.log_warn("ordered waypoint with negative altitude")
         else:
             self.log_dbug("reached last waypoint in sequence")
             self.listComplete = True

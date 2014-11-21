@@ -170,12 +170,14 @@ class FollowController(Controller):
                 lla.alt = self.ctrlAlt - self.baseAlt
             elif self.altMode == ALT_SEP_MODE:
                 lla.alt = self.followAlt + self.ctrlAlt - self.baseAlt
-            if lla.alt is not None: #verify valid altitude data
+
+            if lla.alt >= MIN_REL_ALT: #verify valid altitude order
                 self.wpPublisher.publish(lla)
                 self.log_dbug("Sent to (%0.06f, %0.06f, %0.03f (leader alt: %0.03f))" \
                               %(lla.lat, lla.lon, lla.alt, self.followAlt))
             else:
-                self.log_warn("Altitude control mode invalid")
+                self.set_active(False)
+                self.log_warn("Altitude control mode invalid or invalid altitude order")
 
 
     #--------------------------
