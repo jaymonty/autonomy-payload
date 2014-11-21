@@ -86,7 +86,7 @@ class Controller(nodeable.Nodeable):
     # Will not activate a controller that is not "ready"
     # @param activate: Boolean value to activate or deactivate the controller
     def set_active(self, activate):
-        if not self.is_ready:
+        if activate and not self.is_ready:
             self.is_active = False
             self.log_warn("attempt to activate uninitialized controller")
         else:
