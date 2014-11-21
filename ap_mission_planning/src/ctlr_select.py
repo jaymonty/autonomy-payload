@@ -231,6 +231,10 @@ class ControllerSelector(object):
             if self._current_mode == controller.NO_PAYLOAD_CTRL:
                 self._retrieve_ap_waypoints()
 
+            # Make sure the specified infinite loiter waypoint actually IS one
+            if not self._loiter_wp_id in self._loiter_wps:
+                raise Exception("Invalid infinite loiter WP specified for controller switch")
+
             # Make sure the autopilot is using the infinite loiter waypoint
             # TODO: See item 5 in class header (infinite loiter/safe behavior conflict)
             if self._ap_status.mode != self._loiter_wp_id:
