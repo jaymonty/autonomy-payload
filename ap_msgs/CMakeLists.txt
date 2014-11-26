@@ -24,6 +24,8 @@ add_message_files(
   FormationOrder.msg
   FormationOrderStamped.msg
   ControllerState.msg
+  ControllerGroupState.msg
+  ControllerGroupStateStamped.msg
 )
 
 ## Generate added messages and services with any dependencies listed here
