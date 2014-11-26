@@ -91,6 +91,7 @@ class ControllerType(object):
 #   _ap_status: status object for autopilot data (autopilot_bridge/Status)
 #   _ap_status_last: timestamp of the last ap_status update
 #   _pub_wpindex: publisher to send vehicle back to the "safe" loiter point
+#   _pub_status: publisher to send a status message for the selector
 #
 # TODO list:
 #  1 Improve basename implementation (too hard coded now)
@@ -135,9 +136,8 @@ class ControllerSelector(object):
         self._ap_status = None
         self._ap_status_last = rospy.Time()
 
-       # TODO: define an overall status message (item 2 in class header)
-#        self._pub_status = rospy.Publisher("%s/selector_status" % basename,
-#                                           createmessagetype)
+        self._pub_status = rospy.Publisher("%s/selector_status" % basename,
+                                           payload_msgs.ControllerGroupStateStamped)
         self._pub_wpindex = rospy.Publisher("autopilot/waypoint_goto",
                                             std_msgs.UInt16)
         self._retrieve_ap_waypoints()
@@ -315,17 +315,24 @@ class ControllerSelector(object):
             rospy.logwarn("Unable to load waypoints: " + ex.args[0])
 
 
+    # Publishes a controller selector status message
+    def _send_status_message(self):
+        status = payload_msgs.ControllerGroupStateStamped()
+        status.header.stamp = rospy.Time.now()
+        status.state.active_controller = self._current_mode
+        for controller in self._controllers:
+            status.state.controllers.append(self._controllers[controller].status)
+
+        self._pub_status.publish(status)
+
+
     # Loop!
     def loop(self, rate):
         r = rospy.Rate(rate)
         while not rospy.is_shutdown():
             # TODO: See item 7 in class header about safety monitoring
 
-            # TODO: See item 2 in class header about status message development
-            # Publish selector status message
-#            status = createmessagetype()
-#            status.a_field = None
-#            self._pub_status.publish(status)
+            self._send_status_message()
 
             r.sleep()
 
