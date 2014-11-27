@@ -136,8 +136,8 @@ class Socket():
             # Is it meant for us?
             if not (msg.msg_dst == self._id or \
                     msg.msg_dst == Socket.ID_BCAST_ALL or \
-                    (msg.msg_dst & messages.SUBSWARM_MASK == messages.SUBSWARM_MASK and \
-                     msg.msg_dst & messages.SUBSWARM_BITS == self.subswarm)):
+                    (msg.msg_dst & ~messages.SUBSWARM_MASK == ~messages.SUBSWARM_MASK and \
+                     msg.msg_dst & messages.SUBSWARM_MASK == self.subswarm)):
                 return False
             
             # Add source IP and port, just in case someone wants them

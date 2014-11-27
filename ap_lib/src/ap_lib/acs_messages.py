@@ -21,9 +21,9 @@ def _bool16(val):
         return 0xffff
     return 0x0000
 
-# Specify bitmask for subswarm IDs
-SUBSWARM_MASK = 0xE0  # 224-254 for subswarms
-SUBSWARM_BITS = 0xFF - SUBSWARM_MASK
+# Bitmasks
+SUBSWARM_MASK = 0x1F    # low 5 bits (of 8)
+RELIABLE_MASK = 0x8000  # high bit (of 16)
 
 #-----------------------------------------------------------------------
 # Base Message class
@@ -36,12 +36,12 @@ Packet header format (all fields in network byte order):
  - (8b)  Destination ID
  - (32b) Seconds since Unix epoch
  - (16b) Milliseconds since last second
- - (16b) UNUSED
+ - (16b) Reliable flag (high bit) and 15-bit reliable seqnum
 '''
 
 class Message(object):
     # Define header parameters
-    hdr_fmt = '>BBBBLHxx'
+    hdr_fmt = '>BBBBLHH'
     hdr_size = struct.calcsize(hdr_fmt)
 
     def __init__(self):
@@ -55,6 +55,8 @@ class Message(object):
         self.msg_dst = None	# Destination ID (1-255 currently)
         self.msg_secs = None	# Epoch seconds
         self.msg_nsecs = None	# Epoch nanoseconds (truncated to ms)
+        self.msg_rel = False    # Reliable flag
+        self.msg_seq = 0        # Reliable sequence number
 
         # Add source IP and port, just for received messages (not serialized)
         self.msg_src_ip = None
@@ -65,13 +67,18 @@ class Message(object):
 
     # Serialize a Message subtype
     def serialize(self):
+        # Pack reliable flag and sequence number into short
+        rel = RELIABLE_MASK if self.msg_rel else 0
+        rel |= self.msg_seq & ~RELIABLE_MASK
+
         # Pack header
         hdr_tupl = (type(self).msg_type,
-                    self.msg_sub & SUBSWARM_BITS,
+                    self.msg_sub & SUBSWARM_MASK,
                     self.msg_src,
                     self.msg_dst,
                     self.msg_secs,
-                    int(self.msg_nsecs / 1e6))
+                    int(self.msg_nsecs / 1e6),
+                    rel)
 
         data = struct.pack(Message.hdr_fmt, *hdr_tupl)
 
@@ -89,7 +96,7 @@ class Message(object):
 
         # Parse header fields
         try:
-            msg_type, msg_sub, msg_src, msg_dst, msg_secs, msg_msecs = \
+            msg_type, msg_sub, msg_src, msg_dst, msg_secs, msg_msecs, rel = \
                 struct.unpack_from(Message.hdr_fmt, data, 0)
         except Exception as ex:
             raise Exception("bad header: %s" % ex.args[0])
@@ -102,10 +109,13 @@ class Message(object):
 
         # Populate header fields
         msg.msg_src = msg_src
-        msg.msg_sub = msg_sub & SUBSWARM_BITS
+        msg.msg_sub = msg_sub & SUBSWARM_MASK
         msg.msg_dst = msg_dst
         msg.msg_secs = msg_secs
         msg.msg_nsecs = msg_msecs * 1e6
+        msg.msg_seq = 0x7fff & rel
+        msg.msg_rel = bool(rel & RELIABLE_MASK)
+        msg.msg_seq = rel & ~RELIABLE_MASK
 
         # Parse payload fields
         try:
