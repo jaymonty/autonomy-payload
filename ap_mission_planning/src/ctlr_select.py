@@ -83,19 +83,22 @@ class ControllerType(object):
 # Class member variables:
 #   _basename: ROS basename for topics associated with this node
 #   _controllers: dictionary object (int key) with controller objects
-#   _loiter_wp_param: ROS parameter containing the the loiter waypoint number
+#   _own_lat: current latitude of this vehicle (for safety waypoint)
+#   _own_lon: current longitude of this vehicle (for safety waypoint)
+#   _own_rel_alt: current relative altitude of this vehicle (for safety waypoint)
 #   _loiter_wp_id: ID of loiter waypoint (issue to autopilot before starting a controller)
+#   _safety_wp: location (LLA) of the waypoint location to set when leaving payload control
 #   _wp_list: list of waypoints from the autopilot
 #   _loiter_wps: list of loiter waypoint indices from the autopilot
 #   _current_mode: currently active controller (int ID)
 #   _ap_status: status object for autopilot data (autopilot_bridge/Status)
 #   _ap_status_last: timestamp of the last ap_status update
 #   _pub_wpindex: publisher to send vehicle back to the "safe" loiter point
+#   _pub_safetywp: publisher to reset the autopilot wp location to the "safe" point
 #   _pub_status: publisher to send a status message for the selector
 #
 # TODO list:
 #  1 Improve basename implementation (too hard coded now)
-#  2 Implement a selector status message (active controller and whatever else we want)
 #  3 Use mavbridge waypoint services to get the loiter waypoint ID (last one in the
 #    misison file?) instead of a rosparam (potential source of error).  If the loiter
 #    point has not been defined in the mission, can we create one and add it? Maybe
@@ -115,18 +118,11 @@ class ControllerSelector(object):
 
     # Initializer for the ControllerSelector initializes the object variables,
     # subscribes to the required ROS topics, and registers ROS publishers
-    def __init__(self,
-                 basename='controllers',
-                 loiter_wp_param='payload_loiter_wp'):
+    def __init__(self, basename='controllers'):
         self._basename = basename
-        self._loiter_wp_param = loiter_wp_param
         self._loiter_wp_id = None
-        try:
-            self._loiter_wp_id = rospy.get_param(self._loiter_wp_param)
-        except Exception as ex:
-            # don't do anything here, but try again if a control mode is
-            # activated, and throw an exception if the rosparam isn't set
-            pass
+        self._safety_wp = mavbridge_msgs.LLA()
+        self._loiter_wp_id = None
 
         # Maintain the controller types by ID
         self._controllers = {}
@@ -140,6 +136,8 @@ class ControllerSelector(object):
                                            payload_msgs.ControllerGroupStateStamped)
         self._pub_wpindex = rospy.Publisher("autopilot/waypoint_goto",
                                             std_msgs.UInt16)
+        self._pub_safety_wp = rospy.Publisher("autopilot/payload_waypoint",
+                                              mavbridge_msgs.LLA)
         self._retrieve_ap_waypoints()
 
         rospy.Subscriber("%s/status" % basename,
@@ -151,6 +149,9 @@ class ControllerSelector(object):
         rospy.Subscriber("autopilot/status",
                          mavbridge_msgs.Status,
                          self._sub_ap_status)
+        rospy.Subscriber("autopilot/acs_pose",
+                         mavbridge_msgs.Geodometry,
+                         self._sub_acs_pose)
 
 
     # Add a new controller type by ID and name
@@ -182,6 +183,12 @@ class ControllerSelector(object):
         stale_time = rospy.Time.now() - rospy.Duration(3)
 
         try:
+            # Is this reset to NO_PAYLOAD_CONTROL
+            if mode == controller.NO_PAYLOAD_CTRL:
+                if self._current_mode != controller.NO_PAYLOAD_CTRL:
+                    self.disable_all_controllers()
+                return
+
             # Is requested mode known to us?
             if mode not in self._controllers:
                 raise Exception("Unknown controller type")
@@ -210,34 +217,24 @@ class ControllerSelector(object):
                 rospy.logwarn("Set Control Mode: Requested controller is already active")
                 return
 
-            # If we were able to get the infinite loiter waypoint at startup,
-            # leave it alone.  If not, check the ROS parameter and get it now.
-            # If we still can't get it, throw an exception
-            # TODO: See item 3 in class header about the loiter waypoint
-            if self._loiter_wp_id == None and rospy.has_param(self._loiter_wp_param):
-                try:
-                    self._loiter_wp_id = rospy.get_param(self._loiter_wp_param)
-                except Exception as ex:
-                    raise Exception("Error getting infinite waypoint index: %s" % ex.args[0])
-            elif self._loiter_wp_id == None:
-                raise Exception("Infinite loiter waypoint parameter not defined")
+            # If we're not already in payload control, make sure we've got an
+            # up-to-date list of infinite loiter waypoints fromn the autopilot
+            if self._current_mode == controller.NO_PAYLOAD_CTRL:
+                self._retrieve_ap_waypoints()
+                self._set_safety_wp()
 
             # Shut down any other active controllers
             # TODO: See item 4 in class header about "safe" waiting behavior
             self._deactivate_all_controllers()
     
-            # If we're not already in payload control, make sure we've got an
-            # up-to-date list of infinite loiter waypoints fromn the autopilot
-            if self._current_mode == controller.NO_PAYLOAD_CTRL:
-                self._retrieve_ap_waypoints()
-
             # Make sure the specified infinite loiter waypoint actually IS one
             if not self._loiter_wp_id in self._loiter_wps:
+                print str(self._loiter_wp_id)
                 raise Exception("Invalid infinite loiter WP specified for controller switch")
 
             # Make sure the autopilot is using the infinite loiter waypoint
             # TODO: See item 5 in class header (infinite loiter/safe behavior conflict)
-            if self._ap_status.mode != self._loiter_wp_id:
+            if self._ap_status.mis_cur != self._loiter_wp_id:
                 wpindex = std_msgs.UInt16()
                 wpindex.data = self._loiter_wp_id
                 self._pub_wpindex.publish(wpindex)
@@ -289,12 +286,22 @@ class ControllerSelector(object):
             self._deactivate_all_controllers()
 
 
+    # Callback for handling pose messages for this aircraft
+    # @param msg: pose message from the autopilot/acs_pose topic
+    def _sub_acs_pose(self, msg):
+        self._own_lat = msg.pose.pose.position.lat
+        self._own_lon = msg.pose.pose.position.lon
+        self._own_rel_alt = msg.pose.pose.position.rel_alt
+
+
     # Sends a "deactivate" command to every controllers
     # TODO: See item 4 in class header about a "safe" behavior--put it here
     def _deactivate_all_controllers(self):
         for c in self._controllers:
             self._controllers[c].set_active(False)
         self._current_mode = controller.NO_PAYLOAD_CTRL
+        if self._loiter_wp_id != None:
+            self._pub_safety_wp.publish(self._safety_wp)
 
 
     # Retrieves and processes all waypoints from the autopilot
@@ -315,6 +322,22 @@ class ControllerSelector(object):
             rospy.logwarn("Unable to load waypoints: " + ex.args[0])
 
 
+    # Sets the values for the safety waypoint
+    def _set_safety_wp(self):
+#        self._safety_wp.lat = loiter_pt.x
+#        self._safety_wp.lon = loiter_pt.y
+#        self._safety_wp.alt = loiter_pt.z
+        self._safety_wp.lat = self._own_lat
+        self._safety_wp.lon = self._own_lon
+        self._safety_wp.alt = self._own_rel_alt
+        loiter_pt = self._wp_list[-1]
+        if loiter_pt.command == INFINITE_LOITER_CMD:
+            self._loiter_wp_id = loiter_pt.seq
+        else:
+            self._loiter_wp_id = None
+            raise Exception("Last mission waypoint not infinite loiter")
+
+
     # Publishes a controller selector status message
     def _send_status_message(self):
         status = payload_msgs.ControllerGroupStateStamped()
@@ -333,7 +356,6 @@ class ControllerSelector(object):
             # TODO: See item 7 in class header about safety monitoring
 
             self._send_status_message()
-
             r.sleep()
 
 
