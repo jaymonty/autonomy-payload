@@ -22,8 +22,8 @@ def _bool16(val):
     return 0x0000
 
 # Bitmasks
-SUBSWARM_MASK = 0x1F    # low 5 bits (of 8)
-RELIABLE_MASK = 0x8000  # high bit (of 16)
+SUBSWARM_MASK = 0x1F  # low 5 bits (of 8)
+RELIABLE_MASK = 0x80  # high bit (of 8)
 
 #-----------------------------------------------------------------------
 # Base Message class
@@ -31,17 +31,22 @@ RELIABLE_MASK = 0x8000  # high bit (of 16)
 '''
 Packet header format (all fields in network byte order):
  - (8b)  Message type
- - (8b)  Subswarm ID (low 5 bits; high 3 reserved)
+ - (8b)  Flags (high-3) + Subswarm ID (low-5)
+          - 0x80 - Message sent reliably (send-buffered)
+          - 0x40 - UNUSED
+          - 0x20 - UNUSED
  - (8b)  Source ID
  - (8b)  Destination ID
+ - (16b) Source reliable messaging sequence number
+ - (16b) Destination reliable messaging sequence number
  - (32b) Seconds since Unix epoch
  - (16b) Milliseconds since last second
- - (16b) Reliable flag (high bit) and 15-bit reliable seqnum
+ - (16b) UNUSED
 '''
 
 class Message(object):
     # Define header parameters
-    hdr_fmt = '>BBBBLHH'
+    hdr_fmt = '>BBBBHHLH2x'
     hdr_size = struct.calcsize(hdr_fmt)
 
     def __init__(self):
@@ -50,13 +55,14 @@ class Message(object):
         self.msg_type = type(self).msg_type
 
         # Initialize other header fields
-        self.msg_src = None	# Source ID (1-223 currently)
+        self.msg_fl_rel = False # Reliable flag
         self.msg_sub = None	# Source subswarm ID (0-30 currently)
+        self.msg_src = None	# Source ID (1-223 currently)
         self.msg_dst = None	# Destination ID (1-255 currently)
+        self.msg_sseq = 0       # Source reliable sequence number (highest sent)
+        self.msg_dseq = 0       # Dest reliable sequence number (highest seen)
         self.msg_secs = None	# Epoch seconds
         self.msg_nsecs = None	# Epoch nanoseconds (truncated to ms)
-        self.msg_rel = False    # Reliable flag
-        self.msg_seq = 0        # Reliable sequence number
 
         # Add source IP and port, just for received messages (not serialized)
         self.msg_src_ip = None
@@ -67,18 +73,16 @@ class Message(object):
 
     # Serialize a Message subtype
     def serialize(self):
-        # Pack reliable flag and sequence number into short
-        rel = (RELIABLE_MASK & _bool16(self.msg_rel)) \
-            | (self.msg_seq & ~RELIABLE_MASK)
-
         # Pack header
         hdr_tupl = (type(self).msg_type,
-                    self.msg_sub & SUBSWARM_MASK,
+                    (self.msg_sub & SUBSWARM_MASK) | \
+                    (_bool8(self.msg_fl_rel) & RELIABLE_MASK),
                     self.msg_src,
                     self.msg_dst,
+                    self.msg_sseq,
+                    self.msg_dseq,
                     self.msg_secs,
-                    int(self.msg_nsecs / 1e6),
-                    rel)
+                    int(self.msg_nsecs / 1e6))
 
         data = struct.pack(Message.hdr_fmt, *hdr_tupl)
 
@@ -96,7 +100,7 @@ class Message(object):
 
         # Parse header fields
         try:
-            msg_type, msg_sub, msg_src, msg_dst, msg_secs, msg_msecs, rel = \
+            msg_type, msg_sub, msg_src, msg_dst, msg_sseq, msg_dseq, msg_secs, msg_msecs = \
                 struct.unpack_from(Message.hdr_fmt, data, 0)
         except Exception as ex:
             raise Exception("bad header: %s" % ex.args[0])
@@ -109,12 +113,13 @@ class Message(object):
 
         # Populate header fields
         msg.msg_src = msg_src
+        msg.msg_fl_rel = bool(msg_sub & RELIABLE_MASK)
         msg.msg_sub = msg_sub & SUBSWARM_MASK
         msg.msg_dst = msg_dst
+        msg.msg_sseq = msg_sseq
+        msg.msg_dseq = msg_dseq
         msg.msg_secs = msg_secs
         msg.msg_nsecs = msg_msecs * 1e6
-        msg.msg_rel = bool(rel & RELIABLE_MASK)
-        msg.msg_seq = rel & ~RELIABLE_MASK
 
         # Parse payload fields
         try:
