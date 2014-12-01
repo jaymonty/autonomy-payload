@@ -68,8 +68,8 @@ class Message(object):
     # Serialize a Message subtype
     def serialize(self):
         # Pack reliable flag and sequence number into short
-        rel = RELIABLE_MASK if self.msg_rel else 0
-        rel |= self.msg_seq & ~RELIABLE_MASK
+        rel = (RELIABLE_MASK & _bool16(self.msg_rel)) \
+            | (self.msg_seq & ~RELIABLE_MASK)
 
         # Pack header
         hdr_tupl = (type(self).msg_type,
@@ -113,7 +113,6 @@ class Message(object):
         msg.msg_dst = msg_dst
         msg.msg_secs = msg_secs
         msg.msg_nsecs = msg_msecs * 1e6
-        msg.msg_seq = 0x7fff & rel
         msg.msg_rel = bool(rel & RELIABLE_MASK)
         msg.msg_seq = rel & ~RELIABLE_MASK
 
