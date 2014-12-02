@@ -294,7 +294,9 @@ class SwarmElement(object):
 #   baseAlt: Altitude from which rel_alt values are calculated for all AC
 #   swarm: Dictionary of records for individual aircraft in the swarm
 #   swarmPublisher: Object for publishing swarm state to the ROS topic
+#   subSwarmPublisher: Object for publishing subswarm state to the ROS topic
 #   swarmMessage: Container for swarm states to be published to the ROS topic
+#   subSwarmMessage: Container for subswarm states to be published to the ROS topic
 #
 # Inherited from Nodeable:
 #   nodeName:  name of the node to start or node in which the object is
@@ -333,9 +335,13 @@ class SwarmTracker(Nodeable):
         self.swarm[self.ownID] = \
             SwarmElement(self.ownID, self.subSwarmID, initState)
         self.swarmPublisher = None
+        self.subSwarmPublisher = None
         self.swarmMessage = SwarmStateStamped()
         self.swarmMessage.header.seq = 0
         self.swarmMessage.header.frame_id = "base_footprint"
+        self.subSwarmMessage = SwarmStateStamped()
+        self.subSwarmMessage.header.seq = 0
+        self.subSwarmMessage.header.frame_id = "base_footprint"
         self.DBUG_PRINT = False
         self.WARN_PRINT = False
 
@@ -363,6 +369,8 @@ class SwarmTracker(Nodeable):
     def publisherSetup(self, params=[]):
         self.swarmPublisher = \
             rospy.Publisher("%s/swarm_state"%self.nodeName, SwarmStateStamped)
+        self.subSwarmPublisher = \
+            rospy.Publisher("%s/subswarm_state"%self.nodeName, SwarmStateStamped)
 
 
     # Executes one iteration of the timed loop for the SwarmTracker object
@@ -370,7 +378,9 @@ class SwarmTracker(Nodeable):
     # current time and publishes a SwarmState message to the ROS topic.
     def executeTimedLoop(self):
         self.swarmMessage.header.stamp = rospy.Time.now()
+        self.subSwarmMessage.header.stamp = self.swarmMessage.header.stamp
         del self.swarmMessage.swarm[:]
+        del self.subSwarmMessage.swarm[:]
         for vID in self.swarm:
             vehicle = self.swarm[vID]
             vehicle.computeDRPose(self.swarmMessage.header.stamp)
@@ -382,8 +392,12 @@ class SwarmTracker(Nodeable):
             vehicleMsg.state.pose = vehicle.drPose.pose
             vehicleMsg.state.twist = vehicle.state.twist
             self.swarmMessage.swarm.append(vehicleMsg)
+            if vehicle.subSwarmID == self.subSwarmID:
+                self.subSwarmMessage.swarm.append(vehicleMsg)
         self.swarmPublisher.publish(self.swarmMessage)
+        self.subSwarmPublisher.publish(self.subSwarmMessage)
         self.swarmMessage.header.seq += 1
+        self.subSwarmMessage.header.seq += 1
 
 
     #-----------------------------------------
