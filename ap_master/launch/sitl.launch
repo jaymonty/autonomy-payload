@@ -3,8 +3,9 @@
   <arg name="dev" default="lo" />
   <arg name="port" default="5554" />
   <arg name="subswarm" default="0" />
-  <arg name="bag" default="0" />  <!-- Generate ROS bag files -->
-  <arg name="viz" default="0" />  <!-- Run the vizualizer -->
+  <arg name="bag" default="0" />    <!-- Generate ROS bag files -->
+  <arg name="viz" default="0" />    <!-- Run the vizualizer -->
+  <arg name="ctrlr" default="1" />  <!-- Run the controller nodes -->
 
   <param name="aircraft_id" type="int" value="$(arg id)" />
   <param name="aircraft_name" type="str" value="$(arg name)" />
@@ -33,6 +34,11 @@
   <node name="swarm_tracker" pkg="ap_perception" type="swarm_tracker_node.py" output="screen" args="" />
   <group if="$(arg viz)">
     <node name="multi_viz" pkg="ap_perception" type="multi_viz.py" output="screen" args="" />
+  </group>
+  <group if="$(arg ctrlr)">
+    <node name="follower" pkg="ap_path_planning" type="follower_node.py" output="screen" args="" />
+    <node name="wp_sequencer" pkg="ap_path_planning" type="wp_sequencer_node.py" output="screen" args="" />
+    <node name="ctlr_selector" pkg="ap_mission_planning" type="ctlr_select.py" output="screen" args="" />
   </group>
   <node name="run_once" pkg="ap_tasks" type="run_once.py" output="screen" args="" />
 </launch>
