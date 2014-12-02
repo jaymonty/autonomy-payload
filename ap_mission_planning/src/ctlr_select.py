@@ -262,7 +262,7 @@ class ControllerSelector(object):
     # @return True if the requested mode was set, or false otherwise
     def _srv_ctlr_mode(self, req_msg):
         new_mode = self._set_ctlr_mode(req_msg.setting)
-        if new_mode == self._current_mode:
+        if new_mode == req_msg.setting:
             return payload_srvs.SetIntegerResponse(True)
         else:
             return payload_srvs.SetIntegerResponse(False)
