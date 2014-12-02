@@ -14,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
 add_service_files(
   FILES
   SetBoolean.srv
+  SetInteger.srv
 )
 
 ## Generate added messages and services with any dependencies listed here
