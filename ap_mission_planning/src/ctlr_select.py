@@ -83,6 +83,7 @@ class ControllerType(object):
 # checks necessary to ensuring a safe transition into or between controllers.
 #
 # Class member variables:
+#   _nodename: ROS nodename of this object
 #   _basename: ROS basename for topics associated with this node
 #   _controllers: dictionary object (int key) with controller objects
 #   _own_lat: current latitude of this vehicle (for safety waypoint)
@@ -101,26 +102,18 @@ class ControllerType(object):
 #
 # TODO list:
 #  1 Improve basename implementation (too hard coded now)
-#  3 Use mavbridge waypoint services to get the loiter waypoint ID (last one in the
-#    misison file?) instead of a rosparam (potential source of error).  If the loiter
-#    point has not been defined in the mission, can we create one and add it? Maybe
-#    near the current location at the time of activation?
-#  4 Implement a "safe" behavior for relay to the autopilot when all controllers
-#    are deactivated (either intentionally, automatically, or because of error).
-#    This might take the form of a mission-defined safety loiter point, but it needs
-#    more discussion.
-#  5 Make sure that the infinite loiter implementation that takes effect when a
-#    new controller is activated doesn't conflict with the "safe" behavior of 4
 #  6 Initiate a wait before activating a controller to verify that the autopilot
 #    acknowledges receipt of the loiter waypoint (next status update).  Needed?
 #  7 Implement safety checking in the "loop" method to make sure that an active
 #    controller is behaving properly and initiate reset to "safe" mode if it isn't
 class ControllerSelector(object):
     ros_basename = 'controllers'
+    ros_nodename = 'ctlr_selector'
 
     # Initializer for the ControllerSelector initializes the object variables,
     # subscribes to the required ROS topics, and registers ROS publishers
-    def __init__(self, basename='controllers'):
+    def __init__(self, nodename='ctlr_selector', basename='controllers'):
+        self._nodename = nodename
         self._basename = basename
         self._loiter_wp_id = None
         self._safety_wp = mavbridge_msgs.LLA()
@@ -140,6 +133,9 @@ class ControllerSelector(object):
                                             std_msgs.UInt16)
         self._pub_safety_wp = rospy.Publisher("autopilot/payload_waypoint",
                                               mavbridge_msgs.LLA)
+
+        rospy.Service('%s/selector_mode' % self._nodename,
+                      payload_srvs.SetInteger, self._srv_ctlr_mode)
 
         rospy.Subscriber("%s/status" % basename,
                          payload_msgs.ControllerState,
@@ -179,8 +175,9 @@ class ControllerSelector(object):
     # controller (if none has been designated with the rosparam, the
     # controller will not be able to activate anything).  Before activating
     # a new controller, all other controllers are explicitly deactivated.
-    def _sub_ctlr_mode(self, msg):
-        mode = msg.data
+    # @param mode: ID (int) of the newly requested active mode
+    # @return the ID of the post-method active controller mode
+    def _set_ctlr_mode(self, mode):
         stale_time = rospy.Time.now() - rospy.Duration(3)
 
         try:
@@ -188,7 +185,7 @@ class ControllerSelector(object):
             if mode == controller.NO_PAYLOAD_CTRL:
                 if self._current_mode != controller.NO_PAYLOAD_CTRL:
                     self._deactivate_all_controllers()
-                return
+                return self._current_mode
 
             # Is requested mode known to us?
             if mode not in self._controllers:
@@ -216,7 +213,7 @@ class ControllerSelector(object):
                 # NOTE: Not really an error--it's idempotent!
                 # We'll report it anyway and then move along (return)
                 rospy.logwarn("Set Control Mode: Requested controller is already active")
-                return
+                return self._current_mode
 
             # If we're not already in payload control, make sure we've got an
             # up-to-date list of infinite loiter waypoints fromn the autopilot
@@ -230,7 +227,6 @@ class ControllerSelector(object):
     
             # Make sure the specified infinite loiter waypoint actually IS one
             if not self._loiter_wp_id in self._loiter_wps:
-                print str(self._loiter_wp_id)
                 raise Exception("Invalid infinite loiter WP specified for controller switch")
 
             # Make sure the autopilot is using the infinite loiter waypoint
@@ -250,12 +246,33 @@ class ControllerSelector(object):
             else:
                 self._current_mode = controller.NO_PAYLOAD_CONTROL
 
+            return self._current_mode
+
         except Exception as ex:
             # If we get here, something is wrong
             # Do the most conservative thing (for now take the payload out of the loop)
             self._deactivate_all_controllers()
             rospy.logwarn("Set Control Mode: " + ex.args[0])
-            # TODO: See item 4 in class header about a "safe" behavior
+            return self._current_mode
+
+
+    # Implementing function for the selector_mode service for requesting
+    # activation of a new controller.
+    # @param req_msg: service (SetInteger) message with the new control mode
+    # @return True if the requested mode was set, or false otherwise
+    def _srv_ctlr_mode(self, req_msg):
+        new_mode = self._set_ctlr_mode(req_msg.setting)
+        if new_mode == self._current_mode:
+            return payload_srvs.SetIntegerResponse(True)
+        else:
+            return payload_srvs.SetIntegerResponse(False)
+
+
+    # Callback for the selector_mode topic used to request
+    # activating a specific controller
+    # @param msg: message (UInt8) containing the newly requested mode
+    def _sub_ctlr_mode(self, msg):
+        self._set_ctlr_mode(msg.data)
 
 
     # Callback for handling controller status messages
@@ -299,7 +316,6 @@ class ControllerSelector(object):
 
 
     # Sends a "deactivate" command to every controllers
-    # TODO: See item 4 in class header about a "safe" behavior--put it here
     def _deactivate_all_controllers(self):
         for c in self._controllers:
             self._controllers[c].set_active(False)
