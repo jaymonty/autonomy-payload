@@ -106,8 +106,6 @@ class WaypointSequencer(Controller):
     def callbackSetup(self, params=[ AP_BASENAME, CTRLR_BASENAME ]):
         rospy.Subscriber("%s/acs_pose"%params[0], apbrg.Geodometry, \
                          self._updatePose)
-        rospy.Subscriber("%s/wp_sequencer_run"%params[1], stdmsg.Bool, \
-                         self._processRunMsg)
         rospy.Subscriber("%s/wp_list"%params[1], apmsg.WaypointListStamped, \
                          self._receiveWaypointList)
 
@@ -224,13 +222,6 @@ class WaypointSequencer(Controller):
                       poseMsg.pose.pose.position.lon ]
         self.baseAlt = poseMsg.pose.pose.position.alt - \
                        poseMsg.pose.pose.position.rel_alt
-
-
-    # Handles start and stop commands written to the ROS topic
-    # @param runMsg: ROS message (std_msgs/Bool) with the start/stop command
-    def _processRunMsg(self, runMsg):
-        self.set_active(runMsg.data)
-        self.log_dbug("received start/stop message=" + str(runMsg.data))
 
 
     # Handles waypoint lists written to the ROS topic

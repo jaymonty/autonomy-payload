@@ -15,6 +15,7 @@ import rospy
 
 import std_msgs.msg as std_msgs
 import ap_msgs.msg as payload_msgs
+import ap_srvs.srv as payload_srvs
 import autopilot_bridge.msg as mavbridge_msgs
 import autopilot_bridge.srv as mavbridge_srv 
 from ap_lib import controller
@@ -32,6 +33,7 @@ INFINITE_LOITER_CMD = 17  # Autopilot command ID for infinite loiter waypoints
 #   name: name of this particular controller
 #   status: most recently received status for this controller
 #   status_last: timestamp of the most recently received status update
+#   _run_pub: service proxy for calling the controller's activation service
 class ControllerType(object):
 
     # Initializer creates a "minimally" initialized ControllerType object
@@ -42,8 +44,8 @@ class ControllerType(object):
         self.id = c_id
         self.name = c_name
 
-        self._run_pub = rospy.Publisher("%s/%s_run" % (c_topic_base, c_name),
-                                        std_msgs.Bool)
+        self._run_srv = rospy.ServiceProxy('%s/%s_run' %(c_name, c_name), \
+                                           payload_srvs.SetBoolean)
 
         # A dummy message to use until a status message is received
         self.status = payload_msgs.ControllerState()
@@ -70,9 +72,9 @@ class ControllerType(object):
     # Activate or deactive this controller type
     # @param active: Boolean value to activate or deactivate the controller
     def set_active(self, active):
-        msg = std_msgs.Bool()
-        msg.data = active
-        self._run_pub.publish(msg)
+        resp = self._run_srv(active)
+        self.status.is_active = resp.result
+        return resp.result
 
 
 # This is the class we interface with. It allows adding controller types,
@@ -138,7 +140,6 @@ class ControllerSelector(object):
                                             std_msgs.UInt16)
         self._pub_safety_wp = rospy.Publisher("autopilot/payload_waypoint",
                                               mavbridge_msgs.LLA)
-        self._retrieve_ap_waypoints()
 
         rospy.Subscriber("%s/status" % basename,
                          payload_msgs.ControllerState,
@@ -186,7 +187,7 @@ class ControllerSelector(object):
             # Is this reset to NO_PAYLOAD_CONTROL
             if mode == controller.NO_PAYLOAD_CTRL:
                 if self._current_mode != controller.NO_PAYLOAD_CTRL:
-                    self.disable_all_controllers()
+                    self._deactivate_all_controllers()
                 return
 
             # Is requested mode known to us?
@@ -241,10 +242,13 @@ class ControllerSelector(object):
                 # TODO: See item 6 in class header (make sure new controller took)
 
             # Activate controller
-            self._controllers[mode].set_active(True)
+            success = self._controllers[mode].set_active(True)
 
             # Update internal state
-            self._current_mode = mode
+            if success:
+                self._current_mode = mode
+            else:
+                self._current_mode = controller.NO_PAYLOAD_CONTROL
 
         except Exception as ex:
             # If we get here, something is wrong

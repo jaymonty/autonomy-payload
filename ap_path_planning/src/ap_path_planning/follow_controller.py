@@ -22,7 +22,7 @@ from ap_lib import nodeable
 from ap_lib.controller import *
 
 # Base name for node topics and services
-NODE_BASENAME = 'follow_controller'
+NODENAME = 'follower'
 TRKR_BASENAME = 'swarm_tracker'   # Default base name for swarm tracker topics
 AP_BASENAME = 'autopilot'         # Default base name for autopilot topics
 
@@ -43,6 +43,8 @@ FOLLOW_DISTANCE = 50.0 # default distance behind the lead to place the follow po
 #   ownLon: longitude of this aircraft
 #   ownAlt: altitude of this aircraft
 #   ownRelAlt: altitude of this aircraft relative to launch altitude
+#   ownVx: north/south linear velocity (m/s) of this aircraft
+#   ownVy: east/west linear velocity (m/s) of this aircraft
 #   ownBaseAlt: altitude from which relative altitude is measured
 #   followID: ID of the leader aircraft (follow this one)
 #   followLat: latitude of the aircraft being followed
@@ -80,7 +82,6 @@ FOLLOW_DISTANCE = 50.0 # default distance behind the lead to place the follow po
 #   set_active: implementation of the Controller virtual function
 #   reset: used to set follow control parameters
 #   _compute_follow_wp: computes a target waypoint to achieve follow behavior
-#   _process_run_message: callback for messages to the run topic
 #   _process_formation_order: callback for messages to the formation order topic
 #   _swarm_callback: callback for swarm state messages
 class FollowController(Controller):
@@ -101,6 +102,8 @@ class FollowController(Controller):
         self.ownLon = None
         self.ownAlt = None
         self.ownRelAlt = None
+        self.ownVx = None
+        self.ownVy = None
         self.baseAlt = None
         self.followID = None
         self.followLat = None
@@ -133,8 +136,6 @@ class FollowController(Controller):
     def callbackSetup(self, params=[ TRKR_BASENAME, CTRLR_BASENAME ]):
         rospy.Subscriber("%s/swarm_state"%params[0], \
                          apmsg.SwarmStateStamped, self._swarm_callback)
-        rospy.Subscriber("%s/follower_run"%params[1], 
-                         stdmsg.Bool, self._process_run_message)
         rospy.Subscriber("%s/set_form_params"%params[1],
                          apmsg.FormationOrderStamped, self._process_formation_order)
 
@@ -237,34 +238,26 @@ class FollowController(Controller):
             gps_utils.gps_newpos(self.followLat, self.followLon, \
                                  (self.tgtCrs + self.rOffset), self.rFollow)
 
-        # If we're behind the lead acfg, shift forward from the follow point
-        # Don't do this if we're in front of the lead acft to avoid some weirdness
-        rel_fm_lead = gps_utils.normalize_angle( \
-                          gps_utils.gps_bearing(self.followLat, self.followLon, \
-                                                self.ownLat, self.ownLon) - \
-                          self.tgtCrs)
-        if abs(rel_fm_lead) > math.pi / 2.0:
-            if gps_utils.gps_distance(self.ownLat, self.ownLon, \
-                                      self.tgtLat, self.tgtLon) > self.rOvershoot:
-                to_follow_pt = \
-                    gps_utils.gps_bearing(self.ownLat, self.ownLon, self.tgtLat, self.tgtLon)
-                self.tgtLat, self.tgtLon = \
-                    gps_utils.gps_newpos(self.ownLat, self.ownLon, to_follow_pt, self.rOvershoot)
-            self.tgtLat, self.tgtLon = \
-                gps_utils.gps_newpos(self.tgtLat, self.tgtLon, self.tgtCrs, 2.0 * self.rOvershoot)
+        # Project fwd from follow point to compute a rough "intercept" point
+        time_to_intercept = gps_utils.gps_distance(self.ownLat, self.ownLon, \
+                                                   self.tgtLat, self.tgtLon) / \
+                            math.hypot(self.ownVx, self.ownVy)
+        tgt_travel = math.hypot(self.followVx, self.followVy) * time_to_intercept
+        self.tgtLat, self.tgtLon = \
+            gps_utils.gps_newpos(self.tgtLat, self.tgtLon, self.tgtCrs, tgt_travel)
+
+        # Choose a point 1 "overshoot" towards the target point
+        to_follow_pt = gps_utils.gps_bearing(self.ownLat, self.ownLon, \
+                                             self.followLat, self.followLon)
+        self.tgtLat, self.tgtLon = \
+            gps_utils.gps_newpos(self.ownLat, self.ownLon, to_follow_pt, self.rOvershoot)
 
         return (self.tgtLat, self.tgtLon)
 
 
-    #---------------------------------_--------
+    #------------------------------------------
     # ROS Subscriber callbacks -for this object
-    #-----------------------------------------
-
-    # Handle incoming run message
-    # @param startMsg: message activating or de-activating the controller (Boolean)
-    def _process_run_message(self, startMsg):
-        self.set_active(startMsg.data)
-
+    #------------------------------------------
 
     # Process incoming formation order message
     # @param formMsg: message containing formation requirements (FormationOrderStamped)
@@ -287,6 +280,8 @@ class FollowController(Controller):
                 self.ownLon = swarmAC.state.pose.pose.position.lon
                 self.ownAlt = swarmAC.state.pose.pose.position.alt
                 self.ownRelAlt = swarmAC.state.pose.pose.position.rel_alt
+                self.ownVx = swarmAC.state.twist.twist.linear.x
+                self.ownVy = swarmAC.state.twist.twist.linear.y
                 self.baseAlt = self.ownAlt - self.ownRelAlt
                 selfUpdated = True
 
