@@ -13,6 +13,7 @@ import rospy
 from rospy import rostime
 from ap_lib import nodeable
 import ap_msgs.msg as apmsg
+import ap_srvs.srv as apsrv
 
 
 # Global variables (constants)
@@ -27,6 +28,12 @@ FOLLOW_CTRLR = 2
 # Abstract object for wrapping a control-order-issuing ACS ROS object 
 # that can be contained in an already established node or run as its
 # own independent node
+# Instantiated objects will provide a ROS service for activation and
+# deactivation.  The service is provided as "nodename/nodename_run"
+# and uses the ap_srvs/SetBoolean service.  The service takes a Boolean
+# argument designating the desired active state of the node.  The
+# service's return value will be the new is_active state of the controller.
+# NOTE:  The service will NOT activate an unready node
 #
 # Class member variables:
 #   controllerID: identifier (int) for this particular controller
@@ -54,6 +61,9 @@ class Controller(nodeable.Nodeable):
         self.is_active = False
         self.statusPublisher = None
         self.statusInterval = None
+        print type(self._activate_srv)
+        rospy.Service('%s/%s_run' % (nodename, nodename), \
+                      apsrv.SetBoolean, self._activate_srv)
 
 
     #-------------------------------------------------------------------
@@ -94,6 +104,14 @@ class Controller(nodeable.Nodeable):
             self.is_active = activate
             self.log_dbug("activation command: " + str(activate))
         return self.is_active
+
+
+    # Implements the service for activating and deactivating the controller
+    # @param activate_req: service call (SetBoolean) message
+    # @return service response (SetBoolean) message
+    def _activate_srv(self, activate_req):
+        resp = self.set_active(activate_req.enable)
+        return apsrv.SetBooleanResponse(resp)
 
 
     # Sets the controller's ready state when new control inputs are received
