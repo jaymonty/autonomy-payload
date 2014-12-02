@@ -248,7 +248,7 @@ class FollowController(Controller):
 
         # Choose a point 1 "overshoot" towards the target point
         to_follow_pt = gps_utils.gps_bearing(self.ownLat, self.ownLon, \
-                                             self.followLat, self.followLon)
+                                             self.tgtLat, self.tgtLon)
         self.tgtLat, self.tgtLon = \
             gps_utils.gps_newpos(self.ownLat, self.ownLon, to_follow_pt, self.rOvershoot)
 
