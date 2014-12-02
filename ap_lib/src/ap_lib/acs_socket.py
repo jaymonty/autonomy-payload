@@ -51,6 +51,7 @@ class Socket():
         # Build the socket
         try:
             self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             if send_only:
                 # Allow a socket that can send but not receive
@@ -126,12 +127,12 @@ class Socket():
         # If anything goes wrong below, return False so caller knows
         #  there may be more packets to receive
         try:
-            # Ignore packets we sent (we see our own broadcasts)
-            if ip == self._ip:
-                return False
-            
             # Parse message
             msg = messages.Message.parse(data)
+
+            # Is it from us? If so, ignore ourselves
+            if msg.msg_src == self._id:
+                return False
             
             # Is it meant for us?
             if not (msg.msg_dst == self._id or \
