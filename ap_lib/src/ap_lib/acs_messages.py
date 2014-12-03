@@ -59,8 +59,8 @@ class Message(object):
         self.msg_sub = None	# Source subswarm ID (0-30 currently)
         self.msg_src = None	# Source ID (1-223 currently)
         self.msg_dst = None	# Destination ID (1-255 currently)
-        self.msg_sseq = 0       # Source reliable sequence number (highest sent)
-        self.msg_dseq = 0       # Dest reliable sequence number (highest seen)
+        self.msg_seq = 0        # Highest reliable seqnum sent to destination
+        self.msg_ack = 0        # Highest reliable seqnum seen from destination
         self.msg_secs = None	# Epoch seconds
         self.msg_nsecs = None	# Epoch nanoseconds (truncated to ms)
 
@@ -79,8 +79,8 @@ class Message(object):
                     (_bool8(self.msg_fl_rel) & RELIABLE_MASK),
                     self.msg_src,
                     self.msg_dst,
-                    self.msg_sseq,
-                    self.msg_dseq,
+                    self.msg_seq,
+                    self.msg_ack,
                     self.msg_secs,
                     int(self.msg_nsecs / 1e6))
 
@@ -100,7 +100,7 @@ class Message(object):
 
         # Parse header fields
         try:
-            msg_type, msg_sub, msg_src, msg_dst, msg_sseq, msg_dseq, msg_secs, msg_msecs = \
+            msg_type, msg_sub, msg_src, msg_dst, msg_seq, msg_ack, msg_secs, msg_msecs = \
                 struct.unpack_from(Message.hdr_fmt, data, 0)
         except Exception as ex:
             raise Exception("bad header: %s" % ex.args[0])
@@ -116,8 +116,8 @@ class Message(object):
         msg.msg_fl_rel = bool(msg_sub & RELIABLE_MASK)
         msg.msg_sub = msg_sub & SUBSWARM_MASK
         msg.msg_dst = msg_dst
-        msg.msg_sseq = msg_sseq
-        msg.msg_dseq = msg_dseq
+        msg.msg_seq = msg_seq
+        msg.msg_ack = msg_ack
         msg.msg_secs = msg_secs
         msg.msg_nsecs = msg_msecs * 1e6
 
