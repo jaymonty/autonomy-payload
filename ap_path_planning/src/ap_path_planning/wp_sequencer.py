@@ -106,8 +106,8 @@ class WaypointSequencer(Controller):
     def callbackSetup(self, params=[ AP_BASENAME, CTRLR_BASENAME ]):
         rospy.Subscriber("%s/acs_pose"%params[0], apbrg.Geodometry, \
                          self._updatePose)
-        rospy.Subscriber("%s/wp_list"%params[1], apmsg.WaypointListStamped, \
-                         self._receiveWaypointList)
+        rospy.Subscriber("%s/%s_set"%(params[1], self.nodeName), \
+                         apmsg.WaypointListStamped, self._receiveWaypointList)
 
 
     # Establishes the publishers for the WaypointSequencer object.  The object

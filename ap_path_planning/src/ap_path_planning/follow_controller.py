@@ -136,7 +136,7 @@ class FollowController(Controller):
     def callbackSetup(self, params=[ TRKR_BASENAME, CTRLR_BASENAME ]):
         rospy.Subscriber("%s/swarm_state"%params[0], \
                          apmsg.SwarmStateStamped, self._swarm_callback)
-        rospy.Subscriber("%s/set_form_params"%params[1],
+        rospy.Subscriber("%s/%s_set"%(params[1], self.nodeName),
                          apmsg.FormationOrderStamped, self._process_formation_order)
 
 

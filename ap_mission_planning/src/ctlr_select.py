@@ -134,13 +134,13 @@ class ControllerSelector(object):
         self._pub_safety_wp = rospy.Publisher("autopilot/payload_waypoint",
                                               mavbridge_msgs.LLA)
 
-        rospy.Service('%s/selector_mode' % self._nodename,
+        rospy.Service('%s/set_selector_mode' % self._nodename,
                       payload_srvs.SetInteger, self._srv_ctlr_mode)
 
         rospy.Subscriber("%s/status" % basename,
                          payload_msgs.ControllerState,
                          self._sub_ctlr_status)
-        rospy.Subscriber("%s/selector_mode" % basename,
+        rospy.Subscriber("%s/set_selector_mode" % basename,
                          std_msgs.UInt8,
                          self._sub_ctlr_mode)
         rospy.Subscriber("autopilot/status",
