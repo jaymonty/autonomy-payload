@@ -16,6 +16,7 @@ import sys
 
 # Load in ACS libraries
 import ap_lib.acs_messages as messages
+import ap_lib.controller as controller
 from ap_lib.acs_socket import Socket
 
 # General ROS imports
@@ -206,11 +207,11 @@ if __name__ == '__main__':
                                       apmsg.LLA)
     pub_waypoint_goto = rospy.Publisher("%s/recv_waypoint_goto"%ROS_BASENAME, 
                                         std_msgs.msg.UInt16)
-    pub_set_controller = rospy.Publisher("%s/recv_set_controller"%ROS_BASENAME,
+    pub_set_controller = rospy.Publisher("%s/set_selector_mode"%controller.CTRLR_BASENAME,
                                          std_msgs.msg.UInt8)
-    pub_follower_setup = rospy.Publisher("%s/recv_follower_setup"%ROS_BASENAME,
+    pub_follower_setup = rospy.Publisher("%s/follower_set"%controller.CTRLR_BASENAME,
                                          ap_msgs.FormationOrderStamped)
-    pub_wpsequencer_setup = rospy.Publisher("%s/recv_wpsequencer_setup"%ROS_BASENAME,
+    pub_wpsequencer_setup = rospy.Publisher("%s/wp_sequencer_set"%controller.CTRLR_BASENAME,
                                             ap_msgs.WaypointListStamped)
 
     # Loop , checking for incoming datagrams and sleeping
