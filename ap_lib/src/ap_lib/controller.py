@@ -53,7 +53,8 @@ class Controller(nodeable.Nodeable):
     # Class initializer initializes base class member variables
     # @param nodename:  name of the node that the object is contained in
     # @param ctrlrID: identifier (int) for this particular controller
-    def __init__(self, nodename, ctrlrID):
+    # @param ctlrBasename: name of the ROS basename for controller topics
+    def __init__(self, nodename, ctrlrID, ctlrBasename=CTRLR_BASENAME):
         nodeable.Nodeable.__init__(self, nodename)
         self.controllerID = ctrlrID
         self.sequence = 0
@@ -62,6 +63,8 @@ class Controller(nodeable.Nodeable):
         self.statusPublisher = None
         self.statusInterval = None
         print type(self._activate_srv)
+        self.statusPublisher = \
+            rospy.Publisher("%s/status"%ctlrBasename, apmsg.ControllerState)
         rospy.Service('%s/%s_run' % (nodename, nodename), \
                       apsrv.SetBoolean, self._activate_srv)
 
