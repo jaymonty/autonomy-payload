@@ -207,8 +207,8 @@ if __name__ == '__main__':
                                       apmsg.LLA)
     pub_waypoint_goto = rospy.Publisher("%s/recv_waypoint_goto"%ROS_BASENAME, 
                                         std_msgs.msg.UInt16)
-    pub_set_controller = rospy.Publisher("%s/set_selector_mode"%controller.CTRLR_BASENAME,
-                                         std_msgs.msg.UInt8)
+    srv_set_controller = rospy.ServiceProxy("ctlr_selector/set_selector_mode",
+                                            ap_srvs.SetInteger)
     pub_follower_setup = rospy.Publisher("%s/follower_set"%controller.CTRLR_BASENAME,
                                          ap_msgs.FormationOrderStamped)
     pub_wpsequencer_setup = rospy.Publisher("%s/wp_sequencer_set"%controller.CTRLR_BASENAME,
@@ -351,9 +351,8 @@ if __name__ == '__main__':
 
         elif isinstance(message, messages.SetController):
             try:
-                msg = std_msgs.msg.UInt8()
-                msg.data = message.controller
-                pub_set_controller.publish(msg)
+                # TODO:  Do something with the service return value (T or F)
+                success = srv_set_controller(message.controller)
                 rospy.loginfo("Ground-to-air: SetController")
             except:
                 rospy.logwarn("Error processing command: SetController")

@@ -40,7 +40,7 @@ class ControllerType(object):
     # @param c_id:  ID (int enumeration) for the controller
     # @param c_name:  name for the controller
     # @param c_topic_base: basename for the controllers ROS topics
-    def __init__(self, c_id, c_name, c_topic_base):
+    def __init__(self, c_id, c_name, c_topic_base=controller.CTRLR_BASENAME):
         self.id = c_id
         self.name = c_name
 
