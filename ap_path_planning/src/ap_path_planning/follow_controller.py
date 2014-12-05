@@ -19,6 +19,7 @@ import std_msgs.msg as stdmsg
 import math
 from ap_lib import gps_utils
 from ap_lib import nodeable
+from ap_lib.waypoint_controller import *
 from ap_lib.controller import *
 
 # Base name for node topics and services
@@ -59,7 +60,9 @@ FOLLOW_DISTANCE = 50.0 # default distance behind the lead to place the follow po
 #   tgtLon: computed target longitude for the follow position
 #   tgtCrs: computed vehicle course at the follow position (matches leader course)
 #   rOvershoot: overshoot distance for avoiding loiter behavior (meters)
-#   wpPublisher: publisher object for computed waypoints to be sent to the autopilot
+#
+# Inherited from WaypointController
+#   _wpPublisher: publisher object for computed waypoints to be sent to the autopilot
 #
 # Inherited from Controller:
 #   controllerID: identifier (int) for this particular controller
@@ -84,7 +87,7 @@ FOLLOW_DISTANCE = 50.0 # default distance behind the lead to place the follow po
 #   _compute_follow_wp: computes a target waypoint to achieve follow behavior
 #   _process_formation_order: callback for messages to the formation order topic
 #   _swarm_callback: callback for swarm state messages
-class FollowController(Controller):
+class FollowController(WaypointController):
 
     # Class initializer initializes class variables.
     # This assumes that the object is already running within an initialized
@@ -95,8 +98,12 @@ class FollowController(Controller):
     # not check ranges, magnitudes, or signs.
     # @param nodename: name of the ROS node in which this object exists
     # @param ownAC: ID (int) of this aircraft
-    def __init__(self, nodename, ownAC):
-        Controller.__init__(self, nodename, FOLLOW_CTRLR)
+    # @param ctlrBasename: ROS topic basename for controller topics
+    # @param apBasename: ROS topic basename for autopilot topics
+    def __init__(self, nodename, ownAC, \
+                 ctlrBasename=CTRLR_BASENAME, apBasename=AP_BASENAME):
+        WaypointController.__init__(self, nodename, FOLLOW_CTRLR, \
+                                    ctlrBasename, apBasename)
         self.ownID = ownAC
         self.ownLat = None
         self.ownLon = None
@@ -140,14 +147,6 @@ class FollowController(Controller):
                          apmsg.FormationOrderStamped, self._process_formation_order)
 
 
-    # Sets up publishers for the FollowController object.  The object publishes
-    # autopilot_bridge.LLA messages to the payload_waypoint topic
-    # @param params: list as follows: [ autopilot_base_name, controllers_base_name ]
-    def publisherSetup(self, params=[ AP_BASENAME, CTRLR_BASENAME ]):
-        self.wpPublisher = rospy.Publisher("%s/payload_waypoint"%params[0], apbrg.LLA)
-        self.statusPublisher = rospy.Publisher("%s/status"%params[1], apmsg.ControllerState)
-
-
     # Executes one iteration of the controller for the FollowController object
     # The loop computes a target waypoint and publishes it to the
     # /autopilot/payload_waypoint ROS topic.
@@ -172,13 +171,7 @@ class FollowController(Controller):
             elif self.altMode == ALT_SEP_MODE:
                 lla.alt = self.followAlt + self.ctrlAlt - self.baseAlt
 
-            if lla.alt >= MIN_REL_ALT: #verify valid altitude order
-                self.wpPublisher.publish(lla)
-                self.log_dbug("Sent to (%0.06f, %0.06f, %0.03f (leader alt: %0.03f))" \
-                              %(lla.lat, lla.lon, lla.alt, self.followAlt))
-            else:
-                self.set_active(False)
-                self.log_warn("Altitude control mode invalid or invalid altitude order")
+            self.publishWaypoint(lla)
 
 
     #--------------------------

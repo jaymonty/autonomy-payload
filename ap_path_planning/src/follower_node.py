@@ -29,6 +29,5 @@ if __name__ == '__main__':
     # Initialize ROS node
     rospy.init_node(fctrl.NODENAME)
     follower = fctrl.FollowController(fctrl.NODENAME, ownAC)
-    follower.runAsNode(10.0, [], [ fctrl.TRKR_BASENAME, fctrl.CTRLR_BASENAME ], \
-                                [ fctrl.AP_BASENAME, fctrl.CTRLR_BASENAME ])
+    follower.runAsNode(10.0, [], [ fctrl.TRKR_BASENAME, fctrl.CTRLR_BASENAME ], [])
 

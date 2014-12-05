@@ -26,6 +26,7 @@ import std_msgs.msg as stdmsg
 # Project-specific imports
 from ap_lib.nodeable import *
 from ap_lib.controller import *
+from ap_lib.waypoint_controller import *
 from ap_lib.gps_utils import *
 import ap_msgs.msg as apmsg
 import autopilot_bridge.msg as apbrg
@@ -50,10 +51,12 @@ CAPTURE_DISTANCE = 110.0
 #   baseAlt: altitude (MSL) from which relative altitudes are computed
 #   currentWP: waypoint to which the vehicle is currently transiting
 #   pose: current vehicle position
-#   wpPublisher: publisher object for publishing waypoint commands
 #   captureDistance: distance from waypoint considered captured
 #   listComplete: set to True when the last waypoint is reached
 #   readyNextWP: set to True when the next waypoint can be issued
+#
+# Inherited from WaypointController
+#   _wpPublisher: publisher object for computed waypoints to be sent to the autopilot
 #
 # Inherited from Controller:
 #   controllerID: identifier (int) for this particular controller
@@ -68,7 +71,7 @@ CAPTURE_DISTANCE = 110.0
 #   timer: ROS rate object that controls the timing loop
 #   DBUG_PRINT: set true to force screen debug messages (default FALSE)
 #   WARN_PRINT: set false to force screen warning messages (default FALSE) 
-class WaypointSequencer(Controller):
+class WaypointSequencer(WaypointController):
 
     # Class initializer initializes variables, subscribes to required
     # ROS topics, and creates required ros publishers.  Initializer
@@ -81,8 +84,10 @@ class WaypointSequencer(Controller):
     # @param apBaseName: base name of the ROS topic to publish waypoints to
     # @param captureDistance: distance from a waypoint considered good enough
     def __init__(self, nodeName=NODE_BASENAME, waypoints=[], \
-                 captureDistance=CAPTURE_DISTANCE):
-        Controller.__init__(self, nodeName, WP_SEQUENCE_CTRLR)
+                 captureDistance=CAPTURE_DISTANCE, \
+                 ctlrBasename=CTRLR_BASENAME, apBasename=AP_BASENAME):
+        WaypointController.__init__(self, nodeName, WP_SEQUENCE_CTRLR, \
+                                    ctlrBasename, apBasename)
         self.currentWP = apbrg.LLA()
         self.pose = None
         self.baseAlt = 0.0
@@ -108,14 +113,6 @@ class WaypointSequencer(Controller):
                          self._updatePose)
         rospy.Subscriber("%s/%s_set"%(params[1], self.nodeName), \
                          apmsg.WaypointListStamped, self._receiveWaypointList)
-
-
-    # Establishes the publishers for the WaypointSequencer object.  The object
-    # publishes waypoint commands (LLA message) to the payload_waypoint topic
-    # @param params: list as follows: [ autopilot_base_name, controller_base_name ]
-    def publisherSetup(self, params=[ AP_BASENAME, CTRLR_BASENAME ]):
-        self.wpPublisher = rospy.Publisher("%s/payload_waypoint"%params[0], apbrg.LLA)
-        self.statusPublisher = rospy.Publisher("%s/status"%params[1], apmsg.ControllerState)
 
 
     # Executes one iteration of the timed loop for the WaypointSequencer
@@ -172,16 +169,7 @@ class WaypointSequencer(Controller):
         if (len(self.wpList) > 0):
             self.currentWP = self.wpList.popleft()
             self.currentWP.alt = self.currentWP.alt - self.baseAlt # convert to rel_alt
-
-            # Make sure the wp is OK, and if so issue--if not kill everything!
-            if self.currentWP.alt >= MIN_REL_ALT:
-                self.wpPublisher.publish(self.currentWP)
-                self.log_dbug("issuing new wpt: lat=" + str(self.currentWP.lat) +\
-                                             ", lon=" + str(self.currentWP.lon) +\
-                                             ", alt=" + str(self.currentWP.alt))
-            else:
-                self.set_ready_state(False)
-                self.log_warn("ordered waypoint with negative altitude")
+            self.publishWaypoint(self.currentWP)
         else:
             self.log_dbug("reached last waypoint in sequence")
             self.listComplete = True
