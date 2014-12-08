@@ -61,8 +61,8 @@ class Message(object):
         self.msg_sub = None	# Source subswarm ID (0-30 currently)
         self.msg_src = None	# Source ID (1-223 currently)
         self.msg_dst = None	# Destination ID (1-255 currently)
-        self.msg_seq = 0        # Highest reliable seqnum sent to dest
-        self.msg_ack = 0        # Highest reliable seqnum seen from dest + 1
+        self.msg_seq = None     # Highest reliable seqnum sent to dest
+        self.msg_ack = None     # Highest reliable seqnum seen from dest + 1
         self.msg_secs = None	# Epoch seconds
         self.msg_nsecs = None	# Epoch nanoseconds (truncated to ms)
 
