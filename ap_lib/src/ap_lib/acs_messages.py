@@ -23,7 +23,8 @@ def _bool16(val):
 
 # Bitmasks
 SUBSWARM_MASK = 0x1F  # low 5 bits (of 8)
-RELIABLE_MASK = 0x80  # high bit (of 8)
+FL_REL_MASK = 0x80    # high bit (of 8)
+FL_SYN_MASK = 0x40    # second bit (of 8)
 
 #-----------------------------------------------------------------------
 # Base Message class
@@ -33,12 +34,12 @@ Packet header format (all fields in network byte order):
  - (8b)  Message type
  - (8b)  Flags (high-3) + Subswarm ID (low-5)
           - 0x80 - Message sent reliably (send-buffered)
-          - 0x40 - UNUSED
+          - 0x40 - SYNchronize with remote side
           - 0x20 - UNUSED
  - (8b)  Source ID
  - (8b)  Destination ID
- - (16b) Source reliable messaging sequence number
- - (16b) Destination reliable messaging sequence number
+ - (16b) Reliable messaging sequence number
+ - (16b) Reliable messaging acknowledgment number (+1)
  - (32b) Seconds since Unix epoch
  - (16b) Milliseconds since last second
  - (16b) UNUSED
@@ -56,11 +57,12 @@ class Message(object):
 
         # Initialize other header fields
         self.msg_fl_rel = False # Reliable flag
+        self.msg_fl_syn = False # SYN flag
         self.msg_sub = None	# Source subswarm ID (0-30 currently)
         self.msg_src = None	# Source ID (1-223 currently)
         self.msg_dst = None	# Destination ID (1-255 currently)
-        self.msg_seq = 0        # Highest reliable seqnum sent to destination
-        self.msg_ack = 0        # Highest reliable seqnum seen from destination
+        self.msg_seq = 0        # Highest reliable seqnum sent to dest
+        self.msg_ack = 0        # Highest reliable seqnum seen from dest + 1
         self.msg_secs = None	# Epoch seconds
         self.msg_nsecs = None	# Epoch nanoseconds (truncated to ms)
 
@@ -76,7 +78,8 @@ class Message(object):
         # Pack header
         hdr_tupl = (type(self).msg_type,
                     (self.msg_sub & SUBSWARM_MASK) | \
-                    (_bool8(self.msg_fl_rel) & RELIABLE_MASK),
+                    (_bool8(self.msg_fl_rel) & FL_REL_MASK) | \
+                    (_bool8(self.msg_fl_syn) & FL_SYN_MASK),
                     self.msg_src,
                     self.msg_dst,
                     self.msg_seq,
@@ -113,7 +116,8 @@ class Message(object):
 
         # Populate header fields
         msg.msg_src = msg_src
-        msg.msg_fl_rel = bool(msg_sub & RELIABLE_MASK)
+        msg.msg_fl_rel = bool(msg_sub & FL_REL_MASK)
+        msg.msg_fl_syn = bool(msg_sub & FL_SYN_MASK)
         msg.msg_sub = msg_sub & SUBSWARM_MASK
         msg.msg_dst = msg_dst
         msg.msg_seq = msg_seq
