@@ -36,7 +36,7 @@ if __name__ == '__main__':
             (my_ip, bcast_ip) = (bcast_ip, my_ip)
     
     try:
-        sock = Socket(0xff, opts.port, opts.device, my_ip, bcast_ip)
+        sock = Socket(0xff, opts.port, opts.device, my_ip, bcast_ip, promisc=True)
     except Exception:
         print "Sorry, couldn't start up the listening socket"
         sys.exit(1)
@@ -50,8 +50,10 @@ if __name__ == '__main__':
             print "<Ignored packet>"
             continue
         
-        print "ID: %u > %u TYPE: %02X TIME: %u.%09u" % \
+        print "ID: %u > %u TYPE: %02X SEQ/ACK: %03u/%03u FLAGS: %u%u%u TIME: %u.%09u" % \
             (message.msg_src, message.msg_dst, message.msg_type,
+             message.msg_seq, message.msg_ack,
+             message.msg_fl_rel, message.msg_fl_syn, 0,
              message.msg_secs, message.msg_nsecs)
         
         if isinstance(message, messages.Pose):
