@@ -23,6 +23,8 @@ add_message_files(
   WaypointListStamped.msg
   FormationOrder.msg
   FormationOrderStamped.msg
+  SwarmFormationOrder.msg
+  SwarmFormationOrderStamped.msg
   ControllerState.msg
   ControllerGroupState.msg
   ControllerGroupStateStamped.msg
