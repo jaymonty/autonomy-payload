@@ -52,7 +52,7 @@ class WaypointController(controller.Controller):
     # @param ap_basename: ROS basename for autopilot topics
     def __init__(self, nodename, ctrlrID, ctlr_basename, ap_basename):
         controller.Controller.__init__(self, nodename, ctrlrID, ctlr_basename)
-        self._wpPublisher = rospy.Publisher("%s/payload_waypoint"%ap_basename, LLA)
+        self._wpPublisher = self.createPublisher("payload_waypoint", LLA)
 
 
     #---------------------------------------------------------

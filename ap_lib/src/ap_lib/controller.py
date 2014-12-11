@@ -62,11 +62,9 @@ class Controller(nodeable.Nodeable):
         self.is_active = False
         self.statusPublisher = None
         self.statusInterval = None
-        print type(self._activate_srv)
         self.statusPublisher = \
-            rospy.Publisher("%s/status"%ctlrBasename, apmsg.ControllerState)
-        rospy.Service('%s/%s_run' % (nodename, nodename), \
-                      apsrv.SetBoolean, self._activate_srv)
+            self.createPublisher("status", apmsg.ControllerState)
+        self.createService("%s_run"%nodename, apsrv.SetBoolean, self._activate_srv)
 
 
     #-------------------------------------------------------------------
