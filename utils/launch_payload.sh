@@ -10,19 +10,37 @@ usage()
 cat <<EOF
 Usage: $0 [options] instance_id
 Options:
-    -C                      Start a linux container for this payload SITL
-    -R                      Username to run ROS as (container mode only)
+    -C              Use Linux network namespace container (don't use with -P)
+    -P              Use calculated port offset for network (don't use with -C)
+    -R USER         Username to run ROS as (use with -C only)
+    -D DEVICE       Override default network device (don't use with -C)
 EOF
 }
 
 USE_CONTAINER=0
+USE_PORT_OFFSET=0
 ROS_USER_TO_USE=$USER
+NET_DEVICE=""
 
 #parse options
-while getopts ":R:Ch" opt; do
+while getopts ":R:D:PCh" opt; do
     case $opt in
         C)
+            if [ $USE_PORT_OFFSET == 1 ]; then
+                echo "ERROR. Cannot use -C with -P."
+                exit -11
+            fi
             USE_CONTAINER=1
+            ;;
+        P)
+            if [ $USE_CONTAINER == 1 ]; then
+                echo "ERROR. Cannot use -C with -P."
+                exit -11
+            fi
+            USE_PORT_OFFSET=1
+            ;;
+        D)
+            NET_DEVICE="dev:=${OPTARG}"
             ;;
         R)
             if [[ `getent passwd | grep -c "^$OPTARG"` != 0 ]]; then
@@ -41,8 +59,8 @@ done
 shift $((OPTIND-1))
 
 if [[ -z $1 ]]; then
-  echo "Usage: $0 [options] instance_id [ROS_username]"
-  exit 1
+    usage
+    exit 1
 fi
 
 ID=$1
@@ -52,16 +70,22 @@ shift 1  # Shift in case we want to send $@ elsewhere later on
 # then default to the user's home directory
 
 if [[ -z $ACS_ROOT ]]; then
-  ACS_ROOT="~"
+    ACS_ROOT="~"
 fi
 
+# Set port options up front
+
+SITL_PORT=$((5762+10*${ID}))
+NET_PORT=5554
+if [ $USE_PORT_OFFSET == 1 ]; then
+    NET_PORT=$((5554+${ID}))
+fi
 
 if [ $USE_CONTAINER == 0 ]; then
-    SITL_CONNECT="tcp:127.0.0.1:"$((5762+10*${ID}))
-    PORT="$((5554+${ID}))"   
+    SITL_CONNECT="tcp:127.0.0.1:${SITL_PORT}"
 
-# Launch a terminal from within the new namespace
-    roslaunch ap_master sitl_ns.launch id:=$ID name:=sitl$ID sitl:=$SITL_CONNECT port:=$PORT ns:=sitl$ID
+    # Launch a terminal from within the new namespace
+    roslaunch ap_master sitl_ns.launch id:=$ID name:=sitl$ID sitl:=$SITL_CONNECT port:=$NET_PORT ns:=sitl$ID $NET_DEVICE
 
 else 
     # Set up the basic networking parameters for our multi-SITL environment.
@@ -87,7 +111,7 @@ else
     BRIDGE_IP="${NET_IP_PREFIX}.250"
 
     # Compute the MAVLink connection string (e.g., tcp:192.168.2.250:5772)
-    SITL_CONNECT="tcp:${BRIDGE_IP}:"$((5762+10*${ID}))
+    SITL_CONNECT="tcp:${BRIDGE_IP}:${SITL_PORT}"
 
     # Define the instance-specific networking parameters. Each virtual aircraft
     # gets its own network namespace and a new virtual network interface.
