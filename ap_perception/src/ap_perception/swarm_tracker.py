@@ -355,12 +355,9 @@ class SwarmTracker(Nodeable):
     # and the recv_pose topic for swarm member updates
     # @param params: list as follows: [ odometry_base_name, net_base_name ]
     def callbackSetup(self, params=[ SELF_ODOM_BASENAME, NET_BASENAME ]):
-        rospy.Subscriber("%s/acs_pose"%params[0], apbrg.Geodometry, \
-                         self.updateOwnPose)
-        rospy.Subscriber("%s/recv_pose"%params[1], SwarmVehicleState, \
-                         self.updateSwarmPose)
-        rospy.Subscriber("%s/update_subswarm"%params[1], 
-                         std_msgs.msg.UInt8, self.setSubSwarm)
+        self.createSubscriber("acs_pose", apbrg.Geodometry, self.updateOwnPose)
+        self.createSubscriber("recv_pose", SwarmVehicleState, self.updateSwarmPose)
+        self.createSubscriber("update_subswarm", std_msgs.msg.UInt8, self.setSubSwarm)
 
 
     # Sets up publishers for the SwarmTracker object.  The object publishes
@@ -368,9 +365,9 @@ class SwarmTracker(Nodeable):
     # @param params: list of parameters (none required for this method)
     def publisherSetup(self, params=[]):
         self.swarmPublisher = \
-            rospy.Publisher("%s/swarm_state"%self.nodeName, SwarmStateStamped)
+            self.createPublisher("swarm_state", SwarmStateStamped)
         self.subSwarmPublisher = \
-            rospy.Publisher("%s/subswarm_state"%self.nodeName, SwarmStateStamped)
+            self.createPublisher("subswarm_state", SwarmStateStamped)
 
 
     # Executes one iteration of the timed loop for the SwarmTracker object
