@@ -141,10 +141,15 @@ class FollowController(WaypointController):
     # and follow aircraft state updates
     # @param params: list as follows: [ swarm_tracker_base_name, controller_base_name ]
     def callbackSetup(self, params=[ TRKR_BASENAME, CTRLR_BASENAME ]):
-        rospy.Subscriber("%s/swarm_state"%params[0], \
-                         apmsg.SwarmStateStamped, self._swarm_callback)
-        rospy.Subscriber("%s/%s_set"%(params[1], self.nodeName),
-                         apmsg.FormationOrderStamped, self._process_formation_order)
+        self.createSubscriber("swarm_state", apmsg.SwarmStateStamped, \
+                              self._swarm_callback)
+        self.createSubscriber("%s_set"%self.nodeName, \
+                              apmsg.FormationOrderStamped, \
+                              self._process_formation_order)
+#        rospy.Subscriber("%s/swarm_state"%params[0], \
+#                         apmsg.SwarmStateStamped, self._swarm_callback)
+#        rospy.Subscriber("%s/%s_set"%(params[1], self.nodeName),
+#                         apmsg.FormationOrderStamped, self._process_formation_order)
 
 
     # Executes one iteration of the controller for the FollowController object
