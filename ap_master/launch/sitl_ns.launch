@@ -31,14 +31,28 @@
       <remap from="network/recv_land_abort" to="autopilot/land_abort" />
       <remap from="network/recv_guided_goto" to="autopilot/guided_goto" />
       <remap from="network/recv_waypoint_goto" to="autopilot/waypoint_goto" />
+      <remap from="network/update_subswarm" to="swarm_tracker/update_subswarm" />
     </node>
-    <node name="swarm_tracker" pkg="ap_perception" type="swarm_tracker_node.py" output="screen" args="" />
+    <node name="swarm_tracker" pkg="ap_perception" type="swarm_tracker_node.py" output="screen" args="" >
+      <remap from="swarm_tracker/acs_pose" to="autopilot/acs_pose" />
+      <remap from="swarm_tracker/recv_pose" to="network/recv_pose" />
+    </node>
     <group if="$(arg viz)">
       <node name="multi_viz" pkg="ap_perception" type="multi_viz.py" output="screen" args="" />
     </group>
     <group if="$(arg ctrlr)">
-      <node name="follower" pkg="ap_path_planning" type="follower_node.py" output="screen" args="" />
-      <node name="wp_sequencer" pkg="ap_path_planning" type="wp_sequencer_node.py" output="screen" args="" />
+      <node name="follower" pkg="ap_path_planning" type="follower_node.py" output="screen" args="">
+        <remap from="follower/payload_waypoint" to="autopilot/payload_waypoint" />
+        <remap from="follower/status" to="controllers/status" />
+        <remap from="follower/swarm_state" to="swarm_tracker/swarm_state" />
+        <remap from="follower/follower_set" to="controllers/follower_set" />
+      </node>
+      <node name="wp_sequencer" pkg="ap_path_planning" type="wp_sequencer_node.py" output="screen" args="">
+        <remap from="wp_sequencer/payload_waypoint" to="autopilot/payload_waypoint" />
+        <remap from="wp_sequencer/status" to="controllers/status" />
+        <remap from="wp_sequencer/acs_pose" to="autopilot/acs_pose" />
+        <remap from="wp_sequencer/wp_sequencer_set" to="controllers/wp_sequencer_set" />
+      </node>
       <node name="ctlr_selector" pkg="ap_mission_planning" type="ctlr_select.py" output="screen" args="" />
     </group>
     <node name="run_once" pkg="ap_tasks" type="run_once.py" output="screen" args="" />
