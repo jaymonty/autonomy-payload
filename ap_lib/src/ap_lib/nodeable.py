@@ -60,6 +60,56 @@ class Nodeable(object):
             self.executeTimedLoop()
 
 
+    # Method for initializing a ROS publisher object
+    # Naming convention for the topic is /nodename/topicname where the
+    # node name is set when the object is instantiated.  The topic name
+    # is provided as a parameter.
+    # NOTE:  This method is provided as a convenient mechanism for
+    #        ensuring a standardized topic naming convention at the
+    #        programming level.  Remap as required in the launch file.
+    # @param topicName: desired name of the topic (no basename)
+    # @param msgType: type of ROS message to be published to this topic
+    # @return the created publisher
+    def createPublisher(self, topicName, msgType):
+        return rospy.Publisher("%s/%s" %(self.nodeName, topicName), msgType)
+
+
+    # Method for initializing a subscription to a ROS topic
+    # Naming convention for the topic is /nodename/topicname where the
+    # node name is set when the object is instantiated.  The topic name
+    # is provided as a parameter.
+    # NOTE:  This method is provided as a convenient mechanism for
+    #        ensuring a standardized topic naming convention at the
+    #        programming level.  Remap as required in the launch file.
+    # @param topicName: desired name of the topic (no basename)
+    # @param msgType: type of ROS message to be received from this topic
+    # @param msgHandler: callback function that will handle the message
+    # @return the created service object
+    def createSubscriber(self, topicName, msgType, msgHandler):
+        return rospy.Subscriber("%s/%s" %(self.nodeName, topicName), \
+                                msgType, msgHandler)
+
+
+    # Method for initializing a ROS service
+    # Naming convention for the service is /nodename/servicename where the
+    # node name is set when the object is instantiated.  The service name
+    # is provided as a parameter.
+    # NOTE:  This method is provided as a convenient mechanism for
+    #        ensuring a standardized service naming convention at the
+    #        programming level.  Remap as required in the launch file.
+    # @param srvName: desired name of the topic (no basename)
+    # @param srvType: type of ROS message to be published to this topic
+    # @param srvHandler: function that will handle the service
+    # @return the created service object
+    def createService(self, srvName, srvType, srvHandler):
+        return rospy.Service("%s/%s" %(self.nodeName, srvName), \
+                             srvType, srvHandler)
+
+
+    #-----------------------------------------------------
+    # "Virtual" methods to be implemented by child classes
+    #-----------------------------------------------------
+
     # Virtual method for setting up services that this object will
     # be providing.  Should be overridden by implementing classes
     # that implement services (leave alone if no services provided)
