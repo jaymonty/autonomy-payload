@@ -221,6 +221,10 @@ class Socket():
             self._rel_states[remote_id] = ReliableState()
         return self._rel_states[remote_id]
 
+    # Get the IP I use to talk on the network
+    def getIP(self):
+        return self._ip
+
     # Return list of IDs for which we have buffered sent messages still
     def getUnackDstList(self):
         return [k for k,v in self._rel_states if v.getUnackCount() > 0]
