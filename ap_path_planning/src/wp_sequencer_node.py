@@ -21,5 +21,5 @@ from autopilot_bridge.msg import LLA
 if __name__ == '__main__':
     # ROS and object initialization
     sequencer = wpseq.WaypointSequencer(wpseq.NODE_BASENAME, [])
-    sequencer.runAsNode(10.0, [], [ wpseq.AP_BASENAME, wpseq.CTRLR_BASENAME ], [])
+    sequencer.runAsNode(10.0, [], [], [])
 

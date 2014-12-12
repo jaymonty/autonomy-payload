@@ -24,8 +24,6 @@ from ap_lib.controller import *
 
 # Base name for node topics and services
 NODENAME = 'follower'
-TRKR_BASENAME = 'swarm_tracker'   # Default base name for swarm tracker topics
-AP_BASENAME = 'autopilot'         # Default base name for autopilot topics
 
 #Global variables (constants)
 BASE_ALT_MODE = 0  # enumeration indicating base altitude mode
@@ -98,12 +96,8 @@ class FollowController(WaypointController):
     # not check ranges, magnitudes, or signs.
     # @param nodename: name of the ROS node in which this object exists
     # @param ownAC: ID (int) of this aircraft
-    # @param ctlrBasename: ROS topic basename for controller topics
-    # @param apBasename: ROS topic basename for autopilot topics
-    def __init__(self, nodename, ownAC, \
-                 ctlrBasename=CTRLR_BASENAME, apBasename=AP_BASENAME):
-        WaypointController.__init__(self, nodename, FOLLOW_CTRLR, \
-                                    ctlrBasename, apBasename)
+    def __init__(self, nodename, ownAC):
+        WaypointController.__init__(self, nodename, FOLLOW_CTRLR)
         self.ownID = ownAC
         self.ownLat = None
         self.ownLon = None
@@ -139,8 +133,8 @@ class FollowController(WaypointController):
     # Establishes the callbacks for the FollowController object.  The object
     # subscribes to the swarm_tracker/swarm_state topic for own-aircraft
     # and follow aircraft state updates
-    # @param params: list as follows: [ swarm_tracker_base_name, controller_base_name ]
-    def callbackSetup(self, params=[ TRKR_BASENAME, CTRLR_BASENAME ]):
+    # @param params: no additional parameters required by this method
+    def callbackSetup(self, params=[]):
         self.createSubscriber("swarm_state", apmsg.SwarmStateStamped, \
                               self._swarm_callback)
         self.createSubscriber("%s_set"%self.nodeName, \

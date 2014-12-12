@@ -34,7 +34,6 @@ import autopilot_bridge.msg as apbrg
 
 # Base name for node topics and services
 NODE_BASENAME = 'wp_sequencer'
-AP_BASENAME = 'autopilot'
 
 
 # Other global constants
@@ -84,10 +83,8 @@ class WaypointSequencer(WaypointController):
     # @param apBaseName: base name of the ROS topic to publish waypoints to
     # @param captureDistance: distance from a waypoint considered good enough
     def __init__(self, nodeName=NODE_BASENAME, waypoints=[], \
-                 captureDistance=CAPTURE_DISTANCE, \
-                 ctlrBasename=CTRLR_BASENAME, apBasename=AP_BASENAME):
-        WaypointController.__init__(self, nodeName, WP_SEQUENCE_CTRLR, \
-                                    ctlrBasename, apBasename)
+                 captureDistance=CAPTURE_DISTANCE):
+        WaypointController.__init__(self, nodeName, WP_SEQUENCE_CTRLR)
         self.currentWP = apbrg.LLA()
         self.pose = None
         self.baseAlt = 0.0
@@ -107,8 +104,8 @@ class WaypointSequencer(WaypointController):
     # object subscribes to the acs_pose topic for current position
     # updates, the wp_sequencer_run topic for start and stop commands, and
     # the wp_list topic to receive new waypoint sequence lists
-    # @param params: list as follows: [ odometry_base_name, controller_base_name ]
-    def callbackSetup(self, params=[ AP_BASENAME, CTRLR_BASENAME ]):
+    # @param params: no additional parameters required for this method
+    def callbackSetup(self, params=[]):
         self.createSubscriber("acs_pose", apbrg.Geodometry, self._updatePose)
         self.createSubscriber("%s_set" %self.nodeName, \
                               apmsg.WaypointListStamped, \
