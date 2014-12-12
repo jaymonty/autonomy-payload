@@ -116,7 +116,6 @@ class ControllerSelector(object):
         self._basename = basename
         self._loiter_wp_id = None
         self._safety_wp = mavbridge_msgs.LLA()
-        self._loiter_wp_id = None
 
         # Maintain the controller types by ID
         self._controllers = {}
@@ -301,9 +300,10 @@ class ControllerSelector(object):
     def _sub_ap_status(self, msg):
         self._ap_status = msg
         self._ap_status_last = rospy.Time.now()
-        if self._current_mode != 0 and \
-           self._ap_status.mode != mavbridge_msgs.Status.MODE_AUTO:
-            self._deactivate_all_controllers()
+        if self._current_mode != 0:
+            if self._ap_status.mode != mavbridge_msgs.Status.MODE_AUTO or \
+               self._ap_status.mis_cur != self._loiter_wp_id:
+                self._deactivate_all_controllers()
 
 
     # Callback for handling pose messages for this aircraft
