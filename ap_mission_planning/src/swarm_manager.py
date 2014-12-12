@@ -75,8 +75,8 @@ class SwarmManager(nodeable.Nodeable):
         self._ctlr_select_srv_proxy = \
             rospy.ServiceProxy("ctlr_selector/set_selector_mode", \
                                apsrv.SetInteger)
-        self.DBUG_PRINT = True
-        self.WARN_PRINT = True
+#        self.DBUG_PRINT = True
+#        self.WARN_PRINT = True
 
 
     #-------------------------------------------------

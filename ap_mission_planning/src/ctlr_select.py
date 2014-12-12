@@ -39,8 +39,7 @@ class ControllerType(object):
     # Initializer creates a "minimally" initialized ControllerType object
     # @param c_id:  ID (int enumeration) for the controller
     # @param c_name:  name for the controller
-    # @param c_topic_base: basename for the controllers ROS topics
-    def __init__(self, c_id, c_name, c_topic_base=controller.CTRLR_BASENAME):
+    def __init__(self, c_id, c_name):
         self.id = c_id
         self.name = c_name
 
@@ -157,10 +156,10 @@ class ControllerSelector(object):
             raise Exception("Attempted to redefine controller %u (%s) as %s" % \
                             (c_id, self.controllers[c_id].name, c_name))
         try:
-            self._controllers[c_id] = ControllerType(c_id, c_name, self._basename)
+            self._controllers[c_id] = ControllerType(c_id, c_name)
         except Exception as ex:
-            raise Exception("Failed to define controller %u (%s): %s" % \
-                            (c_id, c_name, ex.args[0]))
+            raise Exception("Failed to define controller %u (%s)" % \
+                            (c_id, c_name))
 
 
     # Handle mode change messages.  This method is responsible for making sure
