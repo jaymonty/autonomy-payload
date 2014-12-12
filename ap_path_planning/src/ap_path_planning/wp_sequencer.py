@@ -113,10 +113,6 @@ class WaypointSequencer(WaypointController):
         self.createSubscriber("%s_set" %self.nodeName, \
                               apmsg.WaypointListStamped, \
                               self._receiveWaypointList)
-#        rospy.Subscriber("%s/acs_pose"%params[0], apbrg.Geodometry, \
-#                         self._updatePose)
-#        rospy.Subscriber("%s/%s_set"%(params[1], self.nodeName), \
-#                         apmsg.WaypointListStamped, self._receiveWaypointList)
 
 
     # Executes one iteration of the timed loop for the WaypointSequencer
