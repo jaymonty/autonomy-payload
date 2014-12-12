@@ -53,8 +53,7 @@ class Controller(nodeable.Nodeable):
     # Class initializer initializes base class member variables
     # @param nodename:  name of the node that the object is contained in
     # @param ctrlrID: identifier (int) for this particular controller
-    # @param ctlrBasename: name of the ROS basename for controller topics
-    def __init__(self, nodename, ctrlrID, ctlrBasename=CTRLR_BASENAME):
+    def __init__(self, nodename, ctrlrID):
         nodeable.Nodeable.__init__(self, nodename)
         self.controllerID = ctrlrID
         self.sequence = 0

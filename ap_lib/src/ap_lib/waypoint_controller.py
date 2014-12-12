@@ -48,10 +48,8 @@ class WaypointController(controller.Controller):
     # Class initializer sets up the publisher for the waypoint topic
     # @param nodename:  name of the node that the object is contained in
     # @param ctrlrID: identifier (int) for this particular controller
-    # @param ctlr_basename: ROS basename for controller topics
-    # @param ap_basename: ROS basename for autopilot topics
-    def __init__(self, nodename, ctrlrID, ctlr_basename, ap_basename):
-        controller.Controller.__init__(self, nodename, ctrlrID, ctlr_basename)
+    def __init__(self, nodename, ctrlrID):
+        controller.Controller.__init__(self, nodename, ctrlrID)
         self._wpPublisher = self.createPublisher("payload_waypoint", LLA)
 
 
