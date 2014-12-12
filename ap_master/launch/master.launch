@@ -46,6 +46,12 @@
       <remap from="wp_sequencer/wp_sequencer_set" to="controllers/wp_sequencer_set" />
     </node>
     <node name="ctlr_selector" pkg="ap_mission_planning" type="ctlr_select.py" output="screen" args="" />
+    <node name="swarm_manager" pkg="ap_mission_planning" type="swarm_manager.py" output="screen" args="" >
+      <remap from="swarm_manager/swarm_state" to="swarm_tracker/swarm_state" />
+      <remap from="swarm_manager/subswarm_state" to="swarm_tracker/subswarm_state" />
+      <remap from="swarm_manager/swarm_formation_set" to="controllers/swarm_formation_set" />
+      <remap from="swarm_manager/follower_set" to="controllers/follower_set" />
+    </node>
   </group>
   <node name="run_once" pkg="ap_tasks" type="run_once.py" output="screen" args="" />
 </launch>
