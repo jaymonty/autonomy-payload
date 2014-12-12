@@ -32,8 +32,6 @@ from ap_lib.nodeable import *
 
 # Base name for node topics and services
 NODE_BASENAME = 'swarm_tracker'
-SELF_ODOM_BASENAME = 'autopilot'
-NET_BASENAME = 'network'
 
 # Some constants to make functions more "reusable"
 CURRENT_POSE = 0
@@ -342,8 +340,8 @@ class SwarmTracker(Nodeable):
         self.subSwarmMessage = SwarmStateStamped()
         self.subSwarmMessage.header.seq = 0
         self.subSwarmMessage.header.frame_id = "base_footprint"
-        self.DBUG_PRINT = False
-        self.WARN_PRINT = False
+#        self.DBUG_PRINT = True
+#        self.WARN_PRINT = True
 
 
     #-------------------------------------------------
@@ -353,8 +351,8 @@ class SwarmTracker(Nodeable):
     # Establishes the callbacks for the SwarmTracker object.  The object
     # subscribes to the acs_pose topic for own-aircraft state updates
     # and the recv_pose topic for swarm member updates
-    # @param params: list as follows: [ odometry_base_name, net_base_name ]
-    def callbackSetup(self, params=[ SELF_ODOM_BASENAME, NET_BASENAME ]):
+    # @param params: list as follows: []
+    def callbackSetup(self, params=[]):
         self.createSubscriber("acs_pose", apbrg.Geodometry, self.updateOwnPose)
         self.createSubscriber("recv_pose", SwarmVehicleState, self.updateSwarmPose)
         self.createSubscriber("update_subswarm", std_msgs.msg.UInt8, self.setSubSwarm)
