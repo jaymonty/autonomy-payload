@@ -18,9 +18,23 @@ from rospy import rostime
 #
 # Class member variables:
 #   nodeName:  Name of the node to start or node in which the object is
+#   timer: ROS rate object that controls the timing loop
 #   DBUG_PRINT: set true to force screen debug messages (default FALSE)
 #   WARN_PRINT: set false to force screen warning messages (default FALSE) 
-#   timer: ROS rate object that controls the timing loop
+#
+# Class member functions
+#   createPublisher: set up one ROS publisher using a standardized naming convention
+#   createSubscriber: set up one ROS subscriber using a standardized naming convention
+#   createService: set up one ROS service using a standardized naming convention
+#   runAsNode: run the object as its own ROS node
+#   log_debug: log an event for debugging purposes
+#   log_warn: log an event as a warning
+#
+# "Virtual" methods for inheriting class implementation
+#   publisherSetup: set up all publishers for the object
+#   callbackSetup: set up all subscribers for the object
+#   serviceSetup: set up all services for the object
+#   executeTimedLoop: run one iteration of the object's timed loop
 class Nodeable(object):
 
     # Class initializer initializes base class member variables

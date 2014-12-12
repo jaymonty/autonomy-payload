@@ -42,7 +42,10 @@ MIN_REL_ALT = 50.0 # Minimum relative altitude that a controller can order
 #   nodeName:  Name of the node to start or node in which the object is
 #   timer: ROS rate object that controls the timing loop
 #   DBUG_PRINT: set true to force screen debug messages (default FALSE)
-#   WARN_PRINT: set false to force screen warning messages (default FALSE) 
+#   WARN_PRINT: set false to force screen warning messages (default FALSE)
+#
+# Class member functions
+#   publishWaypoint: "safetly" publishes a waypoint position
 class WaypointController(controller.Controller):
 
     # Class initializer sets up the publisher for the waypoint topic

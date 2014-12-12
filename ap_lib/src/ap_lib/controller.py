@@ -37,17 +37,27 @@ FOLLOW_CTRLR = 2
 #
 # Class member variables:
 #   controllerID: identifier (int) for this particular controller
-#   statusPublisher: publisher object for controller status
-#   statusStamp: timestamp of the last status message publication
-#   sequence: number of waypoint sequences that have been ordered
 #   is_ready: set to True when a waypoint sequence has been loaded
 #   is_active: set to True is the waypoint sequencer is running
+#   _statusPublisher: publisher object for controller status
+#   _statusStamp: timestamp of the last status message publication
+#   _sequence: number of waypoint sequences that have been ordered
 #
 # Inherited from Nodeable:
 #   nodeName:  Name of the node to start or node in which the object is
 #   timer: ROS rate object that controls the timing loop
 #   DBUG_PRINT: set true to force screen debug messages (default FALSE)
-#   WARN_PRINT: set false to force screen warning messages (default FALSE) 
+#   WARN_PRINT: set false to force screen warning messages (default FALSE)
+#
+# Class member functions
+#   executeTimedLoop: implementation of the Nodeable class "virtual" function
+#   set_active: "safe" controller activation and deactivation
+#   set_ready_state: "safe" transitions between controller ready and not ready
+#   _sendStatusMessage: publishes the controller's periodic status message
+#   _activate_srv: handler for the controller's *_run service
+#
+# "Virtual" methods for inheriting class implementation
+#   runController: implements 1 iteration of the controller's functionality
 class Controller(nodeable.Nodeable):
 
     # Class initializer initializes base class member variables
@@ -56,12 +66,10 @@ class Controller(nodeable.Nodeable):
     def __init__(self, nodename, ctrlrID):
         nodeable.Nodeable.__init__(self, nodename)
         self.controllerID = ctrlrID
-        self.sequence = 0
+        self._sequence = 0
         self.is_ready = False
         self.is_active = False
-        self.statusPublisher = None
-        self.statusInterval = None
-        self.statusPublisher = \
+        self._statusPublisher = \
             self.createPublisher("status", apmsg.ControllerState)
         self.createService("%s_run"%nodename, apsrv.SetBoolean, self._activate_srv)
 
@@ -84,7 +92,7 @@ class Controller(nodeable.Nodeable):
     # controller is ready and active, the object-specific control
     # method will be called.  Status messages will be published regardless
     def executeTimedLoop(self):
-        self.sendStatusMessage()
+        self._sendStatusMessage()
         if self.is_ready and self.is_active:
             self.runController()
 
@@ -129,17 +137,17 @@ class Controller(nodeable.Nodeable):
 
 
     # Publishes a ControllerState message to the 
-    def sendStatusMessage(self):
-        if self.statusStamp == None: self.statusStamp = rospy.Time.now()
+    def _sendStatusMessage(self):
+        if self._statusStamp == None: self._statusStamp = rospy.Time.now()
         time = rospy.Time.now()
         interval = (time.secs + (time.nsecs / 1e9)) - \
-                   (self.statusStamp.secs + (self.statusStamp.nsecs / 1e9))
+                   (self._statusStamp.secs + (self._statusStamp.nsecs / 1e9))
         if interval >= 1.0:
-            self.statusStamp = time
+            self._statusStamp = time
             status = apmsg.ControllerState()
             status.controller_id = self.controllerID
-            status.sequence = self.sequence
+            status._sequence = self._sequence
             status.is_ready = self.is_ready
             status.is_active = self.is_active
-            self.statusPublisher.publish(status)
+            self._statusPublisher.publish(status)
 
