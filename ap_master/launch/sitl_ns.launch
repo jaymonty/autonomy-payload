@@ -32,6 +32,7 @@
       <remap from="network/recv_guided_goto" to="autopilot/guided_goto" />
       <remap from="network/recv_waypoint_goto" to="autopilot/waypoint_goto" />
       <remap from="network/update_subswarm" to="swarm_tracker/update_subswarm" />
+      <remap from="network/update_ctl_status" to="controllers/status" />
     </node>
     <node name="swarm_tracker" pkg="ap_perception" type="swarm_tracker_node.py" output="screen" args="" >
       <remap from="swarm_tracker/acs_pose" to="autopilot/acs_pose" />
