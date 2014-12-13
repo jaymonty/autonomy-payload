@@ -40,6 +40,8 @@ ROS_BASENAME = 'network'
 
 acs_sock = None     # socket
 aircraft_name = ''  # aircraft friendly name
+ctl_mode = 0        # Controller mode number
+ctl_ready = [False] * 16    # Controller ready flags (FIXME)
 
 #-----------------------------------------------------------------------
 # Handler for subswarm ID updates
@@ -71,6 +73,14 @@ def subscribe_subswarm_id(msg):
 #-----------------------------------------------------------------------
 # Subscribers (ROS -> Network)
 
+def sub_ctl_status(msg):
+    global ctl_mode, ctl_ready
+    if not (0 <= msg.controller_id <= 15):  # FIXME don't hardcode
+        return
+    ctl_ready[msg.controller_id] = msg.is_ready
+    if msg.is_active:
+        ctl_mode = msg.controller_id
+
 def sub_flight_status(msg):
     global acs_sock, aircraft_name
     message = messages.FlightStatus()
@@ -93,6 +103,11 @@ def sub_flight_status(msg):
     message.alt_rel = msg.alt_rel
     message.gps_hdop = msg.gps_eph
     message.mis_cur = msg.mis_cur
+
+    # Bring in controller mode and status
+    global ctl_mode, ctl_ready
+    message.ctl_mode = ctl_mode
+    message.ctl_ready = ctl_ready
 
     # Also bring in flight-ready flag
     message.ready = rospy.has_param("flight_ready") and \
@@ -189,6 +204,8 @@ if __name__ == '__main__':
                      apmsg.Geodometry, sub_pose)
     rospy.Subscriber("%s/update_subswarm"%ROS_BASENAME, 
                      std_msgs.msg.UInt8, subscribe_subswarm_id)
+    rospy.Subscriber("%s/update_ctl_status"%ROS_BASENAME,
+                     ap_msgs.ControllerState, sub_ctl_status)
 
     # Set up publishers (network -> ROS)
     pub_pose = rospy.Publisher("%s/recv_pose"%ROS_BASENAME, 
