@@ -1,6 +1,6 @@
 #!/bin/sh
 
-if [[ -z $1 || -z $2 ]]; then
+if [ -z $1 ] || [ -z $2 ]; then
   echo "usage: $0 DEVICE ID-NUMBER"
 fi
 
