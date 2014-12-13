@@ -63,13 +63,17 @@ if __name__ == '__main__':
                  message.vlx, message.vly, message.vlz,
                  message.vax, message.vay, message.vaz)
         elif isinstance(message, messages.FlightStatus):
-            print "\tNm: %s Su: %u Mo: %u Wp: %u Fl: %u%u%u%u%u%u%u%u Sa: %u Br: %d Bv: %d Bc: %d As: %f Ar: %d Gh: %u" % \
-                (message.name, message.msg_sub, message.mode, int(message.mis_cur), int(message.armed), int(message.ok_ahrs),
+            ready_string = ''
+            for b in message.ctl_ready:
+                ready_string += "%u" % int(b)
+            print "\tNm: %s Su: %u Mo: %u Wp: %u Fl: %u%u%u%u%u%u%u%u Sa: %u Br: %d Bv: %d As: %f Ar: %d Cm: %u Cr: %s" % \
+                (message.name, message.msg_sub, message.mode,
+                 int(message.mis_cur), int(message.armed), int(message.ok_ahrs),
                  int(message.ok_as), int(message.ok_gps), int(message.ok_ins),
                  int(message.ok_mag), int(message.ok_pwr), int(message.ready),
                  message.gps_sats, message.batt_rem, message.batt_vcc,
-                 message.batt_cur, message.airspeed, message.alt_rel,
-                 message.gps_hdop)
+                 message.airspeed, message.alt_rel,
+                 message.ctl_mode, ready_string)
         else:
             print "\t<I don't know how to decode this type>"
 
