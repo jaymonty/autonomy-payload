@@ -175,7 +175,7 @@ class Example(Message):
 class FlightStatus(Message):
     # Define message type parameters
     msg_type = 0x00
-    msg_fmt = '>HBBHHhhHH16s'
+    msg_fmt = '>HBBHhhHxBH16s'
 
     def _init_message(self):
         # Define message fields (setting to None helps raise Exceptions later)
@@ -191,11 +191,13 @@ class FlightStatus(Message):
         self.gps_sats = None	# Number of satellites (int, 0-255)
         self.batt_rem = None	# Battery % remaining (int, 0-100)
         self.batt_vcc = None	# Battery Voltage (int, mV)
-        self.batt_cur = None	# Battery Current (int, mA)
         self.airspeed = None	# Airspeed (float, m/s)
         self.alt_rel = None	# AGL (int, millimeters)
-        self.gps_hdop = None	# GPS HDOP (int, 0-65535)
         self.mis_cur = None	# Current mission (waypoint) index (0-65535)
+        # Unused byte
+        self.ctl_mode = None	# Controller mode (0-15)
+        self.ctl_ready = [False] * 16   # Controller ready flags (bool/bit array)
+                                # (Index 0 is low bit)
         self.name = None	# Friendly name of aircraft (16 chars max)
         
     def _pack(self):
@@ -216,18 +218,19 @@ class FlightStatus(Message):
         batt_vcc = 65535
         if self.batt_vcc >= 0:
             batt_vcc = self.batt_vcc
-        batt_cur = 65535
-        if self.batt_cur >= 0:
-            batt_cur = self.batt_cur
+        ctl_ready_bits = 0x0000
+        for bit in range(len(self.ctl_ready)):
+            if self.ctl_ready[bit]:
+                ctl_ready_bits |= 1<<bit
         tupl = (mode_and_flags,
                 int(self.gps_sats),
                 int(batt_rem),
                 int(batt_vcc),
-                int(batt_cur),
                 int(self.airspeed * 1e02),  # TODO: Are these large enough?
                 int(self.alt_rel / 1e02),
-                int(self.gps_hdop),
                 int(self.mis_cur),
+                int(self.ctl_mode),
+                ctl_ready_bits,
                 self.name)
 
         # Pack into a byte string
@@ -254,13 +257,13 @@ class FlightStatus(Message):
         self.batt_vcc = -1
         if fields[3] != 65535:  # Account for invalid values
             self.batt_vcc = fields[3]
-        self.batt_cur = -1
-        if fields[4] != 65535:  # Account for invalid values
-            self.batt_cur = fields[4]
-        self.airspeed = fields[5] / 1e02
-        self.alt_rel = fields[6] * 1e02
-        self.gps_hdop = fields[7]
-        self.mis_cur = fields[8]
+        self.airspeed = fields[4] / 1e02
+        self.alt_rel = fields[5] * 1e02
+        self.mis_cur = fields[6]
+        self.ctl_mode = fields[7]
+        self.ctl_ready = [False] * 16
+        for bit in range(len(self.ctl_ready)):
+            self.ctl_ready[bit] = bool(1<<bit & fields[8])
         self.name = str(fields[9]).strip(chr(0x0))
 
 class Pose(Message):
