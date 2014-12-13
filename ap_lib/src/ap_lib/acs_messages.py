@@ -446,8 +446,14 @@ class SlaveSetup(Message):
         self.channel = None        # Pascal String
 
     def _pack(self):
+        # TODO Get rid of this ugly hack
+        try:
+            channel = bytes(self.channel, 'utf-8')  # Python3
+        except:
+            channel = str(self.channel)  # Python2
+
         tupl = (int(self.enable),
-                str(self.channel))
+                channel)
         return struct.pack(type(self).msg_fmt, *tupl)
 
     def _unpack(self, data):
