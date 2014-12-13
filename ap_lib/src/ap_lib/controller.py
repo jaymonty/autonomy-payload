@@ -69,6 +69,8 @@ class Controller(nodeable.Nodeable):
         self._sequence = 0
         self.is_ready = False
         self.is_active = False
+        self._statusStamp = None
+        self._sequence = 0
         self._statusPublisher = \
             self.createPublisher("status", apmsg.ControllerState)
         self.createService("%s_run"%nodename, apsrv.SetBoolean, self._activate_srv)
@@ -146,7 +148,7 @@ class Controller(nodeable.Nodeable):
             self._statusStamp = time
             status = apmsg.ControllerState()
             status.controller_id = self.controllerID
-            status._sequence = self._sequence
+            status.sequence = self._sequence
             status.is_ready = self.is_ready
             status.is_active = self.is_active
             self._statusPublisher.publish(status)

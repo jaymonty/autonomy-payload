@@ -69,7 +69,17 @@ CAPTURE_DISTANCE = 110.0
 #   nodeName:  Name of the node to start or node in which the object is
 #   timer: ROS rate object that controls the timing loop
 #   DBUG_PRINT: set true to force screen debug messages (default FALSE)
-#   WARN_PRINT: set false to force screen warning messages (default FALSE) 
+#   WARN_PRINT: set false to force screen warning messages (default FALSE)
+#
+# Class member functions
+#   callbackSetup: implementation of the Nodeable class virtual function
+#   runController: implementation of the Controller class virtual function
+#   setSequence: sets the sequence of waypoints to be followed
+#   addWaypoint: adds a waypoint to the end of the sequence
+#   _incrementWP: transition to the next WP (upon current WP capture)
+#   _checkReadyNextWP: determines whether readiness for issue of the next WP
+#   _updatePose: callback for new aircraft state information
+#   _receiveWaypointList: callback for new waypoint lists
 class WaypointSequencer(WaypointController):
 
     # Class initializer initializes variables, subscribes to required
@@ -134,7 +144,7 @@ class WaypointSequencer(WaypointController):
         try:
             self.wpList = deque(newWaypoints)
             if len(self.wpList) > 0:
-                self.sequence += 1
+                self._sequence += 1
                 self.readyNextWP = True
                 self.listComplete = False
                 self.set_ready_state(True)

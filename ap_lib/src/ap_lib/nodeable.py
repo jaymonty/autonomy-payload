@@ -62,6 +62,7 @@ class Nodeable(object):
         # Initialize ROS node & set up callbacks, services and publishers
         rospy.init_node(self.nodeName)
         self.serviceSetup(serviceParams)
+        self.serviceProxySetup([])
         self.callbackSetup(callbackParams)
         self.publisherSetup(publisherParams)
 
@@ -112,12 +113,26 @@ class Nodeable(object):
     #        ensuring a standardized service naming convention at the
     #        programming level.  Remap as required in the launch file.
     # @param srvName: desired name of the topic (no basename)
-    # @param srvType: type of ROS message to be published to this topic
+    # @param srvType: type of ROS service
     # @param srvHandler: function that will handle the service
     # @return the created service object
     def createService(self, srvName, srvType, srvHandler):
         return rospy.Service("%s/%s" %(self.nodeName, srvName), \
                              srvType, srvHandler)
+
+
+    # Method for initializing a ROS service proxy
+    # Naming convention for the service is /nodename/servicename where the
+    # node name is set when the object is instantiated.  The service name
+    # is provided as a parameter.
+    # NOTE:  This method is provided as a convenient mechanism for
+    #        ensuring a standardized service naming convention at the
+    #        programming level.  Remap as required in the launch file.
+    # @param srvName: desired name of the topic (no basename)
+    # @param srvType: type of ROS service
+    # @return the created service proxy object
+    def createServiceProxy(self, srvName, srvType):
+        return rospy.ServiceProxy("%s/%s" %(self.nodeName, srvName), srvType)
 
 
     #-----------------------------------------------------
@@ -129,6 +144,14 @@ class Nodeable(object):
     # that implement services (leave alone if no services provided)
     # @param params: list of arbitrary parameters for implementing class use
     def serviceSetup(self, params=[]):
+        pass
+
+
+    # Virtual method for setting up service proxies that this object will
+    # utilize.  Should be overridden by implementing classes
+    # that require services (leave alone if no services utilized)
+    # @param params: list of arbitrary parameters for implementing class use
+    def serviceProxySetup(self, params=[]):
         pass
 
 

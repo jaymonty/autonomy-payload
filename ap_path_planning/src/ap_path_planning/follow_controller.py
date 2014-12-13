@@ -78,9 +78,7 @@ FOLLOW_DISTANCE = 50.0 # default distance behind the lead to place the follow po
 #
 # Class member functions:
 #   callBackSetup: implementation of the Nodeable virtual function
-#   publisherSetup: implementation of the Nodeable virtual function
-#   executeTimedLoop: implementation of the Nodeable virtual function
-#   set_active: implementation of the Controller virtual function
+#   runController: implementation of the Controller virtual function
 #   reset: used to set follow control parameters
 #   _compute_follow_wp: computes a target waypoint to achieve follow behavior
 #   _process_formation_order: callback for messages to the formation order topic
@@ -204,7 +202,7 @@ class FollowController(WaypointController):
         self.rOffset = offset
         self.altMode = altMode
         self.ctrlAlt = ctrlAlt
-        self.sequence += 1
+        self._sequence += 1
         self.set_ready_state(True)
         self.log_dbug("formatio-n command: ldr=%d, range=%f, offset=%f"%(followAC, followDist, offset))
 
