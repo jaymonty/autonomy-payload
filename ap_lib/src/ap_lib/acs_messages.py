@@ -51,11 +51,7 @@ class Message(object):
     hdr_size = struct.calcsize(hdr_fmt)
 
     def __init__(self):
-        # Initialize instance msg_type from class msg_type
-        # (done for compatibility only)
-        self.msg_type = type(self).msg_type
-
-        # Initialize other header fields
+        # Initialize header fields
         self.msg_fl_rel = False # Reliable flag
         self.msg_fl_syn = False # SYN flag
         self.msg_sub = None	# Source subswarm ID (0-30 currently)
@@ -69,9 +65,6 @@ class Message(object):
         # Add source IP and port, just for received messages (not serialized)
         self.msg_src_ip = None
         self.msg_src_port = None
-
-        # Initialize payload component
-        self._init_message()
 
     # Serialize a Message subtype
     def serialize(self):
@@ -146,7 +139,9 @@ class Example(Message):
     # Nothing outside this class uses this, so do what makes sense here.
     msg_fmt = '>HH8s'
 
-    def _init_message(self):
+    def __init__(self):
+        Message.__init__(self)
+
         # Define message fields (setting to None helps raise Exceptions later)
         self.foo = None         # Decimal foo's (e.g., 123.456)
         self.bar = None		# Integer bar's (e.g., 789)
@@ -177,7 +172,9 @@ class FlightStatus(Message):
     msg_type = 0x00
     msg_fmt = '>HBBHhhHxBH16s'
 
-    def _init_message(self):
+    def __init__(self):
+        Message.__init__(self)
+
         # Define message fields (setting to None helps raise Exceptions later)
         self.mode = None	# Aircraft guidance mode (0-15, see enum)
         self.armed = None	# Boolean: Throttle Armed?
@@ -271,7 +268,9 @@ class Pose(Message):
     msg_type = 0x01
     msg_fmt = '>lllllllhhhhhh'
 
-    def _init_message(self):
+    def __init__(self):
+        Message.__init__(self)
+
         # Define message fields (setting to None helps raise Exceptions later)
         self.lat = None		# Decimal degrees (e.g. 35.123456)
         self.lon = None		# Decimal degrees (e.g. -120.123456)
@@ -329,7 +328,9 @@ class Heartbeat(Message):
     msg_type = 0x80
     msg_fmt = '>L'
 
-    def _init_message(self):
+    def __init__(self):
+        Message.__init__(self)
+
         self.counter = None         # User-definable counter (UInt32)
 
     def _pack(self):
@@ -344,7 +345,9 @@ class Arm(Message):
     msg_type = 0x81
     msg_fmt = '>B3x'
 
-    def _init_message(self):
+    def __init__(self):
+        Message.__init__(self)
+
         self.enable = None         # Boolean
         # 3 padding bytes = 0x00
         
@@ -360,7 +363,9 @@ class Mode(Message):
     msg_type = 0x82
     msg_fmt = '>B3x'
 
-    def _init_message(self):
+    def __init__(self):
+        Message.__init__(self)
+
         self.mode = None         # Mode ID (0-15)
         # 3 padding bytes = 0x00
 
@@ -375,7 +380,9 @@ class Mode(Message):
 class Land(Message):
     msg_type = 0x83
 
-    def _init_message(self):
+    def __init__(self):
+        Message.__init__(self)
+
         pass
 
     def _pack(self):
@@ -388,7 +395,9 @@ class LandAbort(Message):
     msg_type = 0x84
     msg_fmt = '>h2x'
 
-    def _init_message(self):
+    def __init__(self):
+        Message.__init__(self)
+
         self.alt = None         # Waive-off altitude (approx +/-32000)
         # 2 padding bytes = 0x0000
 
@@ -404,7 +413,9 @@ class GuidedGoto(Message):
     msg_type = 0x85
     msg_fmt = '>lll'
 
-    def _init_message(self):
+    def __init__(self):
+        Message.__init__(self)
+
         self.lat = None		# Decimal degrees (e.g. 35.123456)
         self.lon = None		# Decimal degrees (e.g. -120.123456)
         self.alt = None		# Decimal meters MSL (WGS84)
@@ -425,7 +436,9 @@ class WaypointGoto(Message):
     msg_type = 0x86
     msg_fmt = '>H2x'
 
-    def _init_message(self):
+    def __init__(self):
+        Message.__init__(self)
+
         self.index = None         # Waypoint index (0-65535)
         # 2 padding bytes = 0x0000
 
@@ -441,7 +454,9 @@ class SlaveSetup(Message):
     msg_type = 0x87
     msg_fmt = '>B100p'
 
-    def _init_message(self):
+    def __init__(self):
+        Message.__init__(self)
+
         self.enable = None         # Boolean
         self.channel = None        # Pascal String
 
@@ -465,7 +480,9 @@ class FlightReady(Message):
     msg_type = 0x88
     msg_fmt = '>B3x'
 
-    def _init_message(self):
+    def __init__(self):
+        Message.__init__(self)
+
         self.raedy = None         # Boolean
         # 3 padding bytes = 0x00
 
@@ -481,7 +498,9 @@ class SetSubswarm(Message):
     msg_type = 0x89
     msg_fmt = '>B3x'
 
-    def _init_message(self):
+    def __init__(self):
+        Message.__init__(self)
+
         self.subswarm = None         # New subswarm ID
         # 3 padding bytes = 0x00
 
@@ -497,7 +516,9 @@ class SetController(Message):
     msg_type = 0x8A
     msg_fmt = '>B3x'
 
-    def _init_message(self):
+    def __init__(self):
+        Message.__init__(self)
+
         self.controller = None     # Numeric ID of controller type
         # 3 padding bytes
 
@@ -513,7 +534,9 @@ class FollowerSetup(Message):
     msg_type = 0x8B
     msg_fmt = '>BBhhhh2x'
 
-    def _init_message(self):
+    def __init__(self):
+        Message.__init__(self)
+
         self.leader_id = None       # ID of aircraft to follow
         self.alt_mode = None        # 0=absolute, 1=relative
         self.seq = None             # Task sequence number (optional but should increment)
@@ -547,7 +570,9 @@ class WPSequencerSetup(Message):
     msg_fmt_wp = '>lll'
     msg_fmt_wp_sz = struct.calcsize(msg_fmt_wp)
 
-    def _init_message(self):
+    def __init__(self):
+        Message.__init__(self)
+
         # 1 byte                 # Count of LLA tuples in wp_list (0-255)
         # 1 padding byte
         self.seq = None          # Task sequence number (optional but should increment)
@@ -575,7 +600,9 @@ class PayloadHeartbeat(Message):
     msg_type = 0xFE
     msg_fmt = '>B3x'
 
-    def _init_message(self):
+    def __init__(self):
+        Message.__init__(self)
+
         self.enable = None         # Boolean
         # 3 padding bytes = 0x00
 
@@ -590,7 +617,9 @@ class PayloadHeartbeat(Message):
 class PayloadShutdown(Message):
     msg_type = 0xFF
 
-    def _init_message(self):
+    def __init__(self):
+        Message.__init__(self)
+
         pass
 
     def _pack(self):
