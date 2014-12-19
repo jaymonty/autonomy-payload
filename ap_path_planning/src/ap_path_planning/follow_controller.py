@@ -29,7 +29,7 @@ NODENAME = 'follower'
 BASE_ALT_MODE = 0  # enumeration indicating base altitude mode
 ALT_SEP_MODE = 1   # enumeration indicating altitude separation mode
 
-OVERSHOOT = 100.0      # default "ahead" distance to place waypoint to avoid capture
+OVERSHOOT = 250.0      # default "ahead" distance to place waypoint to avoid capture
 FOLLOW_DISTANCE = 50.0 # default distance behind the lead to place the follow point
 
 
