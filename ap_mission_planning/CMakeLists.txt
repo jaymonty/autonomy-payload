@@ -8,6 +8,8 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   std_msgs
+  ap_path_planning
+  ap_lib
 )
 
 ## System dependencies are found with CMake's conventions
