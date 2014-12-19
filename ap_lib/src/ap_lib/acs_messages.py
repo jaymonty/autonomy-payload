@@ -193,8 +193,8 @@ class FlightStatus(Message):
         self.mis_cur = None	# Current mission (waypoint) index (0-65535)
         # Unused byte
         self.ctl_mode = None	# Controller mode (0-15)
-        self.ctl_ready = [False] * 16   # Controller ready flags (bool/bit array)
-                                # (Index 0 is low bit)
+        self.ctl_ready = [False] * 17   # Controller ready flags (bool/bit array)
+                                # (Index 1 is low bit, 16 is high bit, no 0)
         self.name = None	# Friendly name of aircraft (16 chars max)
         
     def _pack(self):
@@ -216,9 +216,9 @@ class FlightStatus(Message):
         if self.batt_vcc >= 0:
             batt_vcc = self.batt_vcc
         ctl_ready_bits = 0x0000
-        for bit in range(len(self.ctl_ready)):
+        for bit in range(1, len(self.ctl_ready)):
             if self.ctl_ready[bit]:
-                ctl_ready_bits |= 1<<bit
+                ctl_ready_bits |= 1<<(bit-1)
         tupl = (mode_and_flags,
                 int(self.gps_sats),
                 int(batt_rem),
@@ -259,8 +259,8 @@ class FlightStatus(Message):
         self.mis_cur = fields[6]
         self.ctl_mode = fields[7]
         self.ctl_ready = [False] * 16
-        for bit in range(len(self.ctl_ready)):
-            self.ctl_ready[bit] = bool(1<<bit & fields[8])
+        for bit in range(1, len(self.ctl_ready)):
+            self.ctl_ready[bit] = bool(1<<(bit-1) & fields[8])
         self.name = str(fields[9]).strip(chr(0x0))
 
 class Pose(Message):
