@@ -20,7 +20,7 @@ from rospy import rostime
 
 # Standard Python imports
 from math import *
-from argparse import ArgumentParser
+from threading import RLock
 
 # Other ACS package imports
 #from autopilot_bridge.msg import LLA
@@ -60,20 +60,16 @@ class SwarmTrackerSubscriber(object):
     # Callback to update swarm information when it is received
     # @param swarmMsg: message containing received swarm data
     def updateSwarmState(self, swarmMsg):
-        lastSwarm = self.swarm
-        self.swarm = dict()
         self.timestamp = swarmMsg.header.stamp
         for msgElement in swarmMsg.swarm:
-            if msgElement.vehicle_id in lastSwarm:
-                element = lastSwarm[msgElement.vehicle_id]
+            if msgElement.vehicle_id in self.swarm:
+                element = self.swarm[msgElement.vehicle_id]
                 element.updateState(msgElement.state, msgElement.subswarm_id)
-                self.swarm[msgElement.vehicle_id] = element
             else:
                 element = SwarmElement(msgElement.vehicle_id, \
                                        msgElement.subswarm_id, \
                                        msgElement.state)
                 self.swarm[msgElement.vehicle_id] = element
-        del lastSwarm
 
 
     # Returns a record (SwarmElement object) for a requested swarm member
@@ -144,12 +140,9 @@ class SwarmElement(object):
     # @param newState: Geodometry object with the new state information
     # @param subswarm: ID of the subswarm to which this swarm member belongs
     def updateState(self, newState, subswarm):
-        oldState = self.state
         self.subSwarmID = subswarm
         self.state = newState
-        self.state.header.seq = oldState.header.seq + 1
         self.state.header.frame_id = 'base_footprint'
-        del oldState
 
 
     # Computes a dead reckon position for a (presumably) future time
@@ -296,6 +289,7 @@ class SwarmElement(object):
 #   _subSwarmPublisher: Object for publishing subswarm state to the ROS topic
 #   _swarmMessage: Container for swarm states to be published to the ROS topic
 #   _subSwarmMessage: Container for subswarm states to be published to the ROS topic
+#   _lock: Prevents the callback thread modifications at a bad time
 #
 # Inherited from Nodeable:
 #   nodeName:  name of the node to start or node in which the object is
@@ -341,6 +335,7 @@ class SwarmTracker(Nodeable):
         self._subSwarmMessage = SwarmStateStamped()
         self._subSwarmMessage.header.seq = 0
         self._subSwarmMessage.header.frame_id = "base_footprint"
+        self._lock = RLock()
 #        self.DBUG_PRINT = True
 #        self.WARN_PRINT = True
 
@@ -373,6 +368,7 @@ class SwarmTracker(Nodeable):
     # The loop computes a DR position for each vehicle in the swarm for the
     # current time and publishes a SwarmState message to the ROS topic.
     def executeTimedLoop(self):
+        self._lock.acquire()
         self._swarmMessage.header.stamp = rospy.Time.now()
         self._subSwarmMessage.header.stamp = self._swarmMessage.header.stamp
         del self._swarmMessage.swarm[:]
@@ -394,6 +390,7 @@ class SwarmTracker(Nodeable):
         self._subSwarmPublisher.publish(self._subSwarmMessage)
         self._swarmMessage.header.seq += 1
         self._subSwarmMessage.header.seq += 1
+        self._lock.release()
 
 
     #-----------------------------------------
@@ -424,6 +421,7 @@ class SwarmTracker(Nodeable):
     # @param poseMsg: SwarmVehicleState object with the new pose
     def updateSwarmPose(self, poseMsg):
         try:
+            self._lock.acquire()
             newTime = poseMsg.state.header.stamp
             poseTime = newTime.secs + (newTime.nsecs / float(1e9))
             # Update an existing element if it's already in the dictionary
@@ -444,8 +442,10 @@ class SwarmTracker(Nodeable):
             element = self._swarm[poseMsg.vehicle_id]
             element.subSwarmID = poseMsg.subswarm_id
             self.log_dbug("new aircraft id=" + str(poseMsg.vehicle_id) + " added to swarm")
+            self._lock.release()
         except Exception as ex:
             self.log_warn("Swarm update callback error: " + ex.args[0])
+            self._lock.release()
 
 
     # Updates the "subswarm" in which this vehicle is participating
