@@ -10,6 +10,7 @@
 # Import a bunch of libraries
 
 import sys
+import threading
 
 import rospy
 
@@ -98,6 +99,7 @@ class ControllerType(object):
 #   _pub_wpindex: publisher to send vehicle back to the "safe" loiter point
 #   _pub_safetywp: publisher to reset the autopilot wp location to the "safe" point
 #   _pub_status: publisher to send a status message for the selector
+#   _lock: prevent unsafe thread interaction between services and callbacks
 #
 # TODO list:
 #  1 Improve basename implementation (too hard coded now)
@@ -116,6 +118,7 @@ class ControllerSelector(object):
         self._basename = basename
         self._loiter_wp_id = None
         self._safety_wp = mavbridge_msgs.LLA()
+        self._lock = threading.RLock()
 
         # Maintain the controller types by ID
         self._controllers = {}
@@ -176,14 +179,15 @@ class ControllerSelector(object):
     # @param mode: ID (int) of the newly requested active mode
     # @return the ID of the post-method active controller mode
     def _set_ctlr_mode(self, mode):
-        stale_time = rospy.Time.now() - rospy.Duration(3)
-
         try:
+            self._lock.acquire()
+            stale_time = rospy.Time.now() - rospy.Duration(3)
+            
             # Is this reset to NO_PAYLOAD_CONTROL
             if mode == controller.NO_PAYLOAD_CTRL:
                 if self._current_mode != controller.NO_PAYLOAD_CTRL:
                     self._deactivate_all_controllers()
-                return self._current_mode
+                return
 
             # Is requested mode known to us?
             if mode not in self._controllers:
@@ -211,7 +215,7 @@ class ControllerSelector(object):
                 # NOTE: Not really an error--it's idempotent!
                 # We'll report it anyway and then move along (return)
                 rospy.logwarn("Set Control Mode: Requested controller is already active")
-                return self._current_mode
+                return
 
             # If we're not already in payload control, make sure we've got an
             # up-to-date list of infinite loiter waypoints fromn the autopilot
@@ -244,13 +248,16 @@ class ControllerSelector(object):
             else:
                 self._current_mode = controller.NO_PAYLOAD_CONTROL
 
-            return self._current_mode
+            return
 
         except Exception as ex:
             # If we get here, something is wrong
             # Do the most conservative thing (for now take the payload out of the loop)
             self._deactivate_all_controllers()
             rospy.logwarn("Set Control Mode: " + ex.args[0])
+            return
+        finally:
+            self._lock.release()
             return self._current_mode
 
 
@@ -282,6 +289,7 @@ class ControllerSelector(object):
     # end state), but this will make sure that everything here is consistent.
     # @param msg: controller status message being processed
     def _sub_ctlr_status(self, msg):
+        self._lock.acquire()
         if msg.controller_id not in self._controllers:
             raise Exception("Received status message from unknown controller type")
         self._controllers[msg.controller_id].update_status(msg)
@@ -291,6 +299,7 @@ class ControllerSelector(object):
         elif msg.is_active == True and \
              msg.controller_id != self._current_mode:
             self._deactivate_all_controllers()
+        self._lock.release()
 
 
     # Callback for handling autopilot status messages
@@ -298,12 +307,14 @@ class ControllerSelector(object):
     # enabled, all controllers will be deactivated.
     # @param msg: new autopilot status message
     def _sub_ap_status(self, msg):
+        self._lock.acquire()
         self._ap_status = msg
         self._ap_status_last = rospy.Time.now()
         if self._current_mode != 0:
             if self._ap_status.mode != mavbridge_msgs.Status.MODE_AUTO or \
                self._ap_status.mis_cur != self._loiter_wp_id:
                 self._deactivate_all_controllers()
+        self._lock.release()
 
 
     # Callback for handling pose messages for this aircraft
