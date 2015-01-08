@@ -99,6 +99,8 @@ class ControllerType(object):
 #   _pub_wpindex: publisher to send vehicle back to the "safe" loiter point
 #   _pub_safetywp: publisher to reset the autopilot wp location to the "safe" point
 #   _pub_status: publisher to send a status message for the selector
+#   _wp_get_all: proxy for wp_getall service calls
+#   _wp_getlast: proxy for wp_getlast service calls
 #   _lock: prevent unsafe thread interaction between services and callbacks
 #
 # TODO list:
@@ -117,6 +119,8 @@ class ControllerSelector(object):
         self._nodename = nodename
         self._basename = basename
         self._loiter_wp_id = None
+        self._wp_list = []
+        self._loiter_wps = []
         self._safety_wp = mavbridge_msgs.LLA()
         self._lock = threading.RLock()
 
@@ -150,6 +154,16 @@ class ControllerSelector(object):
         rospy.Subscriber("autopilot/acs_pose",
                          mavbridge_msgs.Geodometry,
                          self._sub_acs_pose)
+
+        self._wp_getall = None
+        self._wp_getlast = None
+        try:
+            self._wp_getall = \
+                rospy.ServiceProxy('autopilot/wp_getall', mavbridge_srv.WPGetAll)
+            self._wp_getlast = \
+                rospy.ServiceProxy('autopilot/wp_getlast', mavbridge_srv.WPGetAll)
+        except:
+            pass  # Don't need to do anything, just don't want the node to crash
 
 
     # Add a new controller type by ID and name
@@ -187,7 +201,7 @@ class ControllerSelector(object):
             if mode == controller.NO_PAYLOAD_CTRL:
                 if self._current_mode != controller.NO_PAYLOAD_CTRL:
                     self._deactivate_all_controllers()
-                return
+                return self._current_mode
 
             # Is requested mode known to us?
             if mode not in self._controllers:
@@ -215,12 +229,12 @@ class ControllerSelector(object):
                 # NOTE: Not really an error--it's idempotent!
                 # We'll report it anyway and then move along (return)
                 rospy.logwarn("Set Control Mode: Requested controller is already active")
-                return
+                return self._controllers[mode]
 
             # If we're not already in payload control, make sure we've got an
             # up-to-date list of infinite loiter waypoints fromn the autopilot
             if self._current_mode == controller.NO_PAYLOAD_CTRL:
-                self._retrieve_ap_waypoints()
+                self._retrieve_last_ap_waypoint()
                 self._set_safety_wp()
 
             # Shut down any other active controllers
@@ -248,14 +262,12 @@ class ControllerSelector(object):
             else:
                 self._current_mode = controller.NO_PAYLOAD_CONTROL
 
-            return
-
         except Exception as ex:
             # If we get here, something is wrong
             # Do the most conservative thing (for now take the payload out of the loop)
             self._deactivate_all_controllers()
             rospy.logwarn("Set Control Mode: " + ex.args[0])
-            return
+
         finally:
             self._lock.release()
             return self._current_mode
@@ -338,8 +350,12 @@ class ControllerSelector(object):
     # TODO:  make the service name more configurable
     def _retrieve_ap_waypoints(self):
         try:
-            wp_getall = rospy.ServiceProxy('autopilot/wp_getall', mavbridge_srv.WPGetAll)
-            self._wp_list = wp_getall().wp
+            # in case the service wasn't available at startup (ordering)
+            if self._wp_getall == None:
+                self._wp_getall = \
+                    rospy.ServiceProxy('autopilot/wp_getall', mavbridge_srv.WPGetAll)
+
+            self._wp_list = self._wp_getall().wp
 
             # Identify all of the available infinite loiter waypoints
             self._loiter_wps = []
@@ -352,6 +368,27 @@ class ControllerSelector(object):
             rospy.logwarn("Unable to load waypoints: " + ex.args[0])
 
 
+    # Retrieves and processes the last waypoint from the autopilot.  This
+    # waypoint is used by waypoint controllers to effect the desired
+    # control mode.  The waypoint must be an infinite loiter waypoint
+    def _retrieve_last_ap_waypoint(self):
+        try:
+            # in case the service wasn't available at startup (ordering)
+            if self._wp_getlast == None:
+                self._wp_getlast = \
+                    rospy.ServiceProxy('autopilot/wp_getlast', mavbridge_srv.WPGetAll)
+
+            self._wp_list = self._wp_getlast().wp
+            self._loiter_wps = []
+            if len(self._wp_list) > 0 and \
+               self._wp_list[0].command == INFINITE_LOITER_CMD:
+                self._loiter_wps.append(self._wp_list[0].seq)
+
+        except Exception as ex:
+            self._loiter_wps = []
+            rospy.logwarn("Unable to load last waypoint: " + ex.args[0])
+
+
     # Sets the values for the safety waypoint
     def _set_safety_wp(self):
 #        self._safety_wp.lat = loiter_pt.x
@@ -360,6 +397,9 @@ class ControllerSelector(object):
         self._safety_wp.lat = self._own_lat
         self._safety_wp.lon = self._own_lon
         self._safety_wp.alt = self._own_rel_alt
+        if len(self._wp_list) < 1:
+            raise Exception("No waypoints retrieved from autopilot")
+
         loiter_pt = self._wp_list[-1]
         if loiter_pt.command == INFINITE_LOITER_CMD:
             self._loiter_wp_id = loiter_pt.seq
