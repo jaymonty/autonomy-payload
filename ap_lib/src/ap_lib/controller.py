@@ -72,7 +72,7 @@ class Controller(nodeable.Nodeable):
         self._statusStamp = None
         self._sequence = 0
         self._statusPublisher = \
-            self.createPublisher("status", apmsg.ControllerState)
+            self.createPublisher("ctlr_status", apmsg.ControllerState)
         self.createService("%s_run"%nodename, apsrv.SetBoolean, self._activate_srv)
 
 

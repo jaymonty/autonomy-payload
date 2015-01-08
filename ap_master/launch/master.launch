@@ -47,19 +47,22 @@
   <group if="$(arg ctrlr)">
     <node name="follower" pkg="ap_path_planning" type="follower_node.py" output="screen" args="">
       <remap from="follower/payload_waypoint" to="autopilot/payload_waypoint" />
-      <remap from="follower/status" to="controllers/status" />
+      <remap from="follower/ctlr_status" to="controllers/status" />
       <remap from="follower/swarm_state" to="swarm_tracker/swarm_state" />
       <remap from="follower/follower_set" to="controllers/follower_set" />
     </node>
 
     <node name="wp_sequencer" pkg="ap_path_planning" type="wp_sequencer_node.py" output="screen" args="">
       <remap from="wp_sequencer/payload_waypoint" to="autopilot/payload_waypoint" />
-      <remap from="wp_sequencer/status" to="controllers/status" />
+      <remap from="wp_sequencer/ctlr_status" to="controllers/status" />
       <remap from="wp_sequencer/acs_pose" to="autopilot/acs_pose" />
       <remap from="wp_sequencer/wp_sequencer_set" to="controllers/wp_sequencer_set" />
     </node>
 
-    <node name="ctlr_selector" pkg="ap_mission_planning" type="ctlr_select.py" output="screen" args="" />
+    <node name="ctlr_selector" pkg="ap_mission_planning" type="ctlr_select.py" output="screen" args="" >
+      <remap from="ctlr_selector/wp_getall" to="autopilot/wp_getall" />
+      <remap from="ctlr_selector/wp_getlast" to="autopilot/wp_getlast" />
+    </node>
 
     <node name="swarm_manager" pkg="ap_mission_planning" type="swarm_manager.py" output="screen" args="" >
       <remap from="swarm_manager/swarm_state" to="swarm_tracker/swarm_state" />
