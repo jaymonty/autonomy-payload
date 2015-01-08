@@ -70,6 +70,12 @@
       <node name="ctlr_selector" pkg="ap_mission_planning" type="ctlr_select.py" output="screen" args="" >
         <remap from="ctlr_selector/wp_getall" to="autopilot/wp_getall" />
         <remap from="ctlr_selector/wp_getlast" to="autopilot/wp_getlast" />
+        <remap from="ctlr_selector/acs_pose" to="autopilot/acs_pose" />
+        <remap from="ctlr_selector/status" to="autopilot/status" />
+        <remap from="ctlr_selector/waypoint_goto" to="autopilot/waypoint_goto" />
+        <remap from="ctlr_selector/payload_waypoint" to="autopilot/payload_waypoint" />
+        <remap from="ctlr_selector/ctlr_status" to="controllers/ctlr_status" />
+        <remap from="ctlr_selector/selector_status" to="controllers/selector_status" />
       </node>
 
       <node name="swarm_manager" pkg="ap_mission_planning" type="swarm_manager.py" output="screen" args="" >

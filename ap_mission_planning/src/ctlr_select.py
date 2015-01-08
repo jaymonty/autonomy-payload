@@ -20,6 +20,7 @@ import ap_srvs.srv as payload_srvs
 import autopilot_bridge.msg as mavbridge_msgs
 import autopilot_bridge.srv as mavbridge_srv 
 from ap_lib import controller
+from ap_lib import nodeable
 
 INFINITE_LOITER_CMD = 17  # Autopilot command ID for infinite loiter waypoints
 
@@ -83,7 +84,6 @@ class ControllerType(object):
 # checks necessary to ensuring a safe transition into or between controllers.
 #
 # Class member variables:
-#   _nodename: ROS nodename of this object
 #   _basename: ROS basename for topics associated with this node
 #   _controllers: dictionary object (int key) with controller objects
 #   _own_lat: current latitude of this vehicle (for safety waypoint)
@@ -103,26 +103,31 @@ class ControllerType(object):
 #   _wp_getlast: proxy for wp_getlast service calls
 #   _lock: prevent unsafe thread interaction between services and callbacks
 #
+# Inherited from Nodeable:
+#   nodeName:  Name of the node to start or node in which the object is
+#   timer: ROS rate object that controls the timing loop
+#   DBUG_PRINT: set true to force screen debug messages (default FALSE)
+#   WARN_PRINT: set false to force screen warning messages (default FALSE)
+#
 # TODO list:
 #  1 Improve basename implementation (too hard coded now)
-#  6 Initiate a wait before activating a controller to verify that the autopilot
-#    acknowledges receipt of the loiter waypoint (next status update).  Needed?
 #  7 Implement safety checking in the "loop" method to make sure that an active
 #    controller is behaving properly and initiate reset to "safe" mode if it isn't
-class ControllerSelector(object):
+class ControllerSelector(nodeable.Nodeable):
     ros_basename = 'controllers'
     ros_nodename = 'ctlr_selector'
 
     # Initializer for the ControllerSelector initializes the object variables,
     # subscribes to the required ROS topics, and registers ROS publishers
     def __init__(self, nodename='ctlr_selector', basename='controllers'):
-        self._nodename = nodename
+        nodeable.Nodeable.__init__(self, nodename)
         self._basename = basename
         self._loiter_wp_id = None
         self._wp_list = []
         self._loiter_wps = []
         self._safety_wp = mavbridge_msgs.LLA()
         self._lock = threading.RLock()
+        self.WARN_PRINT = True
 
         # Maintain the controller types by ID
         self._controllers = {}
@@ -132,39 +137,73 @@ class ControllerSelector(object):
         self._ap_status = None
         self._ap_status_last = rospy.Time()
 
-        self._pub_status = rospy.Publisher("%s/selector_status" % basename,
-                                           payload_msgs.ControllerGroupStateStamped)
-        self._pub_wpindex = rospy.Publisher("autopilot/waypoint_goto",
-                                            std_msgs.UInt16)
-        self._pub_safety_wp = rospy.Publisher("autopilot/payload_waypoint",
-                                              mavbridge_msgs.LLA)
-
-        rospy.Service('%s/set_selector_mode' % self._nodename,
-                      payload_srvs.SetInteger, self._srv_ctlr_mode)
-
-        rospy.Subscriber("%s/status" % basename,
-                         payload_msgs.ControllerState,
-                         self._sub_ctlr_status)
-        rospy.Subscriber("%s/set_selector_mode" % basename,
-                         std_msgs.UInt8,
-                         self._sub_ctlr_mode)
-        rospy.Subscriber("autopilot/status",
-                         mavbridge_msgs.Status,
-                         self._sub_ap_status)
-        rospy.Subscriber("autopilot/acs_pose",
-                         mavbridge_msgs.Geodometry,
-                         self._sub_acs_pose)
-
         self._wp_getall = None
         self._wp_getlast = None
-        try:
-            self._wp_getall = \
-                rospy.ServiceProxy('autopilot/wp_getall', mavbridge_srv.WPGetAll)
-            self._wp_getlast = \
-                rospy.ServiceProxy('autopilot/wp_getlast', mavbridge_srv.WPGetAll)
-        except:
-            pass  # Don't need to do anything, just don't want the node to crash
+        self._pub_status = None
+        self._pub_wpindex = None
+        self._pub_safety_wp = None
 
+
+    #------------------------------------------------
+    # Nodeable class "virtual" method implementations
+    #------------------------------------------------
+
+    # Initializes ROS services provided by this class.  This class
+    # utilizes a "set_selector_mode" service to activate controllers
+    # @param params: no parameters required for this method ([])
+    def serviceSetup(self, params=[]):
+        self.createService('set_selector_mode', payload_srvs.SetInteger, \
+                           self._srv_ctlr_mode)
+
+
+    # Initializes ROS service proxies for this class.  This class requires
+    # proxies to call the wp_getall and wp_getlast services to retrieve
+    # waypoints from the autopilot
+    # @param params: no parameters required for this method ([])
+    def serviceProxySetup(self, params=[]):
+        self._wp_getall = \
+            self.createServiceProxy('wp_getall', mavbridge_srv.WPGetAll)
+        self._wp_getlast = \
+            self.createServiceProxy('wp_getlast', mavbridge_srv.WPGetAll)
+
+
+    # Initializes callbacks for ROS topics to which this class subscribes.
+    # This class subscribes to the controller state ctlr_status topic, the
+    # autopilot status topic, and the autopilot acs_pose topic.
+    # @param params: no parameters required for this method ([])
+    def callbackSetup(self, params=[]):
+        self.createSubscriber("ctlr_status", payload_msgs.ControllerState,
+                              self._sub_ctlr_status)
+        self.createSubscriber("status", mavbridge_msgs.Status,
+                              self._sub_ap_status)
+        self.createSubscriber("acs_pose", mavbridge_msgs.Geodometry,
+                              self._sub_acs_pose)
+
+
+    # Virtual method for setting up publishers for topics to which this
+    # object will publish information.  Should be overridden by implementing
+    # classes that publish to ROS topics (leave alone if no publishers)
+    # @param params: no parameters required for this method ([])
+    def publisherSetup(self, params=[]):
+        self._pub_status = \
+            self.createPublisher("selector_status",
+                                 payload_msgs.ControllerGroupStateStamped)
+        self._pub_wpindex = \
+            self.createPublisher("waypoint_goto", std_msgs.UInt16)
+        self._pub_safety_wp = \
+            self.createPublisher("payload_waypoint", mavbridge_msgs.LLA)
+
+
+    # Executes one iteration of the object's timed loop
+    # Everything is managed by callbacks and services, so the only thing that
+    # is required during a timed loop is publication of the status message
+    def executeTimedLoop(self):
+        self._send_status_message()
+
+
+    #------------------------
+    # Object-specific methods
+    #------------------------
 
     # Add a new controller type by ID and name
     def add_controller(self, c_id, c_name):
@@ -200,7 +239,7 @@ class ControllerSelector(object):
             # Is this reset to NO_PAYLOAD_CONTROL
             if mode == controller.NO_PAYLOAD_CTRL:
                 if self._current_mode != controller.NO_PAYLOAD_CTRL:
-                    self._deactivate_all_controllers()
+                    self._deactivate_all_controllers(True)
                 return self._current_mode
 
             # Is requested mode known to us?
@@ -228,7 +267,7 @@ class ControllerSelector(object):
             if self._controllers[mode].status.is_active:
                 # NOTE: Not really an error--it's idempotent!
                 # We'll report it anyway and then move along (return)
-                rospy.logwarn("Set Control Mode: Requested controller is already active")
+                self.log_debug("Set Control Mode: Requested controller is already active")
                 return self._controllers[mode]
 
             # If we're not already in payload control, make sure we've got an
@@ -237,9 +276,8 @@ class ControllerSelector(object):
                 self._retrieve_last_ap_waypoint()
                 self._set_safety_wp()
 
-            # Shut down any other active controllers
-            # TODO: See item 4 in class header about "safe" waiting behavior
-            self._deactivate_all_controllers()
+            # Shut down any other active controllers (don't send to safety waypoint)
+            self._deactivate_all_controllers(False)
     
             # Make sure the specified infinite loiter waypoint actually IS one
             if not self._loiter_wp_id in self._loiter_wps:
@@ -265,8 +303,8 @@ class ControllerSelector(object):
         except Exception as ex:
             # If we get here, something is wrong
             # Do the most conservative thing (for now take the payload out of the loop)
-            self._deactivate_all_controllers()
-            rospy.logwarn("Set Control Mode: " + ex.args[0])
+            self._deactivate_all_controllers(True)
+            self.log_warn("Set Control Mode: " + ex.args[0])
 
         finally:
             self._lock.release()
@@ -303,14 +341,18 @@ class ControllerSelector(object):
     def _sub_ctlr_status(self, msg):
         self._lock.acquire()
         if msg.controller_id not in self._controllers:
+            self.log_warn("Received status message from unknown controller type")
             raise Exception("Received status message from unknown controller type")
         self._controllers[msg.controller_id].update_status(msg)
         if msg.controller_id == self._current_mode and \
            msg.is_active == False:
-            self._deactivate_all_controllers()
+            self.log_warn("Activated controller reporting inactive status")
+            self._deactivate_all_controllers(True)
         elif msg.is_active == True and \
              msg.controller_id != self._current_mode:
-            self._deactivate_all_controllers()
+            self.log_warn("Inactive controller (" + \
+                          str(msg.controller_id) + ") reporting active status")
+            self._deactivate_all_controllers(True)
         self._lock.release()
 
 
@@ -325,7 +367,8 @@ class ControllerSelector(object):
         if self._current_mode != 0:
             if self._ap_status.mode != mavbridge_msgs.Status.MODE_AUTO or \
                self._ap_status.mis_cur != self._loiter_wp_id:
-                self._deactivate_all_controllers()
+                self.log_warn("Autopilot mode not compatible with waypoint control")
+                self._deactivate_all_controllers(False) # don't send to safety waypoint
         self._lock.release()
 
 
@@ -338,11 +381,12 @@ class ControllerSelector(object):
 
 
     # Sends a "deactivate" command to every controllers
-    def _deactivate_all_controllers(self):
+    # @param sendToSafetyPoint: Boolean--True will send to the safety waypoint location
+    def _deactivate_all_controllers(self, sendToSafetyPt):
         for c in self._controllers:
             self._controllers[c].set_active(False)
         self._current_mode = controller.NO_PAYLOAD_CTRL
-        if self._loiter_wp_id != None:
+        if self._loiter_wp_id != None and sendToSafetyPt:
             self._pub_safety_wp.publish(self._safety_wp)
 
 
@@ -353,7 +397,7 @@ class ControllerSelector(object):
             # in case the service wasn't available at startup (ordering)
             if self._wp_getall == None:
                 self._wp_getall = \
-                    rospy.ServiceProxy('autopilot/wp_getall', mavbridge_srv.WPGetAll)
+                    self.setupServiceProxy('wp_getall', mavbridge_srv.WPGetAll)
 
             self._wp_list = self._wp_getall().wp
 
@@ -365,7 +409,7 @@ class ControllerSelector(object):
 
         except Exception as ex:
             self._loiter_wps = []
-            rospy.logwarn("Unable to load waypoints: " + ex.args[0])
+            self.log_warn("Unable to load waypoints: " + ex.args[0])
 
 
     # Retrieves and processes the last waypoint from the autopilot.  This
@@ -376,7 +420,7 @@ class ControllerSelector(object):
             # in case the service wasn't available at startup (ordering)
             if self._wp_getlast == None:
                 self._wp_getlast = \
-                    rospy.ServiceProxy('autopilot/wp_getlast', mavbridge_srv.WPGetAll)
+                    self.setupServiceProxy('wp_getlast', mavbridge_srv.WPGetAll)
 
             self._wp_list = self._wp_getlast().wp
             self._loiter_wps = []
@@ -386,7 +430,7 @@ class ControllerSelector(object):
 
         except Exception as ex:
             self._loiter_wps = []
-            rospy.logwarn("Unable to load last waypoint: " + ex.args[0])
+            self.log_warn("Unable to load last waypoint: " + ex.args[0])
 
 
     # Sets the values for the safety waypoint
@@ -419,29 +463,16 @@ class ControllerSelector(object):
         self._pub_status.publish(status)
 
 
-    # Loop!
-    def loop(self, rate):
-        r = rospy.Rate(rate)
-        while not rospy.is_shutdown():
-            # TODO: See item 7 in class header about safety monitoring
-
-            self._send_status_message()
-            r.sleep()
-
-
 #-----------------------------------------------------------------------
 # Main code
 
 if __name__ == '__main__':
-    # ROS init
-    rospy.init_node(ControllerSelector.ros_basename)
-
     # Initialize state machine
-    ctlrsel = ControllerSelector()
+    ctlrsel = ControllerSelector(ControllerSelector.ros_nodename)
     ctlrsel.add_controller(controller.WP_SEQUENCE_CTRLR, "wp_sequencer")
     ctlrsel.add_controller(controller.FOLLOW_CTRLR, "follower")
 
     # Start loop
     # TODO: Is this fast enough?
-    ctlrsel.loop(1.0)
+    ctlrsel.runAsNode(1.0)
 
