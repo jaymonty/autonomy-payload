@@ -5,69 +5,17 @@
 
 
 
-### Configuration Variables ###
+### Configuration and Functions ###
+
+# Import some common config
+LIB_DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+source $LIB_DIR/launch_lib.sh
 
 # This variable should be set in newer SITL installs, but if it isn't
 # then default to the user's home directory
-
 if [[ -z $ACS_ROOT ]]; then
     ACS_ROOT="~"
 fi
-
-# This applies for container mode and for creating a SITL bridge.
-# Set up the basic networking parameters for our multi-SITL environment.
-# This is set to mimic our flight configuration as closely as possible.
-# All aircraft (and ground stations) are in 192.168.2.0/24
-
-NET_IP_PREFIX="192.168.2"
-NET_MASK="255.255.255.0"
-NET_BCAST="${NET_IP_PREFIX}.255"
-
-# Container Mode: Network namespaces need unique names, and new network
-# interfaces need namespace-unique names. These are the prefixes; a number
-# will be appended to each where appropriate.
-
-NET_DEV_PREFIX="sitl"
-NET_NS_PREFIX="sitl"
-
-# SITL Bridge: Parameters for a soft network bridge that can be a virtual
-# network interface capable of broadcast, and can be a bridge between
-# containers when using container mode.
-
-BRIDGE_DEV="sitl_bridge"
-BRIDGE_IP="${NET_IP_PREFIX}.250"
-
-
-
-### Helper Functions ###
-
-# Check that we can get sudo privs
-test_sudo()
-{
-    sudo echo &> /dev/null
-    if [ $? != 0 ]; then
-        echo "Failed to gain sudo privs!"
-        exit 1
-    fi
-}
-
-# Note: requires root
-setup_bridge()
-{
-    # Check that the bridge device exists; if not, create it
-    ip link show dev $BRIDGE_DEV &> /dev/null
-    if [ $? != 0 ]; then
-        echo "Building software bridge ..."
-
-        test_sudo
-
-        sudo ip link add $BRIDGE_DEV type bridge
-        sudo ip addr add $BRIDGE_IP/$NET_MASK broadcast $NET_BCAST dev $BRIDGE_DEV
-    fi
-
-    # Always make sure it is set to 'up'
-    sudo ip link set dev $BRIDGE_DEV up
-}
 
 
 
@@ -97,6 +45,7 @@ while getopts ":BCD:PR:h" opt; do
     case $opt in
         B)
             NET_DEVICE=$BRIDGE_DEV
+            setup_bridge
             ;;
         C)
             if [ $USE_PORT_OFFSET == 1 ]; then
@@ -105,6 +54,7 @@ while getopts ":BCD:PR:h" opt; do
             fi
             USE_CONTAINER=1
             NET_DEVICE=$BRIDGE_DEV
+            setup_bridge
             ;;
         D)
             NET_DEVICE=$OPTARG
@@ -159,14 +109,6 @@ SITL_CONNECT="tcp:${SITL_IP}:${SITL_PORT}"
 NET_PORT=5554
 if [ $USE_PORT_OFFSET == 1 ]; then
     NET_PORT=$((5554+${ID}))
-fi
-
-
-
-### If needed, set up bridge ###
-
-if [ $NET_DEVICE == $BRIDGE_DEV ]; then
-    setup_bridge
 fi
 
 
