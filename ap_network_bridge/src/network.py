@@ -212,7 +212,7 @@ class NetworkBridge(object):
                     continue
 
                 # Process the message
-                print "Got Message: " + str(type(msg))
+                #print "Got Message: " + str(type(msg))
                 if type(msg) in self.msg_handlers:
                     self.msg_handlers[type(msg)](msg)
 
