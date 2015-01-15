@@ -84,7 +84,6 @@ class ControllerType(object):
 # checks necessary to ensuring a safe transition into or between controllers.
 #
 # Class member variables:
-#   _basename: ROS basename for topics associated with this node
 #   _controllers: dictionary object (int key) with controller objects
 #   _own_lat: current latitude of this vehicle (for safety waypoint)
 #   _own_lon: current longitude of this vehicle (for safety waypoint)
@@ -102,6 +101,8 @@ class ControllerType(object):
 #   _wp_get_all: proxy for wp_getall service calls
 #   _wp_getlast: proxy for wp_getlast service calls
 #   _lock: prevent unsafe thread interaction between services and callbacks
+#   _new_ap_status: allows up to 1 erroneous AP status following mode switch
+#   _new_ctlr_status: allows up to 1 erroneous status per ctlr following mode switch
 #
 # Inherited from Nodeable:
 #   nodeName:  Name of the node to start or node in which the object is
@@ -119,14 +120,15 @@ class ControllerSelector(nodeable.Nodeable):
 
     # Initializer for the ControllerSelector initializes the object variables,
     # subscribes to the required ROS topics, and registers ROS publishers
-    def __init__(self, nodename='ctlr_selector', basename='controllers'):
+    def __init__(self, nodename='ctlr_selector'):
         nodeable.Nodeable.__init__(self, nodename)
-        self._basename = basename
         self._loiter_wp_id = None
         self._wp_list = []
         self._loiter_wps = []
         self._safety_wp = mavbridge_msgs.LLA()
         self._lock = threading.RLock()
+        self._new_ap_status = False
+        self._new_ctlr_status = dict()
         self.WARN_PRINT = True
 
         # Maintain the controller types by ID
@@ -267,7 +269,7 @@ class ControllerSelector(nodeable.Nodeable):
             if self._controllers[mode].status.is_active:
                 # NOTE: Not really an error--it's idempotent!
                 # We'll report it anyway and then move along (return)
-                self.log_debug("Set Control Mode: Requested controller is already active")
+                self.log_dbug("Set Control Mode: Requested controller is already active")
                 return self._controllers[mode]
 
             # If we're not already in payload control, make sure we've got an
@@ -297,6 +299,8 @@ class ControllerSelector(nodeable.Nodeable):
             # Update internal state
             if success:
                 self._current_mode = mode
+                self._new_ap_status = True
+                self._new_ctlr_status.clear()
             else:
                 self._current_mode = controller.NO_PAYLOAD_CONTROL
 
@@ -337,6 +341,10 @@ class ControllerSelector(nodeable.Nodeable):
     # is active) then all controllers will be disabled.  This may or may
     # not be an indication of a problem (e.g., the controller reached a normal
     # end state), but this will make sure that everything here is consistent.
+    # The callback allows each controller to report up to 1 erroneous status
+    # to account for any potential threading issue (i.e., status message
+    # waiting to be processed when the new mode is set).  This will result
+    # in a delay of no more than 1 second for an actual controller status error
     # @param msg: controller status message being processed
     def _sub_ctlr_status(self, msg):
         self._lock.acquire()
@@ -346,29 +354,38 @@ class ControllerSelector(nodeable.Nodeable):
         self._controllers[msg.controller_id].update_status(msg)
         if msg.controller_id == self._current_mode and \
            msg.is_active == False:
-            self.log_warn("Activated controller reporting inactive status")
-            self._deactivate_all_controllers(True)
+            if msg.controller_id in self._new_ctlr_status:
+                self.log_warn("Activated controller reporting inactive status")
+                self._deactivate_all_controllers(True)
+            else:
+                self._new_ctlr_status[msg.controller_id] = True
         elif msg.is_active == True and \
              msg.controller_id != self._current_mode:
-            self.log_warn("Inactive controller (" + \
-                          str(msg.controller_id) + ") reporting active status")
-            self._deactivate_all_controllers(True)
+            if msg.controller_id in self._new_ctlr_status:
+                self.log_warn("Inactive controller (" + \
+                              str(msg.controller_id) + ") reporting active status")
+                self._deactivate_all_controllers(True)
+            else:
+                self._new_ctlr_status[msg.controller_id] = True
         self._lock.release()
 
 
     # Callback for handling autopilot status messages
-    # If the autopilot switches out of AUTO mode while a controller is
-    # enabled, all controllers will be deactivated.
+    # If the autopilot switches out of AUTO mode while a controller is enabled,
+    # all controllers will be deactivated.  The method allows for 1 erroneous
+    # status report to account for a potential threading issue (i.e., an AP
+    # status message waiting to be processed when payload control is initiated).
     # @param msg: new autopilot status message
     def _sub_ap_status(self, msg):
         self._lock.acquire()
         self._ap_status = msg
         self._ap_status_last = rospy.Time.now()
-        if self._current_mode != 0:
+        if not self._new_ap_status and self._current_mode != 0:
             if self._ap_status.mode != mavbridge_msgs.Status.MODE_AUTO or \
                self._ap_status.mis_cur != self._loiter_wp_id:
                 self.log_warn("Autopilot mode not compatible with waypoint control")
                 self._deactivate_all_controllers(False) # don't send to safety waypoint
+        self._new_ap_status = False
         self._lock.release()
 
 
