@@ -12,7 +12,7 @@
   <param name="aircraft_name" type="str" value="$(arg name)" />
   <param name="rosbag_enable" type="bool" value="true" />
 
-  <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--module acs --module param --module slave --module wp $(arg gps_arg)" />
+  <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--baudrate 115200 --module acs --module param --module slave --module wp $(arg gps_arg)" />
 
   <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" >
     <remap from="safety/heartbeat" to="autopilot/heartbeat_onboard" />
