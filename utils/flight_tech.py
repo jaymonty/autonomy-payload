@@ -59,6 +59,7 @@ class UAVListWidget(QListWidget):
     # UAV state
     STATE_NONE = UAVState('INVALID', QBrush(QColor('white')))
     STATE_OFFLINE = UAVState('OFFLINE', QBrush(QColor('red')))
+    STATE_BOOTING = UAVState('BOOTING', QBrush(QColor('cyan').darker(150)))
     STATE_NOT_READY = UAVState('NOT READY', QBrush(QColor('yellow')))
     STATE_READY= UAVState('READY', QBrush(QColor.fromRgb(0,200,0)))
     STATE_FLYING = UAVState('FLYING', QBrush(QColor.fromRgb(160,160,160)))
@@ -111,6 +112,9 @@ class UAVListWidget(QListWidget):
             if msg.armed and msg.alt_rel > 20000:
                 # Armed ^ (Alt > 20m AGL) -> Active/Flying
                 state = UAVListWidget.STATE_FLYING
+            elif msg.batt_vcc == 0.0 and msg.mode == 15:
+                # No voltage ^ Unknown mode -> No autopilot data yet
+                state = UAVListWidget.STATE_BOOTING
             elif msg.ready:
                 state = UAVListWidget.STATE_READY
             else:
@@ -230,8 +234,9 @@ if __name__ == '__main__':
 
     # Provide color-key for states
     hlayout = QHBoxLayout()
-    for st in [ UAVListWidget.STATE_OFFLINE, UAVListWidget.STATE_NOT_READY,
-                UAVListWidget.STATE_READY, UAVListWidget.STATE_FLYING ]:
+    for st in [ UAVListWidget.STATE_OFFLINE, UAVListWidget.STATE_BOOTING,
+                UAVListWidget.STATE_NOT_READY, UAVListWidget.STATE_READY,
+                UAVListWidget.STATE_FLYING ]:
         lbl = QLabel(st.text)
         plt = lbl.palette()
         plt.setBrush(QPalette.Background, st.color)
@@ -259,7 +264,7 @@ if __name__ == '__main__':
     def do_preflight():
         item = lst.currentItem()
         if item.ident > 0 and item.state in [UAVListWidget.STATE_READY,
-                                            UAVListWidget.STATE_NOT_READY]:
+                                             UAVListWidget.STATE_NOT_READY]:
             print "START  %f" % time.time()
             preflight_aircraft(sock, item.ident, my_ip, item.ip)
             print "STOP   %f" % time.time()
