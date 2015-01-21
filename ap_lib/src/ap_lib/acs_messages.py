@@ -258,7 +258,6 @@ class FlightStatus(Message):
         self.alt_rel = fields[5] * 1e02
         self.mis_cur = fields[6]
         self.ctl_mode = fields[7]
-        self.ctl_ready = [False] * 16
         for bit in range(1, len(self.ctl_ready)):
             self.ctl_ready[bit] = bool(1<<(bit-1) & fields[8])
         self.name = str(fields[9]).strip(chr(0x0))
