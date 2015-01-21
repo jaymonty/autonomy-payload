@@ -64,7 +64,7 @@ if __name__ == '__main__':
                  message.vax, message.vay, message.vaz)
         elif isinstance(message, messages.FlightStatus):
             ready_string = ''
-            for b in message.ctl_ready:
+            for b in message.ctl_ready[1:]:
                 ready_string += "%u" % int(b)
             print "\tNm: %s Su: %u Mo: %u Wp: %u Fl: %u%u%u%u%u%u%u%u Sa: %u Br: %d Bv: %d As: %f Ar: %d Cm: %u Cr: %s" % \
                 (message.name, message.msg_sub, message.mode,
