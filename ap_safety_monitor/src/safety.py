@@ -68,7 +68,7 @@ if __name__ == '__main__':
     
     # Set up ROS publishers
     pub_heartbeat = rospy.Publisher("%s/heartbeat"%ROS_BASENAME,
-                                    apmsg.Heartbeat)
+                                    apmsg.Heartbeat, queue_size=1)
     
     # Set up ROS subscribers
     
