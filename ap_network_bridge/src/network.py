@@ -82,7 +82,7 @@ class NetworkBridge(object):
             # Publish the message
             self.publishers[topic].obj.publish(msg)
         except Exception as ex:
-            raise Exception("publish: " + ex.args[0])
+            raise Exception("publish: " + str(ex.args[0]))
 
     def callService(self, s_name, s_type, **s_fields):
         try:
@@ -93,20 +93,20 @@ class NetworkBridge(object):
                                      s_type)
             return srv(**s_fields)
         except Exception as ex:
-            raise Exception("callService: " + ex.args[0])
+            raise Exception("callService: " + str(ex.args[0]))
 
     def setParam(self, name, val):
         # NOTE: Param names are relative to the base namespace (e.g., /)
         try:
             rospy.set_param(name, value)
         except Exception as ex:
-            raise Exception("setParam: " + ex.args[0])
+            raise Exception("setParam: " + str(ex.args[0]))
 
     def sendMessage(self, message):
         try:
             self.sock.send(message)
         except Exception as ex:
-            raise Exception("sendMessage: " + ex.args[0])
+            raise Exception("sendMessage: " + str(ex.args[0]))
 
     def setSubswarmID(self, subswarm_id):
         self.sock.subswarm = subswarm_id
@@ -122,7 +122,7 @@ class NetworkBridge(object):
                 if log_success:
                     rospy.loginfo("NET %s" % m_name)
             except Exception as ex:
-                rospy.logwarn("NET ERROR %s: %s" % (m_name, ex.args[0]))
+                rospy.logwarn("NET ERROR %s: %s" % (m_name, str(ex.args[0])))
         self.msg_handlers[m_type] = wrapper
 
     def addSubHandler(self, m_topic, m_type, m_func, log_success=False):
@@ -132,7 +132,7 @@ class NetworkBridge(object):
                 if log_success:
                     rospy.loginfo("SUB %s" % m_topic)
             except Exception as ex:
-                rospy.logwarn("SUB ERROR %s: %s" % (m_topic, ex.args[0]))
+                rospy.logwarn("SUB ERROR %s: %s" % (m_topic, str(ex.args[0])))
         rospy.Subscriber("%s/%s" % (self.ros_basename, m_topic), m_type, wrapper)
 
     def addTimedHandler(self, hz, callback):
@@ -140,7 +140,7 @@ class NetworkBridge(object):
             try:
                 callback(bridge)
             except Exception as ex:
-                rospy.logwarn("TIMED ERROR: " + ex.args[0])
+                rospy.logwarn("TIMED ERROR: " + str(ex.args[0]))
         interval = 1.0 / float(hz)  # NOTE: 0 Hz is illegal anyway
         self.timed_events.append(NetworkBridge._TimedEvent(interval, wrapper))
 
@@ -184,7 +184,7 @@ class NetworkBridge(object):
                 subswarm_id = rospy.get_param('subswarm_id')
             self.setSubswarmID(subswarm_id)
         except Exception as ex:
-            rospy.logwarn("Could not set subswarm_id: " + ex.args[0])
+            rospy.logwarn("Could not set subswarm_id: " + str(ex.args[0]))
 
         # Initialize stores for handlers and ROS objects
         self.msg_handlers = {}
@@ -217,7 +217,7 @@ class NetworkBridge(object):
                     self.msg_handlers[type(msg)](msg)
 
             except Exception as ex:
-                rospy.logwarn("runLoop error: " + ex.args[0])
+                rospy.logwarn("runLoop error: " + str(ex.args[0]))
 
 #-----------------------------------------------------------------------
 # Timed event handlers
@@ -497,7 +497,7 @@ if __name__ == '__main__':
         print "\nStarting network bridge loop...\n"
         bridge.runLoop(100)
     except Exception as ex:
-        print "NETWORK BRIDGE FATAL ERROR: " + ex.args[0]
+        print "NETWORK BRIDGE FATAL ERROR: " + str(ex.args[0])
         # If rospy happened to get initialized before the error, log there too
-        rospy.logfatal(ex.args[0])
+        rospy.logfatal(str(ex.args[0]))
 
