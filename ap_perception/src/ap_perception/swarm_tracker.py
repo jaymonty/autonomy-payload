@@ -357,9 +357,9 @@ class SwarmTracker(Nodeable):
     # @param params: list of parameters (none required for this method)
     def publisherSetup(self, params=[]):
         self._swarmPublisher = \
-            self.createPublisher("swarm_state", SwarmStateStamped)
+            self.createPublisher("swarm_state", SwarmStateStamped, 1)
         self._subSwarmPublisher = \
-            self.createPublisher("subswarm_state", SwarmStateStamped)
+            self.createPublisher("subswarm_state", SwarmStateStamped, 1)
 
 
     # Executes one iteration of the timed loop for the SwarmTracker object
