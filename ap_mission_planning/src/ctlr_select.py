@@ -189,11 +189,11 @@ class ControllerSelector(nodeable.Nodeable):
     def publisherSetup(self, params=[]):
         self._pub_status = \
             self.createPublisher("selector_status",
-                                 payload_msgs.ControllerGroupStateStamped)
+                                 payload_msgs.ControllerGroupStateStamped, 1)
         self._pub_wpindex = \
-            self.createPublisher("waypoint_goto", std_msgs.UInt16)
+            self.createPublisher("waypoint_goto", std_msgs.UInt16, 1)
         self._pub_safety_wp = \
-            self.createPublisher("payload_waypoint", mavbridge_msgs.LLA)
+            self.createPublisher("payload_waypoint", mavbridge_msgs.LLA, 1)
 
 
     # Executes one iteration of the object's timed loop

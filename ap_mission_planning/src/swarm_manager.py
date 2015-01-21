@@ -110,9 +110,9 @@ class SwarmManager(nodeable.Nodeable):
     # @param params: list of required parameters (none are at present)
     def publisherSetup(self, params=[]):
         self._ctlr_select_publisher = \
-            self.createPublisher("set_selector_mode", stdmsg.UInt8)
+            self.createPublisher("set_selector_mode", stdmsg.UInt8, 1)
         self._follow_publisher = \
-            self.createPublisher("follower_set", apmsg.FormationOrderStamped)
+            self.createPublisher("follower_set", apmsg.FormationOrderStamped, 1)
 
 
     # Establishes the services for the SwarmManager object.  The object
