@@ -4,17 +4,16 @@
 
 Discovers online aircraft, displays in a color-coded list, and provides mechanism for establishing a slave MAVProxy connection through the payload to perform pre-flight.
 
-NOTE: VERY MUCH a work in progress
-
 Color coding:
 Red = Discovered but currently not broadcasting ("offline")
+Blue = Discovered and still "booting" (e.g., awaiting data)
 Yellow = Discovered and online, but "not ready" (not pre-flighted)
 Green = Discovered, online, and ready for flight
 Gray = In-flight, some features are inaccessible
 
 Example (assuming computer's wlan0 is on 192.168.2.x network):
 
-	python flight_tech.py --device wlan0
+	./flight_tech.py --device wlan0
 
 ## ground\_heartbeat.py
 
@@ -22,22 +21,28 @@ Periodically broadcasts a heartbeat, consumed by the payload and used to indicat
 
 Example:
 
-	python ground_heartbeat.py --device wlan0
+	./ground_heartbeat.py --device wlan0
 
 ## launch\_payload.sh
 
-Launches an instance of the payload in one of two ways:
+Launches an instance of the payload in one of a few ways:
 
-* using a calculated offset for the network bridge's UDP port. In this case, communication between multiple payload instances on a single computer relies on a UDP relay, such as repeater.py (see below).
+* using a calculated offset for the network bridge's UDP port (-P). In this case, communication between multiple payload instances on a single computer relies on a UDP relay, such as repeater.py (see below).
 
-* using a network namespace container. Creates a virtual interface pair, gives one end a 192.168.2.x/24 address inside the container, and attaches the other end to a software bridge (sitl\_bridge). If the bridge doesn't exist, it will be created. Finally, it launches sitl.launch with reasonable parameters.
+* using a network namespace containeri (-C, optional -R). Creates a virtual interface pair, gives one end a 192.168.2.x/24 address inside the container, and attaches the other end to a software bridge (sitl\_bridge). If the bridge doesn't exist, it will be created. Finally, it launches sitl.launch with reasonable parameters.
 
-This script takes one numeric positional argument that should equal the "-I" (instance) argument to sim\_vehicle.sh. It further takes optional argument -C to run using containers and -R to specify the user to run the payload software as (only applicable when using -C).
+* using a broadcast-capable network device (-D DEVICE). Can use wired interfaces (e.g., eth0), wireless interfaces (e.g., wlan0), and software bridges. This is a preferred mode for running multiple payloads across multiple machines.
 
-Example usage with optional user specification:
+* using the loopback interface (default, or -D lo). Generally only used for single payload instances, or in conjunction with UDP port offsets.
+
+* setting up and using a software bridge (-B, implies -D sitl\_bridge). This first creates a software bridge and then starts the payload using that bridge as the interface. This is preferred for multiple payload instances on a single machine.
+
+This script takes one numeric positional argument that should equal the "-I" (instance) argument to sim\_vehicle.sh. It further takes optional arguments that specify which way it should set up networking.
+
+Example usage using a bridge (requires sudo password):
 
 	(terminal 1): sim_vehicle.sh -I 2 -v ArduPlane -L McMillan --aircraft testFolder
-	(terminal 2): ./launch_payload.sh -C -R acsuser 2
+	(terminal 2): ./launch_payload.sh -B 2
 
 ## net\_parser.py
 
@@ -51,7 +56,9 @@ Use '--help' for all options. Note that '--repeat' can be used to repeat all rec
 
 ## repeater.py
 
-This, plus sitl\_ns.launch and some updates to the network bridge, works with launch\_payload.sh in its default, non-container mode to relay messages between instances. repeater.py can be configured to listen on loopback IP 127.0.1.1 at several UDP ports to traffic from those same port numbers at IP 127.0.0.1. When it hears a datagram from one of those ports, it repeats to all other ports. Thus, multiple payload instances can run at _different UDP ports on the same address_ and this utility will serve the same purpose as a broadcast address.
+*This section needs to be updated.*
+
+This can be used with launch\_payload.sh (-P form) to relay messages between instances. repeater.py can be configured to listen on loopback IP 127.0.1.1 at several UDP ports to traffic from those same port numbers at IP 127.0.0.1. When it hears a datagram from one of those ports, it repeats to all other ports. Thus, multiple payload instances can run at _different UDP ports on the same address_ and this utility will serve the same purpose as a broadcast address.
 
 Example usage:
 
@@ -61,7 +68,7 @@ First, start repeater.py for however many payloads you wish to run:
 
 Next, start SITLs as before with different -I values.
 
-Then, start corresponding payloads using roslaunch. These options are approximately what launch\_payload\_container.sh provides, plus a new option ns:=NAME, where name is the ROS group or "namespace" (not to be confused with Linux network namespaces):
+Then, start corresponding payloads using roslaunch. These options are approximately what launch\_payload.sh provides, plus a new option ns:=NAME, where name is the ROS group or "namespace" (not to be confused with Linux network namespaces):
 
 	roslaunch ap_master sitl_ns.launch id:=1 name:=sitl1 sitl:=tcp:127.0.0.1:5772 port:=5555 ns:=sitl1
 
