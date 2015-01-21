@@ -53,7 +53,7 @@ class WaypointController(controller.Controller):
     # @param ctrlrID: identifier (int) for this particular controller
     def __init__(self, nodename, ctrlrID):
         controller.Controller.__init__(self, nodename, ctrlrID)
-        self._wpPublisher = self.createPublisher("payload_waypoint", LLA)
+        self._wpPublisher = self.createPublisher("payload_waypoint", LLA, 1)
 
 
     #---------------------------------------------------------

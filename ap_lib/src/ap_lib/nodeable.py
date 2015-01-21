@@ -84,9 +84,11 @@ class Nodeable(object):
     #        programming level.  Remap as required in the launch file.
     # @param topicName: desired name of the topic (no basename)
     # @param msgType: type of ROS message to be published to this topic
+    # @param queueSize: size of published message queue
     # @return the created publisher
-    def createPublisher(self, topicName, msgType):
-        return rospy.Publisher("%s/%s" %(self.nodeName, topicName), msgType)
+    def createPublisher(self, topicName, msgType, queueSize=1):
+        return rospy.Publisher("%s/%s" %(self.nodeName, topicName), msgType, \
+                               tcp_nodelay=True, queue_size=queueSize)
 
 
     # Method for initializing a subscription to a ROS topic
