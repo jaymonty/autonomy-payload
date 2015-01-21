@@ -27,6 +27,7 @@ class NetworkBridge(object):
 
     ROS_BASENAME = 'network'
 
+    # Container for timed event callbacks, with timing logic
     class _TimedEvent(object):
         def __init__(self, interval, callback):
             self._interval = interval
@@ -44,24 +45,11 @@ class NetworkBridge(object):
                 t = time.time()
             self._next_time = t + self._interval
 
+    # Basic two-object container for lookups
     class _TypeAndObj(object):
-        def __init__(self):
-            self.type = None
-            self.obj = None
-
-    # NOTE: Because this doesn't get used until a publication or service
-    # call is actually made, the ROS graph may look more disconnected
-    # than it really is at first.
-    def _lookupOrAdd(self, o_name, o_type, cons, store):
-        if o_name in store:
-            if store[o_name].type is not o_type:
-                raise Exception("type mismatch for " + o_name)
-        else:
-            tao = NetworkBridge._TypeAndObj()
-            tao.type = o_type
-            tao.obj = cons("%s/%s" % (self.ros_basename, o_name), o_type)
-            store[o_name] = tao
-        return store[o_name].obj
+        def __init__(self, t=None, o=None):
+            self.type = t
+            self.obj = o
 
     # Prefer provided args, then ROS params, then default values, then FAIL
     def _getArg(self, arg, ros_param, default, error_text='<unknown>'):
@@ -76,20 +64,33 @@ class NetworkBridge(object):
 
     ### Utility functions for handlers ###
 
-    def publish(self, topic, msg):
+    def publish(self, topic, msg, queue_size=1):
+        # NOTE: default queue_size is *safe* (bounded memory) but may
+        # result in dropped messages. Strongly recommend adjusting.
         try:
-            pub = self._lookupOrAdd(topic, type(msg),
-                                    rospy.Publisher, self.publishers)
-            pub.publish(msg)
+            # See if a publisher of the correct type exists, or make one
+            if topic not in self.publishers:
+                pub = rospy.Publisher(self.ros_basename + '/' + topic,
+                                     type(msg),
+                                     tcp_nodelay=True,
+                                     queue_size=queue_size)
+                tao = NetworkBridge._TypeAndObj(type(msg), pub)
+                self.publishers[topic] = tao
+            elif self.publishers[topic].type != type(msg):
+                raise Exception("type mismatch for " + topic)
+
+            # Publish the message
+            self.publishers[topic].obj.publish(msg)
         except Exception as ex:
             raise Exception("publish: " + ex.args[0])
 
     def callService(self, s_name, s_type, **s_fields):
         try:
-            # NOTE: If services start failing, consider creating new proxy
-            # during each call, or initializing with persistent=True option.
-            srv = self._lookupOrAdd(s_name, s_type,
-                                    rospy.ServiceProxy, self.service_proxies)
+            # NOTE: It appears safer to re-lookup the service each time,
+            # though if the service provider is super-stable it may be
+            # worth looking at persistent service connections.
+            srv = rospy.ServiceProxy(self.ros_basename + '/' + s_name,
+                                     s_type)
             return srv(**s_fields)
         except Exception as ex:
             raise Exception("callService: " + ex.args[0])
@@ -188,7 +189,6 @@ class NetworkBridge(object):
         # Initialize stores for handlers and ROS objects
         self.msg_handlers = {}
         self.publishers = {}
-        self.service_proxies = {}
         self.timed_events = []
 
     def runLoop(self, loop_rate):
@@ -221,6 +221,7 @@ class NetworkBridge(object):
 
 #-----------------------------------------------------------------------
 # Timed event handlers
+# NOTE: Be sure to add a handler in the "main" code below
 
 def timed_status(bridge):
     message = messages.FlightStatus()
@@ -289,6 +290,7 @@ timed_status.f_status = None  # Flight status
 
 #-----------------------------------------------------------------------
 # ROS subscription handlers
+# NOTE: Be sure to add a handler in the "main" code below
 
 def sub_subswarm_id(msg, bridge):
     bridge.setSubswarmID(msg.data)
@@ -323,6 +325,7 @@ def sub_pose(msg, bridge):
 
 #-----------------------------------------------------------------------
 # Network receive handlers
+# NOTE: Be sure to add a handler in the "main" code below
 
 def net_pose(message, bridge):
     msg = ap_msg.SwarmVehicleState()
@@ -349,7 +352,8 @@ def net_pose(message, bridge):
     msg.state.twist.twist.angular.y = message.vay
     msg.state.twist.twist.angular.z = message.vaz
     # msg.state.twist.covariance is not used
-    bridge.publish('recv_pose', msg)
+    # NOTE: adjust queue_size as necessary
+    bridge.publish('recv_pose', msg, queue_size=50)
 
 def net_heartbeat(message, bridge):
     msg = pilot_msg.Heartbeat()
@@ -459,6 +463,8 @@ if __name__ == '__main__':
         bridge = NetworkBridge(args.acid, args.acname, args.port, args.device)
 
         # Set up handlers
+        # NOTE: the add*Handler() methods handle ROS object creation;
+        # see their definitions above for details and assumptions.
         bridge.addTimedHandler(2.0, timed_status)
         bridge.addSubHandler('update_subswarm',
                              std_msgs.msg.UInt8, sub_subswarm_id)
