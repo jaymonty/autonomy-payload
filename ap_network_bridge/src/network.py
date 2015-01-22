@@ -138,7 +138,7 @@ class NetworkBridge(object):
     def addTimedHandler(self, hz, callback):
         def wrapper():
             try:
-                callback(bridge)
+                callback(self)
             except Exception as ex:
                 rospy.logwarn("TIMED ERROR: " + str(ex.args[0]))
         interval = 1.0 / float(hz)  # NOTE: 0 Hz is illegal anyway
@@ -247,7 +247,7 @@ def timed_status(bridge):
     message.gps_hdop = 0
     message.mis_cur = 0
     message.ctl_mode = 0
-    message.ctl_ready = [0] * 16  # TODO: Don't hardcode
+    message.ctl_ready = [0] * 17  # TODO: Don't hardcode
 
     # If we have valid data, populate correctly
     if timed_status.c_status:
@@ -326,7 +326,6 @@ def sub_pose(msg, bridge):
 #-----------------------------------------------------------------------
 # Network receive handlers
 # NOTE: Be sure to add a handler in the "main" code below
-
 def net_pose(message, bridge):
     msg = ap_msg.SwarmVehicleState()
     msg.vehicle_id = message.msg_src
