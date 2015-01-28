@@ -24,7 +24,64 @@ import ap_lib.acs_messages as messages
 # NOTE: This is transitional work, and is subject to much change
 
 '''
-NOTE: The current implementation has several important limitations:
+ABSTRACT RELIABLE PROTOCOL DEFINITION
+(for a single remote endpoint and without broadcast case)
+
+<init>
+------------------------------
+seq = 0                        # first reliable message is 1
+ack = NULL                     # highest received seq + 1
+send_buf = []
+recv_buf = []
+
+<timer>
+------------------------------
+time = TIME()
+for (data, m_seq, m_ack, m_syn, m_rel, p_time) in send_buf
+    if time >= p_time + TIMEOUT
+        if ack                 # may have new ack (retain old ack if not set)
+            m_ack = ack
+        if m_ack               # ack guards reliable send before syn finishes
+            pkt = MAKEPACKET(data, m_seq, m_ack, m_syn, m_rel)
+            SENDPACKET(pkt)
+            send_buf[m_seq] = (data, m_seq, m_ack, m_syn, m_rel, time)
+
+send(data, is_rel)
+------------------------------
+if is_rel
+    seq++
+m_seq = seq
+m_ack = ack
+m_syn = FALSE
+m_rel = is_rel
+if not m_rel and not m_ack     # ack guard overridden for unreliable sends
+    m_ack = 1
+if m_rel and m_seq == 1        # first reliable send syns, ack guard overridden
+    m_ack = 1
+    m_syn = True
+if m_rel
+    send_buf[m_seq] = (data, m_seq, m_ack, m_syn, m_rel, TIME())
+if m_ack                       # ack guards reliable send before syn finishes
+    pkt = MAKEPACKET(data, m_seq, m_ack, m_syn, m_rel)
+    SENDPACKET(pkt)
+
+recv(pkt)
+------------------------------
+(data, m_seq, m_ack, m_syn, m_rel) = PARSEPACKET(pkt)
+if m_syn or not ack            # remote sender may re-syn at any time
+    ack = m_seq + 1
+    recv_buf = []
+if not m_syn and seq + 1 >= m_ack
+    send_buf = send_buf[m_ack:]
+if m_rel
+    if m_seq >= ack            # implements Go-Back-N acknowledgment
+        recv_buf[m_seq] = data
+    while recv_buf[ack]        # ordered delivery code unused and omitted
+        ack++
+RETURN(data)
+
+************
+LIMITATIONS:
  * There is no enforced ordering of received messages passed up to
    the application. While the receiver will only ACK the highest
    in-order message it has received, any message is allowed through.
@@ -60,7 +117,7 @@ class ReliableMessage(object):
     def __init__(self, msg, send_params):
         self.msg = msg
         self.send_params = send_params
-        self.first_sent = None
+        self.first_sent = None    # TODO: Eliminate if not used
         self.last_sent = None
 
     def stamp(self, t=None):
@@ -116,8 +173,8 @@ class ReliableState(object):
         if not t: t = time.time()
         msgs = [self._send_buf[s] for s in sorted(self._send_buf) \
                 if t >= self._send_buf[s].last_sent + self.TIME_RESEND]
-        for m in msgs:
-            m.msg.msg_ack = self._recv_ack
+        #for m in msgs:  # NOTE: This looks like a bug (may wreck SYN resends)
+        #    m.msg.msg_ack = self._recv_ack
         return msgs
 
     # Process (filter) messages that have been acknowledged
@@ -257,14 +314,16 @@ class Socket():
         if not t: t = time.time()
 
         # Iterate through per-remote states
+        # TODO: May want to restrict to remote(s) from which we've seen data
         for dst,state in self._rel_states.items():
             ack = state.getAck()
 
             # Iterate through buffered messages in each state
             for relmsg in state.getTimedOut(t):
-                # If no ACK set, try to set, or skip the message
-                if relmsg.msg.msg_ack is None:
+                # If state's ACK is set, update the message's ACK
+                if ack is not None:
                     relmsg.msg.msg_ack = ack
+                # If message's ACK is not set, don't send
                 if relmsg.msg.msg_ack is None:
                     continue
 
