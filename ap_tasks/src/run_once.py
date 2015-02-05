@@ -42,6 +42,8 @@ def rosbag_start():
     rosbag_start.proc = subprocess.Popen("rosbag record -a -o %s/%u" % (folder, acid), shell=True)
 
 def rosbag_stop():
+    if not hasattr(rosbag_start, 'proc'):
+        return
     rosbag_start.proc.send_signal(subprocess.signal.SIGINT)
 
 #-----------------------------------------------------------------------
