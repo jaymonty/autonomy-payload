@@ -1,8 +1,46 @@
 #!/bin/sh
 
+usage()
+{
+cat <<EOF
+Usage: $0 [options] wireless-device id-number
+Options:
+    -R DEVICE       Set up as router, with DEVICE facing the world
+EOF
+}
+
+# option defaults
+ROUTER_USE=0
+ROUTER_DEV=""
+
+#parse options
+while getopts ":R:h" opt; do
+    case $opt in
+        R)
+            if [ -z $OPTARG ]; then
+                usage
+                exit 1
+            fi
+            ROUTER_USE=1
+            ROUTER_DEV=$OPTARG
+            ;;
+        h)
+            usage
+            exit 0
+            ;;
+    esac
+done
+shift $((OPTIND-1))
+
 if [ -z $1 ] || [ -z $2 ]; then
-  echo "usage: $0 DEVICE ID-NUMBER"
+  usage
   exit 1
+fi
+
+if [ $ROUTER_USE != 0 ]; then
+  echo "Setting up router ..."
+  sudo sh -c "echo 1 > /proc/sys/net/ipv4/ip_forward"
+  sudo iptables -t nat -A POSTROUTING -o $ROUTER_DEV -j MASQUERADE
 fi
 
 sudo ifconfig $1 down
