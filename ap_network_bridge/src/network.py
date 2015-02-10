@@ -398,9 +398,8 @@ def net_flight_ready(message, bridge):
     bridge.setParam('flight_ready', message.ready)
 
 def net_subswarm_id(message, bridge):
-    bridge.setSubswarmID(message.subswarm)
     msg = std_msgs.msg.UInt8()
-    msg.data = sub_id
+    msg.data = message.subswarm
     bridge.publish('update_subswarm', msg)
 
 def net_controller_mode(message, bridge):
