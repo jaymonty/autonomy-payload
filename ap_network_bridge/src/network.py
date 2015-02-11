@@ -64,21 +64,27 @@ class NetworkBridge(object):
 
     ### Utility functions for handlers ###
 
-    def publish(self, topic, msg, queue_size=1, latched=False):
-        # NOTE: default queue_size is *safe* (bounded memory) but may
-        # result in dropped messages. Strongly recommend adjusting.
+    # NOTE: This is here so we can pre-create publishers if needed
+    def addPublisher(self, topic, m_type, queue_size=1, latched=False):
         try:
             # See if a publisher of the correct type exists, or make one
             if topic not in self.publishers:
                 pub = rospy.Publisher(self.ros_basename + '/' + topic,
-                                     type(msg),
-                                     tcp_nodelay=True,
-                                     latch=latched,
-                                     queue_size=queue_size)
-                tao = NetworkBridge._TypeAndObj(type(msg), pub)
+                                      m_type,
+                                      tcp_nodelay=True,
+                                      latch=latched,
+                                      queue_size=queue_size)
+                tao = NetworkBridge._TypeAndObj(m_type, pub)
                 self.publishers[topic] = tao
-            elif self.publishers[topic].type != type(msg):
+            elif self.publishers[topic].type != m_type:
                 raise Exception("type mismatch for " + topic)
+        except Exception as ex:
+            raise Exception("addPublisher: " + str(ex.args[0]))
+
+    def publish(self, topic, msg, queue_size=1, latched=False):
+        try:
+            # Make sure the publisher exists
+            pub = self.addPublisher(topic, type(msg), queue_size, latched)
 
             # Publish the message
             self.publishers[topic].obj.publish(msg)
@@ -460,6 +466,9 @@ if __name__ == '__main__':
     try:
         # Initialize the bridge
         bridge = NetworkBridge(args.acid, args.acname, args.port, args.device)
+
+        # NOTE: If we need to stand up any ROS publishers in advance,
+        # make calls to bridge.addPublisher() here.
 
         # Set up handlers
         # NOTE: the add*Handler() methods handle ROS object creation;
