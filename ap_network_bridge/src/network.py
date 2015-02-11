@@ -64,7 +64,7 @@ class NetworkBridge(object):
 
     ### Utility functions for handlers ###
 
-    def publish(self, topic, msg, queue_size=1):
+    def publish(self, topic, msg, queue_size=1, latched=False):
         # NOTE: default queue_size is *safe* (bounded memory) but may
         # result in dropped messages. Strongly recommend adjusting.
         try:
@@ -73,6 +73,7 @@ class NetworkBridge(object):
                 pub = rospy.Publisher(self.ros_basename + '/' + topic,
                                      type(msg),
                                      tcp_nodelay=True,
+                                     latch=latched,
                                      queue_size=queue_size)
                 tao = NetworkBridge._TypeAndObj(type(msg), pub)
                 self.publishers[topic] = tao
@@ -362,33 +363,33 @@ def net_heartbeat(message, bridge):
 def net_arm(message, bridge):
     msg = std_msgs.msg.Bool()
     msg.data = message.enable
-    bridge.publish('recv_arm', msg)
+    bridge.publish('recv_arm', msg, latched=True)
 
 def net_mode(message, bridge):
     msg = std_msgs.msg.UInt8()
     msg.data = message.mode
-    bridge.publish('recv_mode', msg)
+    bridge.publish('recv_mode', msg, latched=True)
 
 def net_land(message, bridge):
     msg = std_msgs.msg.Empty()
-    bridge.publish('recv_land', msg)
+    bridge.publish('recv_land', msg, latched=True)
 
 def net_land_abort(message, bridge):
     msg = std_msgs.msg.UInt16()
     msg.data = message.alt
-    bridge.publish('recv_land_abort', msg)
+    bridge.publish('recv_land_abort', msg, latched=True)
 
 def net_guided_goto(message, bridge):
     msg = pilot_msg.LLA()
     msg.lat = message.lat
     msg.lon = message.lon
     msg.alt = message.alt
-    bridge.publish('recv_guided_goto', msg)
+    bridge.publish('recv_guided_goto', msg, latched=True)
 
 def net_waypoint_goto(message, bridge):
     msg = std_msgs.msg.UInt16()
     msg.data = message.index
-    bridge.publish('recv_waypoint_goto', msg)
+    bridge.publish('recv_waypoint_goto', msg, latched=True)
 
 def net_slave_setup(message, bridge):
     bridge.callService('slave_setup', pilot_srv.SlaveSetup,
@@ -400,7 +401,7 @@ def net_flight_ready(message, bridge):
 def net_subswarm_id(message, bridge):
     msg = std_msgs.msg.UInt8()
     msg.data = message.subswarm
-    bridge.publish('update_subswarm', msg)
+    bridge.publish('update_subswarm', msg, latched=True)
 
 def net_controller_mode(message, bridge):
     bridge.callService('controller_mode', ap_srv.SetInteger,
@@ -416,7 +417,7 @@ def net_follower_set(message, bridge):
     msg.order.angle = message.offset_angle
     msg.order.alt_mode = message.alt_mode
     msg.order.control_alt = message.control_alt
-    bridge.publish('recv_follower_set', msg)
+    bridge.publish('recv_follower_set', msg, latched=True)
 
 def net_sequencer_set(message, bridge):
     msg = ap_msg.WaypointListStamped()
@@ -429,7 +430,7 @@ def net_sequencer_set(message, bridge):
         lla.lon = wp[1]
         lla.alt = wp[2]
         msg.waypoints.append(lla)
-    bridge.publish('recv_sequencer_set', msg)
+    bridge.publish('recv_sequencer_set', msg, latched=True)
 
 def net_health_state(message, bridge):
     bridge.callService('health_state', ap_srv.SetBoolean,
