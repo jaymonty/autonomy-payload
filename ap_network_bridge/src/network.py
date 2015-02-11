@@ -116,7 +116,12 @@ class NetworkBridge(object):
             raise Exception("sendMessage: " + str(ex.args[0]))
 
     def setSubswarmID(self, subswarm_id):
+        # Set subswarm ID in socket so it knows which subswarm-destined
+        # broadcasts to accept
         self.sock.subswarm = subswarm_id
+
+        # Update ROS param
+        # TODO: This should be phased out
         rospy.set_param('subswarm_id', subswarm_id)
 
     ### Add handlers for ROS, network, and timed events ###
@@ -405,6 +410,7 @@ def net_flight_ready(message, bridge):
     bridge.setParam('flight_ready', message.ready)
 
 def net_subswarm_id(message, bridge):
+    bridge.setSubswarmID(message.subswarm)
     msg = std_msgs.msg.UInt8()
     msg.data = message.subswarm
     bridge.publish('update_subswarm', msg, latched=True)
