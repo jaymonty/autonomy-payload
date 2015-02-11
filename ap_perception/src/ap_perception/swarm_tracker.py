@@ -334,6 +334,7 @@ class SwarmTracker(Nodeable):
         self._subSwarmMessage.header.seq = 0
         self._subSwarmMessage.header.frame_id = "base_footprint"
         self._lock = RLock()
+        rospy.set_param('subswarm_id', self.subSwarmID)
 #        self.DBUG_PRINT = True
 #        self.WARN_PRINT = True
 
@@ -468,6 +469,7 @@ class SwarmTracker(Nodeable):
     # @param swarmMsg: message (UInt8) containing the updated swarm ID
     def setSubSwarm(self, swarmMsg):
         self.subSwarmID = swarmMsg.data
+        rospy.set_param('subswarm_id', self.subSwarmID)
         self.log_dbug("subswarm set to %d"%swarmMsg.data)
 
 
