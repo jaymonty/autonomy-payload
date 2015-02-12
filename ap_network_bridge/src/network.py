@@ -120,10 +120,6 @@ class NetworkBridge(object):
         # broadcasts to accept
         self.sock.subswarm = subswarm_id
 
-        # Update ROS param
-        # TODO: This should be phased out
-        rospy.set_param('subswarm_id', subswarm_id)
-
     ### Add handlers for ROS, network, and timed events ###
 
     def addNetHandler(self, m_type, m_func, log_success=True):
@@ -189,11 +185,15 @@ class NetworkBridge(object):
         except Exception as ex:
             raise ex
 
-        # Initialize subswarm ID
+        # Initialize subswarm ID - socket library can filter messages destined for
+        # subswarms; need to keep socket synced with aircraft's subswarm ID
         try:
             subswarm_id = 0
+
+            # TODO: If param goes away, this can too
             if rospy.has_param('subswarm_id'):
                 subswarm_id = rospy.get_param('subswarm_id')
+
             self.setSubswarmID(subswarm_id)
         except Exception as ex:
             rospy.logwarn("Could not set subswarm_id: " + str(ex.args[0]))
@@ -409,10 +409,9 @@ def net_flight_ready(message, bridge):
     bridge.setParam('flight_ready', message.ready)
 
 def net_subswarm_id(message, bridge):
-    bridge.setSubswarmID(message.subswarm)
     msg = std_msgs.msg.UInt8()
     msg.data = message.subswarm
-    bridge.publish('update_subswarm', msg, latched=True)
+    bridge.publish('recv_subswarm', msg, latched=True)
 
 def net_controller_mode(message, bridge):
     bridge.callService('controller_mode', ap_srv.SetInteger,
