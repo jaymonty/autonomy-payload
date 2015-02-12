@@ -102,7 +102,7 @@ class NetworkBridge(object):
         except Exception as ex:
             raise Exception("callService: " + str(ex.args[0]))
 
-    def setParam(self, name, val):
+    def setParam(self, name, value):
         # NOTE: Param names are relative to the base namespace (e.g., /)
         try:
             rospy.set_param(name, value)
