@@ -263,11 +263,13 @@ if __name__ == '__main__':
     btPreflight = QPushButton("Pre-Flight")
     def do_preflight():
         item = lst.currentItem()
-        if item.ident > 0 and item.state in [UAVListWidget.STATE_READY,
-                                             UAVListWidget.STATE_NOT_READY]:
-            print "START  %f" % time.time()
-            preflight_aircraft(sock, item.ident, my_ip, item.ip)
-            print "STOP   %f" % time.time()
+        if item is None or item.ident <= 0 or \
+           item.state not in [UAVListWidget.STATE_READY,
+                              UAVListWidget.STATE_NOT_READY]:
+            return
+        print "START  %f" % time.time()
+        preflight_aircraft(sock, item.ident, my_ip, item.ip)
+        print "STOP   %f" % time.time()
     btPreflight.clicked.connect(do_preflight)
     layout.addWidget(btPreflight)
 
@@ -275,7 +277,7 @@ if __name__ == '__main__':
     btToggle = QPushButton("Toggle Flight Ready")
     def do_toggle():
         item = lst.currentItem()
-        if item.ident <= 0:
+        if item is None or item.ident <= 0:
             return
         if item.state == UAVListWidget.STATE_NOT_READY:
             set_aircraft_ready(sock, item.ident, my_ip, item.ip, True)
@@ -288,7 +290,8 @@ if __name__ == '__main__':
     btShutdown = QPushButton("Shut Down Payload")
     def do_shutdown():
         item = lst.currentItem()
-        if item.ident <= 0 or item.state == UAVListWidget.STATE_FLYING:
+        if item is None or item.ident <= 0 or \
+           item.state in [UAVListWidget.STATE_FLYING]:
             return
         mbx = QMessageBox()
         mbx.setText("Shut down aircraft %d?" % item.ident)
