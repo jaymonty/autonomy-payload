@@ -170,12 +170,13 @@ class Example(Message):
 class FlightStatus(Message):
     # Define message type parameters
     msg_type = 0x00
-    msg_fmt = '>HBBHhhHxBH16s'
+    msg_fmt = '>HxBHhhHxBH16s'
 
     def __init__(self):
         Message.__init__(self)
 
         # Define message fields (setting to None helps raise Exceptions later)
+        # All of these are in the first 'H' (mode_and_flags)
         self.mode = None	# Aircraft guidance mode (0-15, see enum)
         self.armed = None	# Boolean: Throttle Armed?
         self.ready = None	# Boolean: Ready for flight? (user-settable)
@@ -185,16 +186,18 @@ class FlightStatus(Message):
         self.ok_ins = None	# Boolean: INS sensor OK?
         self.ok_mag = None	# Boolean: Magnetometer OK?
         self.ok_pwr = None	# Boolean: Power OK?
-        self.gps_sats = None	# Number of satellites (int, 0-255)
+        # These are the remainder, starting with the 'x'
+        # Unused byte, was GPS sats
         self.batt_rem = None	# Battery % remaining (int, 0-100)
         self.batt_vcc = None	# Battery Voltage (int, mV)
         self.airspeed = None	# Airspeed (float, m/s)
         self.alt_rel = None	# AGL (int, millimeters)
         self.mis_cur = None	# Current mission (waypoint) index (0-65535)
         # Unused byte
-        self.ctl_mode = None	# Controller mode (0-15)
-        self.ctl_ready = [False] * 17   # Controller ready flags (bool/bit array)
-                                # (Index 1 is low bit, 16 is high bit, no 0)
+        self.ctl_mode = None	# Controller mode (byte, but only use 0-16)
+        self.ctl_ready = [False] * (16 + 1)   # Ctlr ready flags (bit array)
+                                # (Index 1 is low bit, 16 is high bit,
+                                #  skip 0 since it is the null controller)
         self.name = None	# Friendly name of aircraft (16 chars max)
         
     def _pack(self):
@@ -220,7 +223,6 @@ class FlightStatus(Message):
             if self.ctl_ready[bit]:
                 ctl_ready_bits |= 1<<(bit-1)
         tupl = (mode_and_flags,
-                int(self.gps_sats),
                 int(batt_rem),
                 int(batt_vcc),
                 int(self.airspeed * 1e02),  # TODO: Are these large enough?
@@ -247,20 +249,19 @@ class FlightStatus(Message):
         self.ok_mag = bool(fields[0] & 0x0040)
         self.ok_pwr = bool(fields[0] & 0x0020)
         self.ready = bool(fields[0] & 0x0010)
-        self.gps_sats = fields[1]
-        self.batt_rem = fields[2]
+        self.batt_rem = fields[1]
         if self.batt_rem == 255:  # Account for invalid values
             self.batt_rem = -1
         self.batt_vcc = -1
-        if fields[3] != 65535:  # Account for invalid values
-            self.batt_vcc = fields[3]
-        self.airspeed = fields[4] / 1e02
-        self.alt_rel = fields[5] * 1e02
-        self.mis_cur = fields[6]
-        self.ctl_mode = fields[7]
+        if fields[2] != 65535:  # Account for invalid values
+            self.batt_vcc = fields[2]
+        self.airspeed = fields[3] / 1e02
+        self.alt_rel = fields[4] * 1e02
+        self.mis_cur = fields[5]
+        self.ctl_mode = fields[6]
         for bit in range(1, len(self.ctl_ready)):
-            self.ctl_ready[bit] = bool(1<<(bit-1) & fields[8])
-        self.name = str(fields[9]).strip(chr(0x0))
+            self.ctl_ready[bit] = bool(1<<(bit-1) & fields[7])
+        self.name = str(fields[8]).strip(chr(0x0))
 
 class Pose(Message):
     # Define message type parameters
