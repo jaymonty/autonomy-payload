@@ -250,7 +250,6 @@ def timed_status(bridge):
     message.ok_ins = False
     message.ok_mag = False
     message.ok_pwr = False
-    message.gps_sats = 0
     message.batt_rem = 0
     message.batt_vcc = 0
     message.batt_cur = 0
@@ -274,11 +273,11 @@ def timed_status(bridge):
         message.armed = timed_status.f_status.armed
         message.ok_ahrs = timed_status.f_status.ahrs_ok
         message.ok_as = timed_status.f_status.as_ok
-        message.ok_gps = timed_status.f_status.gps_ok
+        message.ok_gps = timed_status.f_status.gps_ok and \
+                         (timed_status.f_status.gps_sats >= 6)  # Current reqt
         message.ok_ins = timed_status.f_status.ins_ok
         message.ok_mag = timed_status.f_status.mag_ok
         message.ok_pwr = timed_status.f_status.pwr_ok
-        message.gps_sats = timed_status.f_status.gps_sats
         message.batt_rem = timed_status.f_status.pwr_batt_rem
         message.batt_vcc = timed_status.f_status.pwr_batt_vcc
         message.batt_cur = timed_status.f_status.pwr_batt_cur
