@@ -35,7 +35,7 @@ import ap_path_planning.follow_controller as follower
 #   _last_control_mode: ID (int) of the most recent set_selector_mode order
 #   _swarm_uav_states: object containing the state of all swarm aircraft
 #   _subswarm_uav_states: object containing the state of all subswarm aircraft
-#   _subswarm_publisher: ROS publisher to assign the vehicle to a new subswarm
+#   _update_subswarm_publisher: ROS publisher to assign vehicle to a subswarm
 #   _swarm_state_publisher: ROS publisher to publish the current swarming state
 #   _follow_publisher: ROS publisher to the follow controller set topic
 #   _ctlr_select_srv_proxy: ROS proxy for the ctlr_selector set mode service
@@ -138,7 +138,7 @@ class SwarmManager(nodeable.Nodeable):
     # computed by the SwarmManager.
     # @param params: list of required parameters (none are at present)
     def publisherSetup(self, params=[]):
-        self._subswarm_publisher = \
+        self._update_subswarm_publisher = \
             self.createPublisher("update_subswarm", stdmsg.UInt8, 1, True)
         self._follow_publisher = \
             self.createPublisher("follower_set", apmsg.FormationOrderStamped, 1)
@@ -146,7 +146,7 @@ class SwarmManager(nodeable.Nodeable):
             self.createPublisher("swarm_state", stdmsg.UInt8, 1, True)
 
         # Publish one message now to initialize the latched publishers with "0"
-        self._subswarm_publisher.publish(stdmsg.UInt8(0))
+        self._update_subswarm_publisher.publish(stdmsg.UInt8(0))
         self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.PRE_FLIGHT))
 
 
@@ -220,11 +220,11 @@ class SwarmManager(nodeable.Nodeable):
     def _process_subswarm_update(self, subswarmMsg):
         if self._swarm_state == SwarmManager.IN_SWARM:
             self._subswarm_id = subswarmMsg.data
-            self._swarm_state_publisher.publish(UInt8(subswarmMsg.data))
+            self._update_subswarm_publisher.publish(stdmsg.UInt8(subswarmMsg.data))
             self.log_dbug("Swarm state updated to %d" %self._subswarm_id)
         else:
             self.log_warn("Cannot assign to subswarm %d in swarm state %s" \
-                          %(subswarmMsg.data, SwarmManager.STATUS_STRINGS[self._swarm_state]))
+                          %(subswarmMsg.data, SwarmManager.STATE_STRINGS[self._swarm_state]))
 
 
     # Specific swarm command callbacks
