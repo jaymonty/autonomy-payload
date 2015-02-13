@@ -129,11 +129,11 @@ class FollowController(WaypointController):
     #-------------------------------------------------
 
     # Establishes the callbacks for the FollowController object.  The object
-    # subscribes to the swarm_tracker/swarm_state topic for own-aircraft
+    # subscribes to the swarm_tracker/swarm_uav_states topic for own-aircraft
     # and follow aircraft state updates
     # @param params: no additional parameters required by this method
     def callbackSetup(self, params=[]):
-        self.createSubscriber("swarm_state", apmsg.SwarmStateStamped, \
+        self.createSubscriber("swarm_uav_states", apmsg.SwarmStateStamped, \
                               self._swarm_callback)
         self.createSubscriber("%s_set"%self.nodeName, \
                               apmsg.FormationOrderStamped, \
@@ -252,7 +252,7 @@ class FollowController(WaypointController):
                    formMsg.order.alt_mode, formMsg.order.control_alt)
 
 
-    # Handle incoming swarm_state messages
+    # Handle incoming swarm_uav_states messages
     # @param swarmMsg: message containing swarm data (SwarmStateStamped)
     def _swarm_callback(self, swarmMsg):
         selfUpdated = False
