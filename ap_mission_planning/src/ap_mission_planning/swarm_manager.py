@@ -36,6 +36,7 @@ import ap_path_planning.follow_controller as follower
 #   _swarm_uav_states: object containing the state of all swarm aircraft
 #   _subswarm_uav_states: object containing the state of all subswarm aircraft
 #   _subswarm_publisher: ROS publisher to assign the vehicle to a new subswarm
+#   _swarm_state_publisher: ROS publisher to publish the current swarming state
 #   _follow_publisher: ROS publisher to the follow controller set topic
 #   _ctlr_select_srv_proxy: ROS proxy for the ctlr_selector set mode service
 #
@@ -58,6 +59,27 @@ import ap_path_planning.follow_controller as follower
 #   _process_swarm_formation_order: callback for swarm formation messages
 class SwarmManager(nodeable.Nodeable):
 
+    # Enumeration for swarming states
+    # Swarm Operator has control when IN_SWARM (subswarm active)
+    # All other states under control of ground station or flight crew
+    PRE_FLIGHT = 0   # Powered on, going through pre-fllight checks
+    FLIGHT_READY = 1 # Awaiting launch
+    LAUNCH = 2       # Airborne, waiting for handoff to swarm operator
+    IN_SWARM = 3     # Swarming-available or swarming-active
+    EGRESS = 4       # Transit to recovery staging (still required?)
+    LANDING = 5      # Flight crew has control for landing
+    ON_DECK = 6      # Aircraft has landed
+
+    # For user interface use or debugging
+    STATE_STRINGS = { PRE_FLIGHT: 'Preflight', \
+                      FLIGHT_READY: 'Flight Ready', \
+                      LAUNCH: 'Launched', \
+                      IN_SWARM: 'Swarming', \
+                      EGRESS: 'Egressing', \
+                      LANDING: 'Landing', \
+                      ON_DECK: 'On Deck' }
+
+
     # Class initializer initializes class variables.
     # This assumes that the object is already running within an initialized
     # ROS node (i.e., the object does not initialize itself as a node).
@@ -69,11 +91,14 @@ class SwarmManager(nodeable.Nodeable):
     def __init__(self, nodename):
         nodeable.Nodeable.__init__(self, nodename)
         self._ownID = rospy.get_param("aircraft_id")
+        self._subswarm_id = 0
+        self._swarm_state = SwarmManager.PRE_FLIGHT
         self._rqd_control_mode = controller.NO_PAYLOAD_CTRL
         self._last_control_mode = controller.NO_PAYLOAD_CTRL
         self._swarm_uav_states = None
         self._subswarm_uav_states = None
         self._follow_publisher = None
+        self._swarm_state_publisher = None
         self._ctlr_select_srv_proxy = \
             rospy.ServiceProxy("ctlr_selector/set_selector_mode", \
                                apsrv.SetInteger)
@@ -117,9 +142,12 @@ class SwarmManager(nodeable.Nodeable):
             self.createPublisher("update_subswarm", stdmsg.UInt8, 1, True)
         self._follow_publisher = \
             self.createPublisher("follower_set", apmsg.FormationOrderStamped, 1)
+        self._swarm_state_publisher =\
+            self.createPublisher("swarm_state", stdmsg.UInt8, 1, True)
 
         # Publish one message now to initialize the latched publishers with "0"
         self._subswarm_publisher.publish(stdmsg.UInt8(0))
+        self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.PRE_FLIGHT))
 
 
     # Establishes the services for the SwarmManager object.  The object
@@ -190,7 +218,13 @@ class SwarmManager(nodeable.Nodeable):
     # the new swarm assignment will be published to the update_swwarm topic
     # @param subswarmMsg: message containing new subswarm assignment
     def _process_subswarm_update(self, subswarmMsg):
-        pass  # Temporary stub until swarm state implemented (next commit)
+        if self._swarm_state == SwarmManager.IN_SWARM:
+            self._subswarm_id = subswarmMsg.data
+            self._swarm_state_publisher.publish(UInt8(subswarmMsg.data))
+            self.log_dbug("Swarm state updated to %d" %self._subswarm_id)
+        else:
+            self.log_warn("Cannot assign to subswarm %d in swarm state %s" \
+                          %(subswarmMsg.data, SwarmManager.STATUS_STRINGS[self._swarm_state]))
 
 
     # Specific swarm command callbacks
