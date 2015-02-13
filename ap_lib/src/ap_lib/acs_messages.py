@@ -239,32 +239,34 @@ class FlightStatus(Message):
         
     def _unpack(self, data):
         # Unpack payload into fields
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        fields = list(struct.unpack_from(type(self).msg_fmt, data, 0))
 
         # Place unpacked but unconverted fields into message elements
-        self.mode = fields[0] >> 12
-        self.armed = bool(fields[0] & 0x0800)
-        self.ok_ahrs = bool(fields[0] & 0x0400)
-        self.ok_as = bool(fields[0] & 0x0200)
-        self.ok_gps = bool(fields[0] & 0x0100)
-        self.ok_ins = bool(fields[0] & 0x0080)
-        self.ok_mag = bool(fields[0] & 0x0040)
-        self.ok_pwr = bool(fields[0] & 0x0020)
-        self.ready = bool(fields[0] & 0x0010)
-        self.swarm_state = int((fields[1] & 0xF0) >>4)
-        self.batt_rem = fields[2]
+        modeflag = fields.pop(0)
+        self.mode = modeflag >> 12
+        self.armed = bool(modeflag & 0x0800)
+        self.ok_ahrs = bool(modeflag & 0x0400)
+        self.ok_as = bool(modeflag & 0x0200)
+        self.ok_gps = bool(modeflag & 0x0100)
+        self.ok_ins = bool(modeflag & 0x0080)
+        self.ok_mag = bool(modeflag & 0x0040)
+        self.ok_pwr = bool(modeflag & 0x0020)
+        self.ready = bool(modeflag & 0x0010)
+        self.swarm_state = int((fields.pop(0) & 0xF0) >>4)
+        self.batt_rem = fields.pop(0)
         if self.batt_rem == 255:  # Account for invalid values
             self.batt_rem = -1
-        self.batt_vcc = -1
-        if fields[3] != 65535:  # Account for invalid values
-            self.batt_vcc = fields[4]
-        self.airspeed = fields[5] / 1e02
-        self.alt_rel = fields[6] * 1e02
-        self.mis_cur = fields[7]
-        self.ctl_mode = fields[8]
+        self.batt_vcc = fields.pop(0)
+        if self.batt_vcc == 65535:  # Account for invalid values
+            self.batt_vcc = -1
+        self.airspeed = fields.pop(0) / 1e02
+        self.alt_rel = fields.pop(0) * 1e02
+        self.mis_cur = fields.pop(0)
+        self.ctl_mode = fields.pop(0)
+        ctlready = fields.pop(0)
         for bit in range(1, len(self.ctl_ready)):
-            self.ctl_ready[bit] = bool(1<<(bit-1) & fields[7])
-        self.name = str(fields[9]).strip(chr(0x0))
+            self.ctl_ready[bit] = bool(1<<(bit-1) & ctlready)
+        self.name = str(fields.pop(0)).strip(chr(0x0))
 
 class Pose(Message):
     # Define message type parameters
