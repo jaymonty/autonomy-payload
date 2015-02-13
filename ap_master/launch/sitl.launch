@@ -34,6 +34,7 @@
       <remap from="network/recv_sequencer_set" to="controllers/wp_sequencer_set" />
       <remap from="network/send_pose" to="autopilot/acs_pose" />
       <remap from="network/update_subswarm" to="swarm_tracker/update_subswarm" />
+      <remap from="network/swarm_state" to="swarm_manager/swarm_state" />
       <remap from="network/update_flight_status" to="autopilot/status" />
       <remap from="network/update_ctlr_status" to="controllers/selector_status" />
       <remap from="network/slave_setup" to="autopilot/slave_setup" />
