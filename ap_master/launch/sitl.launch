@@ -56,7 +56,7 @@
       <node name="follower" pkg="ap_path_planning" type="follower_node.py" output="screen" args="">
         <remap from="follower/payload_waypoint" to="autopilot/payload_waypoint" />
         <remap from="follower/ctlr_status" to="controllers/ctlr_status" />
-        <remap from="follower/swarm_state" to="swarm_tracker/swarm_state" />
+        <remap from="follower/swarm_uav_states" to="swarm_tracker/swarm_uav_states" />
         <remap from="follower/follower_set" to="controllers/follower_set" />
       </node>
 
@@ -79,10 +79,15 @@
       </node>
 
       <node name="swarm_manager" pkg="ap_mission_planning" type="swarm_manager.py" output="screen" args="" >
-        <remap from="swarm_manager/swarm_state" to="swarm_tracker/swarm_state" />
-        <remap from="swarm_manager/subswarm_state" to="swarm_tracker/subswarm_state" />
+        <remap from="swarm_manager/swarm_uav_states" to="swarm_tracker/swarm_uav_states" />
+        <remap from="swarm_manager/subswarm_uav_states" to="swarm_tracker/subswarm_uav_states" />
+        <remap from="swarm_manager/update_subswarm" to="swarm_tracker/update_subswarm" />
         <remap from="swarm_manager/swarm_formation_set" to="controllers/swarm_formation_set" />
         <remap from="swarm_manager/follower_set" to="controllers/follower_set" />
+        <remap from="swarm_manager/selector_status" to="controllers/selector_status" />
+        <remap from="swarm_manager/set_selector_mode" to="ctlr_selector/set_selector_mode" />
+        <remap from="swarm_manager/selector_status" to="controllers/selector_status" />
+        <remap from="swarm_manager/recv_subswarm" to="network/recv_subswarm" />
       </node>
     </group>
   </group>
