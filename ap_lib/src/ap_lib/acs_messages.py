@@ -170,7 +170,7 @@ class Example(Message):
 class FlightStatus(Message):
     # Define message type parameters
     msg_type = 0x00
-    msg_fmt = '>HxBHhhHxBH16s'
+    msg_fmt = '>HBBHhhHxBH16s'
 
     def __init__(self):
         Message.__init__(self)
@@ -186,8 +186,9 @@ class FlightStatus(Message):
         self.ok_ins = None	# Boolean: INS sensor OK?
         self.ok_mag = None	# Boolean: Magnetometer OK?
         self.ok_pwr = None	# Boolean: Power OK?
-        # These are the remainder, starting with the 'x'
-        # Unused byte, was GPS sats
+        # These are the remainder, starting with the first 'B'
+        # Next byte used to be was GPS sats, now 4 bits swarm_state, 4 unused
+        self.swarm_state = 0 # Value 0-6
         self.batt_rem = None	# Battery % remaining (int, 0-100)
         self.batt_vcc = None	# Battery Voltage (int, mV)
         self.airspeed = None	# Airspeed (float, m/s)
@@ -223,6 +224,7 @@ class FlightStatus(Message):
             if self.ctl_ready[bit]:
                 ctl_ready_bits |= 1<<(bit-1)
         tupl = (mode_and_flags,
+                ((self.swarm_state << 4) & 0xF0), # left 4 (0 out rt 4 for now)
                 int(batt_rem),
                 int(batt_vcc),
                 int(self.airspeed * 1e02),  # TODO: Are these large enough?
@@ -249,19 +251,20 @@ class FlightStatus(Message):
         self.ok_mag = bool(fields[0] & 0x0040)
         self.ok_pwr = bool(fields[0] & 0x0020)
         self.ready = bool(fields[0] & 0x0010)
-        self.batt_rem = fields[1]
+        self.swarm_state = int((fields[1] & 0xF0) >>4)
+        self.batt_rem = fields[2]
         if self.batt_rem == 255:  # Account for invalid values
             self.batt_rem = -1
         self.batt_vcc = -1
-        if fields[2] != 65535:  # Account for invalid values
-            self.batt_vcc = fields[2]
-        self.airspeed = fields[3] / 1e02
-        self.alt_rel = fields[4] * 1e02
-        self.mis_cur = fields[5]
-        self.ctl_mode = fields[6]
+        if fields[3] != 65535:  # Account for invalid values
+            self.batt_vcc = fields[4]
+        self.airspeed = fields[5] / 1e02
+        self.alt_rel = fields[6] * 1e02
+        self.mis_cur = fields[7]
+        self.ctl_mode = fields[8]
         for bit in range(1, len(self.ctl_ready)):
             self.ctl_ready[bit] = bool(1<<(bit-1) & fields[7])
-        self.name = str(fields[8]).strip(chr(0x0))
+        self.name = str(fields[9]).strip(chr(0x0))
 
 class Pose(Message):
     # Define message type parameters
