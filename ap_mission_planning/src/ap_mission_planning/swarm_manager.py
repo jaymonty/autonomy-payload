@@ -33,8 +33,9 @@ import ap_path_planning.follow_controller as follower
 #   _ownSubswarmID: ID of the subswarm to which this vehicle belongs
 #   _rqd_control_mode: ID (int) of the controller implementing the swarm command
 #   _last_control_mode: ID (int) of the most recent set_selector_mode order
-#   _swarm_state: object containing the state of all swarm aircraft
-#   _subswarm_state: object containing the state of all subswarm aircraft
+#   _swarm_uav_states: object containing the state of all swarm aircraft
+#   _subswarm_uav_states: object containing the state of all subswarm aircraft
+#   _subswarm_publisher: ROS publisher to assign the vehicle to a new subswarm
 #   _follow_publisher: ROS publisher to the follow controller set topic
 #   _ctlr_select_srv_proxy: ROS proxy for the ctlr_selector set mode service
 #
@@ -49,8 +50,9 @@ import ap_path_planning.follow_controller as follower
 #   publisherSetup: implementation of the Nodeable virtual function
 #   serviceSetup: implementation of the Nodeable virtual function
 #   _swarm_sort: utility for sorting swarm aircraft by an arbitrary criteria
-#   _process_swarm_state: callback for swarm state messages
-#   _process_subswarm_state: callback for subswarm state messages
+#   _process_subswarm_update: callback for update subswarm messages
+#   _process_swarm_uav_states: callback for swarm state messages
+#   _process_subswarm_uav_states: callback for subswarm state messages
 #   _process_selector_status: callback for ctlr_selector/status messages
 #   _process_swarm_control_run: implements the activate/deactivate ROS service
 #   _process_swarm_formation_order: callback for swarm formation messages
@@ -69,8 +71,8 @@ class SwarmManager(nodeable.Nodeable):
         self._ownID = rospy.get_param("aircraft_id")
         self._rqd_control_mode = controller.NO_PAYLOAD_CTRL
         self._last_control_mode = controller.NO_PAYLOAD_CTRL
-        self._swarm_state = None
-        self._subswarm_state = None
+        self._swarm_uav_states = None
+        self._subswarm_uav_states = None
         self._follow_publisher = None
         self._ctlr_select_srv_proxy = \
             rospy.ServiceProxy("ctlr_selector/set_selector_mode", \
@@ -84,7 +86,7 @@ class SwarmManager(nodeable.Nodeable):
     #-------------------------------------------------
 
     # Establishes the callbacks for the SwarmManager object.  The object
-    # subscribes to the swarm_state and subswarm_state topics for
+    # subscribes to the swarm_uav_states and subswarm_uav_states topics for
     # own-aircraft, swarm, and subswarm states, to the swarm_control_run
     # topic to initiate the actual swarm control, and to the set_selector_mode
     # topic to keep track of which payload mode the vehicle is currently in.
@@ -92,16 +94,18 @@ class SwarmManager(nodeable.Nodeable):
     #   Swarm formation:  swarm_formation_set
     # @param params: list of required parameters (none are at present)
     def callbackSetup(self, params=[]):
-        self.createSubscriber("swarm_state", apmsg.SwarmStateStamped, \
-                              self._process_swarm_state)
-        self.createSubscriber("subswarm_state", apmsg.SwarmStateStamped, \
-                              self._process_subswarm_state)
+        self.createSubscriber("swarm_uav_states", apmsg.SwarmStateStamped, \
+                              self._process_swarm_uav_states)
+        self.createSubscriber("subswarm_uav_states", apmsg.SwarmStateStamped, \
+                              self._process_subswarm_uav_states)
         self.createSubscriber("selector_status", \
                               apmsg.ControllerGroupStateStamped, \
                               self._process_selector_status)
         self.createSubscriber("swarm_formation_set", \
                               apmsg.SwarmFormationOrderStamped, \
                               self._process_swarm_formation_order)
+        self.createSubscriber("recv_subswarm", stdmsg.UInt8, \
+                              self._process_subswarm_update)
 
 
     # Establishes the publishers for the SwarmManager object.  The object
@@ -109,10 +113,13 @@ class SwarmManager(nodeable.Nodeable):
     # computed by the SwarmManager.
     # @param params: list of required parameters (none are at present)
     def publisherSetup(self, params=[]):
-        self._ctlr_select_publisher = \
-            self.createPublisher("set_selector_mode", stdmsg.UInt8, 1)
+        self._subswarm_publisher = \
+            self.createPublisher("update_subswarm", stdmsg.UInt8, 1, True)
         self._follow_publisher = \
             self.createPublisher("follower_set", apmsg.FormationOrderStamped, 1)
+
+        # Publish one message now to initialize the latched publishers with "0"
+        self._subswarm_publisher.publish(stdmsg.UInt8(0))
 
 
     # Establishes the services for the SwarmManager object.  The object
@@ -159,16 +166,16 @@ class SwarmManager(nodeable.Nodeable):
     # ROS Subscriber callbacks -for this object
     #------------------------------------------
 
-    # Handle incoming swarm_state messages
+    # Handle incoming swarm_uav_states messages
     # @param swarmMsg: message containing swarm data (SwarmStateStamped)
-    def _process_swarm_state(self, swarmMsg):
-        self._swarm_state = swarmMsg
+    def _process_swarm_uav_states(self, swarmMsg):
+        self._swarm_uav_states = swarmMsg
 
 
-    # Handle incoming swarm_state messages
+    # Handle incoming swarm_uav_states messages
     # @param swarmMsg: message containing swarm data (SwarmStateStamped)
-    def _process_subswarm_state(self, subswarmMsg):
-        self._subswarm_state = subswarmMsg
+    def _process_subswarm_uav_states(self, subswarmMsg):
+        self._subswarm_uav_states = subswarmMsg
 
 
     # Process ctlr_selector status messages 
@@ -176,6 +183,14 @@ class SwarmManager(nodeable.Nodeable):
     # @param statusMsg: selector mode message
     def _process_selector_status(self, statusMsg):
         self._last_control_mode = statusMsg.state.active_controller
+
+
+    # Process recv_subswarm messages.  Messages will be ignored if the
+    # vehicle's swarm_state is anything other than IN_SWARM, in which case
+    # the new swarm assignment will be published to the update_swwarm topic
+    # @param subswarmMsg: message containing new subswarm assignment
+    def _process_subswarm_update(self, subswarmMsg):
+        pass  # Temporary stub until swarm state implemented (next commit)
 
 
     # Specific swarm command callbacks
@@ -189,9 +204,9 @@ class SwarmManager(nodeable.Nodeable):
     # @param formMsg: swarm formation requirements msg (SwarmFormationOrderStamped)
     def _process_swarm_formation_order(self, formMsg):
         swarmRecs = []
-        appliesTo = self._swarm_state.swarm
+        appliesTo = self._swarm_uav_states.swarm
         if formMsg.order.subswarm_only:
-            appliesTo = self._subswarm_state.swarm
+            appliesTo = self._subswarm_uav_states.swarm
 
         # sort by altitude & find this acft in the list
         for acft in appliesTo:
