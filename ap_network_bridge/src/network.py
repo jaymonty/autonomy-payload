@@ -250,6 +250,7 @@ def timed_status(bridge):
     message.ok_ins = False
     message.ok_mag = False
     message.ok_pwr = False
+    message.swarm_state = timed_status.swarm_state
     message.batt_rem = 0
     message.batt_vcc = 0
     message.batt_cur = 0
@@ -298,6 +299,7 @@ def timed_status(bridge):
 
 timed_status.c_status = None  # Controller status
 timed_status.f_status = None  # Flight status
+timed_status.swarm_state = 0
 
 #-----------------------------------------------------------------------
 # ROS subscription handlers
@@ -313,6 +315,10 @@ def sub_controller_status(msg, bridge):
 def sub_flight_status(msg, bridge):
     # Just update; timed event will do the send
     timed_status.f_status = msg
+
+def sub_swarm_state(msg, bridge):
+    # Just update the swarm_state; timed event will do the send
+    timed_status.swarm_state = msg.data
 
 def sub_pose(msg, bridge):
     message = messages.Pose()
@@ -486,6 +492,7 @@ if __name__ == '__main__':
         bridge.addSubHandler('update_flight_status',
                              pilot_msg.Status, sub_flight_status)
         bridge.addSubHandler('send_pose', pilot_msg.Geodometry, sub_pose)
+        bridge.addSubHandler('swarm_state', std_msgs.msg.UInt8, sub_swarm_state)
         bridge.addNetHandler(messages.Pose, net_pose,
                              log_success=False)
         bridge.addNetHandler(messages.Heartbeat, net_heartbeat,
