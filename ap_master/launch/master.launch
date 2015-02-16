@@ -10,7 +10,7 @@
   <param name="aircraft_id" type="int" value="$(arg id)" />
   <param name="subswarm_id" type="int" value="$(arg subswarm)" />
   <param name="aircraft_name" type="str" value="$(arg name)" />
-  <param name="rosbag_enable" type="bool" value="true" />
+  <param name="rosbag_enable" type="bool" value="false" />
 
   <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--baudrate 115200 --module acs --module param --module slave --module wp $(arg gps_arg)" />
 
