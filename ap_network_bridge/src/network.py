@@ -209,10 +209,11 @@ class NetworkBridge(object):
             try: # NOTE: This outer try is extra safety, shouldn't need it
                 # Handle time-driven events
                 t = time.time()
-                for ev in [ev for ev in self.timed_events if ev.due(t)]:
-                    # NOTE: technically, want to use the time when the event
-                    # actually ran, but this is slightly more efficient.
-                    ev.run(t)
+                for ev in self.timed_events:
+                    if ev.due(t):
+                        # NOTE: technically, want to use the time when the event
+                        # actually ran, but this is slightly more efficient.
+                        ev.run(t)
 
                 # Receive a message
                 msg = self.sock.recv()
@@ -514,7 +515,7 @@ if __name__ == '__main__':
 
         # Run the loop (shouldn't stop until node is shut down)
         print "\nStarting network bridge loop...\n"
-        bridge.runLoop(100)
+        bridge.runLoop(50)
     except Exception as ex:
         print "NETWORK BRIDGE FATAL ERROR: " + str(ex.args[0])
         # If rospy happened to get initialized before the error, log there too
