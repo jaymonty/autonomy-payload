@@ -34,8 +34,9 @@ import autopilot_bridge.msg as apmsgs
 #   _ownSubswarmID: ID of the subswarm to which this vehicle belongs
 #   _rqd_control_mode: ID (int) of the controller implementing the swarm command
 #   _last_control_mode: ID (int) of the most recent set_selector_mode order
-#   _swarm_uav_states: object containing the state of all swarm aircraft
-#   _subswarm_uav_states: object containing the state of all subswarm aircraft
+#   _swarm_uav_states: dictionary object containing state of all swarm aircraft
+#   _swarm_keys: list of all aircraft IDs (keys) in the swarm dictionary
+#   _subswarm_keys: list of subswarm aircraft IDs (keys) in the swarm dictionary
 #   _update_subswarm_publisher: ROS publisher to assign vehicle to a subswarm
 #   _swarm_state_publisher: ROS publisher to publish the current swarming state
 #   _follow_publisher: ROS publisher to the follow controller set topic
@@ -96,8 +97,10 @@ class SwarmManager(nodeable.Nodeable):
         self._swarm_state = SwarmManager.PRE_FLIGHT
         self._rqd_control_mode = controller.NO_PAYLOAD_CTRL
         self._last_control_mode = controller.NO_PAYLOAD_CTRL
-        self._swarm_uav_states = None
-        self._subswarm_uav_states = None
+        self._swarm_uav_states = dict()
+        self._swarm_keys = []
+        self._subswarm_keys = []
+#        self._subswarm_uav_states = None
         self._follow_publisher = None
         self._swarm_state_publisher = None
         self._ctlr_select_srv_proxy = \
@@ -122,8 +125,8 @@ class SwarmManager(nodeable.Nodeable):
     def callbackSetup(self, params=[]):
         self.createSubscriber("swarm_uav_states", apmsg.SwarmStateStamped, \
                               self._process_swarm_uav_states)
-        self.createSubscriber("subswarm_uav_states", apmsg.SwarmStateStamped, \
-                              self._process_subswarm_uav_states)
+#        self.createSubscriber("subswarm_uav_states", apmsg.SwarmStateStamped, \
+#                              self._process_subswarm_uav_states)
         self.createSubscriber("selector_status", \
                               apmsg.ControllerGroupStateStamped, \
                               self._process_selector_status)
@@ -132,8 +135,6 @@ class SwarmManager(nodeable.Nodeable):
                               self._process_swarm_formation_order)
         self.createSubscriber("recv_subswarm", stdmsg.UInt8, \
                               self._process_subswarm_update)
-#        self.createSubscriber("acs_pose", apmsgs.Geodometry,
-#                              self._process_acs_pose)
         self.createSubscriber("status", apmsgs.Status, \
                               self._process_autopilot_status)
 
@@ -214,13 +215,21 @@ class SwarmManager(nodeable.Nodeable):
     # Handle incoming swarm_uav_states messages
     # @param swarmMsg: message containing swarm data (SwarmStateStamped)
     def _process_swarm_uav_states(self, swarmMsg):
-        self._swarm_uav_states = swarmMsg
+        self._swarm_uav_states.clear()
+        del self._swarm_keys[:]
+        del self._subswarm_keys[:]
+#        self._swarm_uav_states = swarmMsg
+        for vehicle in swarmMsg.swarm:
+            self._swarm_uav_states[vehicle.vehicle_id] = vehicle
+            self._swarm_keys.append(vehicle.vehicle_id)
+            if vehicle.subswarm_id == self._subswarm_id:
+                self._subswarm_keys.append(vehicle.vehicle_id)
 
 
     # Handle incoming swarm_uav_states messages
     # @param swarmMsg: message containing swarm data (SwarmStateStamped)
-    def _process_subswarm_uav_states(self, subswarmMsg):
-        self._subswarm_uav_states = subswarmMsg
+#    def _process_subswarm_uav_states(self, subswarmMsg):
+#        self._subswarm_uav_states = subswarmMsg
 
 
     # Process ctlr_selector status messages 
