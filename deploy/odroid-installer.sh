@@ -377,6 +377,12 @@ read -p "Please make sure you have an appropriate Internet gateway set up, then 
 # Stop any running payload
 sudo service autonomy-payload stop
 
+# Shut down NTP service and get a proper time hack
+# (important for make to work correctly)
+sudo service ntp stop
+sudo ntpdate time.nps.edu  # This should be customized later
+check_fail "ntp time sync"
+
 # Conditionally perform base software install
 if [ $INSTALL_BASE == true ]; then
   install_base_software
