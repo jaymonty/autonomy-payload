@@ -61,6 +61,12 @@ import autopilot_bridge.msg as apmsgs
 #   _process_swarm_formation_order: callback for swarm formation messages
 class SwarmManager(nodeable.Nodeable):
 
+    # Fixed (per convention) state-specific waypoints
+    TAKEOFF_WP = 1       # Airborne
+    SWARM_INGRESS_WP = 4 # Available for tasking
+    SWARM_EGRESS_WP = 5  # Leaving swarm for recovery
+    RACETRACK_WP = 7     # First racetrack waypoint
+
     # Enumeration for swarming states
     # Swarm Operator has control when IN_SWARM (subswarm active)
     # All other states under control of ground station or flight crew
@@ -272,32 +278,44 @@ class SwarmManager(nodeable.Nodeable):
 
     # Process autopilot status messages.  Messages are tested primarily to
     # detect swarm_state changes as follows:
-    #    PRE_FLIGHT or FLIGHT_READY to LAUNCH when mis_cur goes fm 1 to 0
-    #    LAUNCH to IN_SWARM when mis_cur goes to 3 or higher
+    #    PRE_FLIGHT or FLIGHT_READY to LAUNCH when mis_cur goes fm 0 to 1
+    #    LAUNCH to IN_SWARM when mis_cur goes to SWARM_INGRESS_WP or higher
+    #    LAUNCH or IN_SWARM to EGRESS when mis_cur goes to SWARM_EGRESS_WP
     #    Anything to LANDING when mode goes to RTL
+    #    LANDING to ON_DECK when as_read <= 5.0
     # @param statusMsg: Status message
     def _process_autopilot_status(self, statusMsg):
         if ((self._swarm_state == SwarmManager.PRE_FLIGHT) or \
             (self._swarm_state == SwarmManager.FLIGHT_READY)):
-            if (statusMsg.mis_cur == 1):
+            if (statusMsg.mis_cur == SwarmManager.TAKEOFF_WP):
                 self._swarm_state = SwarmManager.LAUNCH
                 self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.LAUNCH))
                 self.log_dbug("Swarm state updated to %d" %self._swarm_state)
+
         elif (self._swarm_state == SwarmManager.LAUNCH):
-            if (statusMsg.mis_cur >= 3):
+            if (statusMsg.mis_cur >= SwarmManager.SWARM_INGRESS_WP):
                 self._swarm_state = SwarmManager.IN_SWARM
                 self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.IN_SWARM))
                 self.log_dbug("Swarm state updated to %d" %self._swarm_state)
+            elif (statusMsg.mis_cur == SwarmManager.SWARM_EGRESS_WP):
+                self._swarm_state = SwarmManager.EGRESS
+                self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.EGRESS))
+                self.log_dbug("Swarm state updated to %d" %self._swarm_state)
+
         elif (self._swarm_state == SwarmManager.IN_SWARM):
-            pass  # No transition to EGRESS implemented yet
-        elif (self._swarm_state == SwarmManager.LANDING):
+            if (statusMsg.mis_cur == SwarmManager.SWARM_EGRESS_WP):
+                self._swarm_state = SwarmManager.EGRESS
+                self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.EGRESS))
+                self.log_dbug("Swarm state updated to %d" %self._swarm_state)
+
+        if (self._swarm_state == SwarmManager.LANDING):
             if (statusMsg.as_read <= 5.0):
                 self._swarm_state = SwarmManager.ON_DECK
                 self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.ON_DECK))
                 self.log_dbug("Swarm state updated to %d" %self._swarm_state)
 
         # Can transition to LANDING at any time after launch
-        if ((self._swarm_state != SwarmManager.PRE_FLIGHT) and \
+        elif ((self._swarm_state != SwarmManager.PRE_FLIGHT) and \
             (self._swarm_state != SwarmManager.FLIGHT_READY) and \
             (statusMsg.mode == apmsgs.Status.MODE_RALLY)):
                 self._swarm_state = SwarmManager.LANDING
