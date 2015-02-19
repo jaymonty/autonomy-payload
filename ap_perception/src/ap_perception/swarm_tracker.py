@@ -96,8 +96,10 @@ class SwarmTrackerSubscriber(object):
 # Class member variables:
 #   ID:  aircraft ID (integer) of the particular swarm member
 #   subSwarmID:  Subswarm to which this SwarmElement is assigned
+#   isActive:  Indicates that the vehicle is active (recent update)
 #   state: aircraft pose and  (Geodometry)
 #   drPose: computed (dead reckoning) position for a future time (Geodometry)
+#   _stateMsg: container object for the swarm state message (SwarmVehicleState)
 #
 # Class member functions
 #   updateState:  update the state information with new data
@@ -118,6 +120,7 @@ class SwarmElement(object):
     def __init__(self, ownID, subswarm, initState, baseAlt = 0.0):
         self.ID = ownID
         self.subSwarmID = subswarm
+        self.isActive = False
         self.state = initState
         self.state.header.seq = 0
         self.state.header.frame_id = 'base_footprint'
@@ -132,6 +135,11 @@ class SwarmElement(object):
         self.drPose.pose.pose.orientation.w = 1.0
         self.drPose.pose.pose.position.using_alt = True
         self.drPose.pose.pose.position.using_rel_alt = True
+        self._stateMsg = SwarmVehicleState()
+        self._stateMsg.vehicle_id = self.ID
+        self._stateMsg.subswarm_id = self.subSwarmID
+        self._stateMsg.state.pose.pose.position.using_alt = True
+        self._stateMsg.state.pose.pose.position.using_rel_alt = True
 
 
     # Updates the object to contain new state information. Displacement
@@ -142,9 +150,11 @@ class SwarmElement(object):
     # @param newState: Geodometry object with the new state information
     # @param subswarm: ID of the subswarm to which this swarm member belongs
     def updateState(self, newState, subswarm):
+        self.isActive = True
         self.subSwarmID = subswarm
         self.state = newState
         self.state.header.frame_id = 'base_footprint'
+        self._stateMsg.subswarm_id = subswarm
 
 
     # Computes a dead reckon position for a (presumably) future time
@@ -326,13 +336,13 @@ class SwarmTracker(Nodeable):
         self._baseAlt = 0.0
         self._swarm = dict()
         self._swarmPublisher = None
-        self._subSwarmPublisher = None
+#        self._subSwarmPublisher = None
         self._swarmMessage = SwarmStateStamped()
         self._swarmMessage.header.seq = 0
         self._swarmMessage.header.frame_id = "base_footprint"
-        self._subSwarmMessage = SwarmStateStamped()
-        self._subSwarmMessage.header.seq = 0
-        self._subSwarmMessage.header.frame_id = "base_footprint"
+#        self._subSwarmMessage = SwarmStateStamped()
+#        self._subSwarmMessage.header.seq = 0
+#        self._subSwarmMessage.header.frame_id = "base_footprint"
         self._lock = RLock()
         rospy.set_param('subswarm_id', self.subSwarmID)
 #        self.DBUG_PRINT = True
@@ -359,8 +369,8 @@ class SwarmTracker(Nodeable):
     def publisherSetup(self, params=[]):
         self._swarmPublisher = \
             self.createPublisher("swarm_uav_states", SwarmStateStamped, 1)
-        self._subSwarmPublisher = \
-            self.createPublisher("subswarm_uav_states", SwarmStateStamped, 1)
+#        self._subSwarmPublisher = \
+#            self.createPublisher("subswarm_uav_states", SwarmStateStamped, 1)
 
 
     # Executes one iteration of the timed loop for the SwarmTracker object
@@ -369,36 +379,32 @@ class SwarmTracker(Nodeable):
     def executeTimedLoop(self):
         self._lock.acquire()
         self._swarmMessage.header.stamp = rospy.Time.now()
-        self._subSwarmMessage.header.stamp = self._swarmMessage.header.stamp
+#        self._subSwarmMessage.header.stamp = self._swarmMessage.header.stamp
         del self._swarmMessage.swarm[:]    # Clear current message contents
-        del self._subSwarmMessage.swarm[:]
+#        del self._subSwarmMessage.swarm[:]
 
         vKeys = self._swarm.keys()
         for vID in vKeys:
             vehicle = self._swarm[vID]
             timeDiff = self._swarmMessage.header.stamp - \
                        vehicle.state.header.stamp
-            if timeDiff > MAX_DR_TIME:
-               del self._swarm[vID]    # Remove vehicle if last report is old
+            if ((self._swarm[vID].isActive) and (timeDiff > MAX_DR_TIME)):
+               self._swarm[vID].isActive = False    # Remove vehicle if last report is old
                self.log_warn("Vehicle ID " + str(vID) +\
                              ": no updates--removed from swarm")
             else:
                 vehicle.computeDRPose(self._swarmMessage.header.stamp)
-                vehicleMsg = SwarmVehicleState()
-                vehicleMsg.vehicle_id = vID
-                vehicleMsg.subswarm_id = vehicle.subSwarmID
-                vehicleMsg.state = apbrg.Geodometry()
-                vehicleMsg.state.header = self._swarmMessage.header
-                vehicleMsg.state.pose = vehicle.drPose.pose
-                vehicleMsg.state.twist = vehicle.state.twist
-                self._swarmMessage.swarm.append(vehicleMsg)
-                if vehicle.subSwarmID == self.subSwarmID:
-                    self._subSwarmMessage.swarm.append(vehicleMsg)
+                vehicle._stateMsg.state.header.stamp = self._swarmMessage.header.stamp
+                vehicle._stateMsg.state.pose = vehicle.drPose.pose
+                vehicle._stateMsg.state.twist = vehicle.state.twist
+                self._swarmMessage.swarm.append(vehicle._stateMsg)
+#                if vehicle.subSwarmID == self.subSwarmID:
+#                    self._subSwarmMessage.swarm.append(vehicle._stateMsg)
 
         self._swarmPublisher.publish(self._swarmMessage)
-        self._subSwarmPublisher.publish(self._subSwarmMessage)
-        self._swarmMessage.header.seq += 1
-        self._subSwarmMessage.header.seq += 1
+#        self._subSwarmPublisher.publish(self._subSwarmMessage)
+#        self._swarmMessage.header.seq += 1
+#        self._subSwarmMessage.header.seq += 1
         self._lock.release()
 
 
