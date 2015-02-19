@@ -19,6 +19,7 @@ import ap_srvs.srv as apsrv
 import ap_lib.nodeable as nodeable
 import ap_lib.controller as controller
 import ap_path_planning.follow_controller as follower
+import autopilot_bridge.msg as apmsgs
 
 
 # Object that ingests swarm commands and computes the appropriate controller
@@ -131,6 +132,10 @@ class SwarmManager(nodeable.Nodeable):
                               self._process_swarm_formation_order)
         self.createSubscriber("recv_subswarm", stdmsg.UInt8, \
                               self._process_subswarm_update)
+#        self.createSubscriber("acs_pose", apmsgs.Geodometry,
+#                              self._process_acs_pose)
+        self.createSubscriber("status", apmsgs.Status, \
+                              self._process_autopilot_status)
 
 
     # Establishes the publishers for the SwarmManager object.  The object
@@ -142,7 +147,7 @@ class SwarmManager(nodeable.Nodeable):
             self.createPublisher("update_subswarm", stdmsg.UInt8, 1, True)
         self._follow_publisher = \
             self.createPublisher("follower_set", apmsg.FormationOrderStamped, 1)
-        self._swarm_state_publisher =\
+        self._swarm_state_publisher = \
             self.createPublisher("swarm_state", stdmsg.UInt8, 1, True)
 
         # Publish one message now to initialize the latched publishers with "0"
@@ -157,6 +162,18 @@ class SwarmManager(nodeable.Nodeable):
     def serviceSetup(self, params=[]):
         self.createService("swarm_control_run", \
                            apsrv.SetBoolean, self._process_swarm_control_run)
+
+
+    # Executes one iteration of the timed loop.  At present, with the exception
+    # of testing for a transition from the PRE_FLIGHT to the FLIGHT_READY state
+    # the method does not do anything (functionality can be added later asreq).
+    def executeTimedLoop(self):
+        if ((self._swarm_state == SwarmManager.PRE_FLIGHT) and \
+            (rospy.has_param("flight_ready")) and \
+            (bool(rospy.get_param("flight_ready")))):
+                self._swarm_state = SwarmManager.FLIGHT_READY
+                self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.FLIGHT_READY))
+                self.log_dbug("Swarm state updated to %d" %self._swarm_state)
 
 
     #--------------------------
@@ -221,11 +238,65 @@ class SwarmManager(nodeable.Nodeable):
         if self._swarm_state == SwarmManager.IN_SWARM:
             self._subswarm_id = subswarmMsg.data
             self._update_subswarm_publisher.publish(stdmsg.UInt8(subswarmMsg.data))
-            self.log_dbug("Swarm state updated to %d" %self._subswarm_id)
+            self.log_dbug("Subswarm updated to %d" %self._subswarm_id)
         else:
             self.log_warn("Cannot assign to subswarm %d in swarm state %s" \
                           %(subswarmMsg.data, SwarmManager.STATE_STRINGS[self._swarm_state]))
 
+
+    # Process acs_pose messages.  Messages are tested primarily to identify
+    # vehicle launch (i.e., current state == PRE_FLIGHT and aircraft is now
+    # airborne) and landed (i.e., aircraft was airborne, but is now on deck)
+    # NOTE:  Not required in SITL (callback disabled)--verify in aircraft
+    # @param poseMsg: Geodometry message with the new pose
+    def _process_acs_pose(self, poseMsg):
+        if ((self._swarm_state == SwarmManager.PRE_FLIGHT) or \
+            (self._swarm_state == SwarmManager.FLIGHT_READY)):
+            vel = math.hypot(poseMsg.twist.twist.linear.x, \
+                             poseMsg.twist.twist.linear.y);
+            # If it's moving and above ground, it's flying
+            if ((vel >= 5.0) and (poseMsg.pose.pose.position.rel_alt > 5.0)):
+                self._swarm_state = SwarmManager.LAUNCH
+                self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.LAUNCH))
+                self.log_dbug("Swarm state updated to %d" %self._swarm_state)
+
+
+    # Process autopilot status messages.  Messages are tested primarily to
+    # detect swarm_state changes as follows:
+    #    PRE_FLIGHT or FLIGHT_READY to LAUNCH when mis_cur goes fm 1 to 0
+    #    LAUNCH to IN_SWARM when mis_cur goes to 3 or higher
+    #    Anything to LANDING when mode goes to RTL
+    # @param statusMsg: Status message
+    def _process_autopilot_status(self, statusMsg):
+        if ((self._swarm_state == SwarmManager.PRE_FLIGHT) or \
+            (self._swarm_state == SwarmManager.FLIGHT_READY)):
+            if (statusMsg.mis_cur == 1):
+                self._swarm_state = SwarmManager.LAUNCH
+                self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.LAUNCH))
+                self.log_dbug("Swarm state updated to %d" %self._swarm_state)
+        elif (self._swarm_state == SwarmManager.LAUNCH):
+            if (statusMsg.mis_cur >= 3):
+                self._swarm_state = SwarmManager.IN_SWARM
+                self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.IN_SWARM))
+                self.log_dbug("Swarm state updated to %d" %self._swarm_state)
+        elif (self._swarm_state == SwarmManager.IN_SWARM):
+            pass  # No transition to EGRESS implemented yet
+        elif (self._swarm_state == SwarmManager.LANDING):
+            if (statusMsg.as_read <= 5.0):
+                self._swarm_state = SwarmManager.ON_DECK
+                self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.ON_DECK))
+                self.log_dbug("Swarm state updated to %d" %self._swarm_state)
+
+        # Can transition to LANDING at any time after launch
+        if ((self._swarm_state != SwarmManager.PRE_FLIGHT) and \
+            (self._swarm_state != SwarmManager.FLIGHT_READY) and \
+            (statusMsg.mode == apmsgs.Status.MODE_RALLY)):
+                self._swarm_state = SwarmManager.LANDING
+                self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.LANDING))
+                self._subswarm_id = 0
+                self._update_subswarm_publisher.publish(stdmsg.UInt8(self._subswarm_id))
+                self.log_dbug("Swarm state updated to %d" %self._swarm_state)
+              
 
     # Specific swarm command callbacks
 
