@@ -276,7 +276,7 @@ class ControllerSelector(nodeable.Nodeable):
             # up-to-date list of infinite loiter waypoints fromn the autopilot
             if self._current_mode == controller.NO_PAYLOAD_CTRL:
                 self._retrieve_last_ap_waypoint()
-                self._set_safety_wp()
+#                self._set_safety_wp()
 
             # Shut down any other active controllers (don't send to safety waypoint)
             self._deactivate_all_controllers(False)
@@ -403,6 +403,7 @@ class ControllerSelector(nodeable.Nodeable):
         for c in self._controllers:
             self._controllers[c].set_active(False)
         self._current_mode = controller.NO_PAYLOAD_CTRL
+        self._set_safety_wp()
         if self._loiter_wp_id != None and sendToSafetyPt:
             self._pub_safety_wp.publish(self._safety_wp)
 
