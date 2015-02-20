@@ -174,20 +174,20 @@ def preflight_aircraft(sock, uavid, localip, uavip):
 
 def set_swarm_ready(sock, uavid, localip, uavip, ready):
     # Trigger the aircraft to be swarm-ready, or not, based on 'uavstat'
-    fr = messages.SwarmReady()
-    fr.msg_dst = int(uavid)
-    fr.msg_secs = 0
-    fr.msg_nsecs = 0
-    fr.ready = ready
-    sock.send(fr)
+    sr = messages.SwarmReady()
+    sr.msg_dst = int(uavid)
+    sr.msg_secs = 0
+    sr.msg_nsecs = 0
+    sr.ready = ready
+    sock.send(sr)
 
     # Also set (FOR FX20) the trigger to the staging (ingress/"swarm ready") waypoint, currently WP#3
-    fr = messages.WaypointGoto()
-    fr.msg_dst = int(uavid)
-    fr.msg_secs = 0
-    fr.msg_nsecs = 0
-    fr.index = 3
-    sock.send(fr)
+    wg = messages.WaypointGoto()
+    wg.msg_dst = int(uavid)
+    wg.msg_secs = 0
+    wg.msg_nsecs = 0
+    wg.index = 3
+    sock.send(wg)
 
 def set_aircraft_ready(sock, uavid, localip, uavip, ready):
     # Toggle the aircraft to be flight-ready, or not, based on 'uavstat'
@@ -309,7 +309,12 @@ if __name__ == '__main__':
         item = lst.currentItem()
         if item is None or item.ident <= 0:
             return
-        set_swarm_ready(sock, item.ident, my_ip, item.ip, True)
+        mbx = QMessageBox()
+        mbx.setText("Confirm aircraft %d?" % item.ident)
+        mbx.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        mbx.setDefaultButton(QMessageBox.No)
+        if mbx.exec_() == QMessageBox.Yes:
+            set_swarm_ready(sock, item.ident, my_ip, item.ip, True)
     btSwarmReady.clicked.connect(do_swarm)
     layout.addWidget(btSwarmReady)
 
