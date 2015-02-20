@@ -449,6 +449,9 @@ def net_sequencer_set(message, bridge):
         msg.waypoints.append(lla)
     bridge.publish('recv_sequencer_set', msg, latched=True)
 
+def net_swarm_ready(message, bridge):
+    bridge.setParam('swarm_ready', message.ready)
+
 def net_health_state(message, bridge):
     bridge.callService('health_state', ap_srv.SetBoolean,
                        enable=message.enable)
@@ -510,6 +513,7 @@ if __name__ == '__main__':
         bridge.addNetHandler(messages.SetController, net_controller_mode)
         bridge.addNetHandler(messages.FollowerSetup, net_follower_set)
         bridge.addNetHandler(messages.WPSequencerSetup, net_sequencer_set)
+        bridge.addNetHandler(messages.FlightReady, net_swarm_ready)
         bridge.addNetHandler(messages.PayloadHeartbeat, net_health_state)
         bridge.addNetHandler(messages.PayloadShutdown, net_shutdown)
 
