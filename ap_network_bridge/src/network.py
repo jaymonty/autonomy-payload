@@ -515,7 +515,7 @@ if __name__ == '__main__':
         bridge.addNetHandler(messages.SetController, net_controller_mode)
         bridge.addNetHandler(messages.FollowerSetup, net_follower_set)
         bridge.addNetHandler(messages.WPSequencerSetup, net_sequencer_set)
-        bridge.addNetHandler(messages.FlightReady, net_swarm_ready)
+        bridge.addNetHandler(messages.SwarmReady, net_swarm_ready)
         bridge.addNetHandler(messages.PayloadHeartbeat, net_health_state)
         bridge.addNetHandler(messages.PayloadShutdown, net_shutdown)
 
