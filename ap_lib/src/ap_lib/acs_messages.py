@@ -491,7 +491,7 @@ class FlightReady(Message):
     def __init__(self):
         Message.__init__(self)
 
-        self.raedy = None         # Boolean
+        self.ready = None         # Boolean
         # 3 padding bytes = 0x00
 
     def _pack(self):
@@ -611,7 +611,7 @@ class SwarmReady(Message):
     def __init__(self):
         Message.__init__(self)
 
-        self.raedy = None         # Boolean
+        self.ready = None         # Boolean
         # 3 padding bytes = 0x00
 
     def _pack(self):
