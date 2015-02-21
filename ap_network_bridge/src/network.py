@@ -461,7 +461,7 @@ def net_health_state(message, bridge):
 def net_shutdown(message, bridge):
     res = os.system("sudo halt")
     if res != 0:
-        raise Exception
+        raise Exception("could not halt")
 
 #-----------------------------------------------------------------------
 # Main section
