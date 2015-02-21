@@ -11,6 +11,8 @@ import subprocess
 import sys
 import time
 
+''' Classes '''
+
 # Simple representation of UAV state
 class UAVState():
     def __init__(self, text, color):
@@ -19,42 +21,8 @@ class UAVState():
 
 # A QListWidgetItem for UAVs, with some custom data and printing
 class UAVListWidgetItem(QListWidgetItem):
+    # Standard item attributes
     FONT = QFont('Helvetica', 14)
-
-    def __init__(self, ident, name, ip, state):
-        QListWidgetItem.__init__(self)
-        self.ident = ident
-        self.name = name
-        self.ip = ip
-        self.vcc = 0.0
-        self.last_seen = 0.0
-
-        self.setState(state)
-        self.updateLastSeen()
-
-        self.setFont(UAVListWidgetItem.FONT)
-        self._setText()
-
-    def _setText(self):
-        self.setText("%s (%d / %2.3fv)" % (self.name, self.ident, self.vcc))
-
-    def __str__(self):
-        return "%s : %s (%d / %s / %2.3fv)" % \
-               (self.name, self.state.text, self.ident, self.ip, self.vcc)
-
-    def setState(self, state):
-        self.state = state
-        self.setBackground(self.state.color)
-
-    def setVoltage(self, vcc):
-        self.vcc = vcc
-        self._setText()
-
-    def updateLastSeen(self):
-        self.last_seen = time.time()
-
-# This creates a list box populated by listening to ACS messages
-class UAVListWidget(QListWidget):
 
     # UAV state
     STATE_NONE = UAVState('INVALID', QBrush(QColor('white')))
@@ -64,147 +32,323 @@ class UAVListWidget(QListWidget):
     STATE_READY= UAVState('READY', QBrush(QColor.fromRgb(0,200,0)))
     STATE_FLYING = UAVState('FLYING', QBrush(QColor.fromRgb(160,160,160)))
 
-    # Time (in seconds) until UAVs go to "offline" status
+    def __init__(self):
+        QListWidgetItem.__init__(self)
+
+        # Attributes of an item
+        self._msg = None     # Last-received FlightStatus message
+        self._time = 0.0     # Time last message was received
+        self._state = None   # State (color coding)
+
+        self.setFont(self.FONT)
+
+    def __str__(self):
+        state_text = "UNKNOWN"
+        if self._state is not None:
+            state_text = self._state.text
+        return "%s : %s (%d / %s / %2.3fv)" % \
+               (self._msg.name,
+                state_text,
+                self._msg.msg_src,
+                self._msg.msg_src_ip,
+                self._msg.batt_vcc / 1000.0)
+
+    def getID(self):
+        if self._msg:
+            return self._msg.msg_src
+        return None
+
+    def getIP(self):
+        if self._msg:
+            return self._msg.msg_src_ip
+        return None
+
+    def getTime(self):
+        return self._time
+
+    def getState(self):
+        return self._state
+
+    # Set the state (color)
+    def setState(self, state):
+        self._state = state
+        if self._state:
+            self.setBackground(self._state.color)
+        else:
+            self.setBackground(QBrush(QColor('white')))
+
+    # Process a status message
+    def processStatus(self, msg):
+        # Update internal data
+        self._msg = msg
+        self._time = time.time()
+
+        # Determine color coding / "state"
+        if msg.armed and msg.alt_rel > 20000:
+            # Armed ^ (Alt > 20m AGL) -> Active/Flying
+            state = self.STATE_FLYING
+        elif msg.batt_vcc == 0.0 and msg.mode == 15:
+            # No voltage ^ Unknown mode -> No autopilot data yet
+            state = self.STATE_BOOTING
+        elif msg.ready:
+            state = self.STATE_READY
+        else:
+            state = self.STATE_NOT_READY
+        self.setState(state)
+
+        # Update UI
+        status_text = "%s (%d / %2.3fv)" % \
+                      (msg.name,
+                       msg.msg_src,
+                       msg.batt_vcc / 1000.0)
+        if msg.armed:
+            status_text += " -- ARM"
+        if msg.mode == 4:
+            status_text += " -- AUTO"
+        self.setText(status_text)
+
+# This creates a list box populated by listening to ACS messages
+class UAVListWidget(QListWidget):
+
+    # Number of times to resend messages (in lieu of reliability)
+    SEND_RETRY = 3
+
+    # Time (in seconds) we start culling aircraft
     OFFLINE_TIME = 5.0
+    DELETE_TIME = 60.0
 
     def __init__(self, sock, parent=None):
         QListWidget.__init__(self, parent)
 
         # Track UAVs, periodically checking for new messages
-        self.uav_listen_event = self.startTimer(100)
+        self._uav_listen_event = self.startTimer(100)
 
         # Add a dummy aircraft to "select none"
-        self.addItem(UAVListWidgetItem(0, '(None)', '', UAVListWidget.STATE_NONE))
+        dummy = UAVListWidgetItem()
+        dummy.setText(" <<None>>")
+        self.addItem(dummy)
+
+        # Add state for MAVProxy connections
+        self.mav_popen = None
+        self.mav_id = None
+        self.mav_channel = None
 
         # ACS protocol connection
-        self.sock = sock
+        self._sock = sock
+
+    ''' Convenience methods '''
 
     # Return the *singly-selected* list item
     def currentItem(self):
         sel = self.selectedItems()
-        if len(sel) != 1 or sel[0].ident == 0:
+        # Second half of condition is false if None or 0 (dummy)
+        if len(sel) != 1 or not sel[0].getID():
             return None
         return sel[0]
 
     # Return item matching a given ident
     def itemByIdent(self, ident):
         for i in range(self.count()):
-            if self.item(i).ident == ident:
+            if self.item(i).getID() == ident:
                 return self.item(i)
         return None
 
-    # Periodic event to look for new UAVs and to update the list
-    def timerEvent(self, event):
-        if event.timerId() != self.uav_listen_event:
+    # Tear down a mavbridge slave channel
+    def _destroySlaveChannel(self):
+        if self.mav_channel is None or self.mav_id is None:
             return
 
-        while True:
-            # Try to receive a message
-            msg = self.sock.recv()
+        ss = messages.SlaveSetup()
+        ss.msg_dst = int(self.mav_id)
+        ss.msg_secs = 0
+        ss.msg_nsecs = 0
+        ss.enable = False
+        ss.channel = self.mav_channel
 
+        # Send the message a few times (in lieu of reliability)
+        for i in range(self.SEND_RETRY):
+            self._sock.send(ss)
+
+        self.mav_id = None
+        self.mav_channel = None
+
+    ''' Handle timer '''
+
+    # Periodic event to look for new UAVs and to update the list
+    def timerEvent(self, event):
+        if event.timerId() != self._uav_listen_event:
+            return
+
+        # If a subprocess is open, see if we can cull it
+        if self.mav_popen is not None:
+            p = self.mav_popen.poll()
+            if p is None:
+                return
+            self._destroySlaveChannel()
+            del self.mav_popen
+            self.mav_popen = None
+            print "Ended MAVProxy at " + str(time.time()) \
+                + " with return code " + str(p)
+
+        # Handle received messages
+        while True:
             # Break if no message, skip non-FlightStatus messages
+            msg = self._sock.recv()
             if msg is None:
                 break
             if not isinstance(msg, messages.FlightStatus):
                 continue
 
-            # Color code based on status
-            if msg.armed and msg.alt_rel > 20000:
-                # Armed ^ (Alt > 20m AGL) -> Active/Flying
-                state = UAVListWidget.STATE_FLYING
-            elif msg.batt_vcc == 0.0 and msg.mode == 15:
-                # No voltage ^ Unknown mode -> No autopilot data yet
-                state = UAVListWidget.STATE_BOOTING
-            elif msg.ready:
-                state = UAVListWidget.STATE_READY
-            else:
-                state = UAVListWidget.STATE_NOT_READY
-
-            # Create if not already in the list
+            # Look up item or create it
             item = self.itemByIdent(msg.msg_src)
             if item is None:
-                self.addItem(UAVListWidgetItem(msg.msg_src, msg.name, msg.msg_src_ip, state))
-            else:
-                item.setState(state)
-                item.setVoltage(float(msg.batt_vcc) / 1e03)
-                item.updateLastSeen()
+                item = UAVListWidgetItem()
+                self.addItem(item)
 
-        # If we haven't seen any for a while, change color
+            # Let the item process the message
+            item.processStatus(msg)
+
+        # Cull those we haven't seen in a while
         cur_time = time.time()
         for i in range(self.count()):
-            if self.item(i).ident == 0:
+            if not self.item(i).getID():
                 continue
-            if self.item(i).last_seen < (cur_time - UAVListWidget.OFFLINE_TIME):
-                self.item(i).setState(UAVListWidget.STATE_OFFLINE)
+            if self.item(i).getTime() < (cur_time - self.DELETE_TIME):
+                # TODO Figure out how to delete from list
+                pass
+            elif self.item(i).getTime() < (cur_time - self.OFFLINE_TIME):
+                self.item(i).setState(UAVListWidgetItem.STATE_OFFLINE)
 
         # schedule refresh and raise event
         self.update()
         self.itemSelectionChanged.emit()
 
-def preflight_aircraft(sock, uavid, localip, uavip):
-    # Some parameters
-    slave_port = 15554 + uavid  # Pick an aircraft-unique port
-    send_retry = 3              # Number of times to send enable/disable
+    ''' Task handlers '''
 
-    # Open a slave mavlink channel to the aircraft
-    # NOTE: This is done unreliably, so it might fail and we won't know :(
-    ss = messages.SlaveSetup()
-    ss.msg_dst = int(uavid)
-    ss.msg_secs = 0
-    ss.msg_nsecs = 0
-    ss.enable = True
-    ss.channel = "udp:%s:%u" % (localip, slave_port)
+    def handleMAVProxy(self):
+        item = self.currentItem()
+        if item is None or not item.getID() or \
+           item.getState() in [UAVListWidgetItem.STATE_OFFLINE,
+                               UAVListWidgetItem.STATE_BOOTING]:
+            print "Selected entry not ready for MAVProxy"
+            return
 
-    # Send the message a few times, so even in bad network conditions one might get through
-    for i in range(send_retry):
-        sock.send(ss)
+        # Can only support one MAVProxy subprocess (for now)
+        if self.mav_popen is not None:
+            print "Please close your other MAVProxy instance first"
+            return
 
-    # Wait a moment so the aircraft can (hopefully) set up the channel
-    time.sleep(1)
+        # Pick an aircraft-unique port
+        slave_port = 15554 + item.getID()
+        self.mav_id = item.getID()
+        self.mav_channel = "udp:%s:%u" % (self._sock._ip, slave_port)
 
-    # Start up a MAVProxy instance and connect to slave channel
-    res = subprocess.call("xterm -e mavproxy.py --master %s --load-module preflight" % ss.channel, shell=True)
+        # Open a slave mavlink channel to the aircraft
+        # NOTE: This is done unreliably, so it might fail and we won't know :(
+        ss = messages.SlaveSetup()
+        ss.msg_dst = int(item.getID())
+        ss.msg_secs = 0
+        ss.msg_nsecs = 0
+        ss.enable = True
+        ss.channel = self.mav_channel
 
-    # Shut down slave channel
-    ss.enable = False
+        # Send the message a few times (in lieu of reliability)
+        for i in range(self.SEND_RETRY):
+            self._sock.send(ss)
 
-    # Send the message a few times, so even in bad network conditions one might get through
-    for i in range(send_retry):
-        sock.send(ss)
+        # Wait a moment so the aircraft can (hopefully) set up the channel
+        time.sleep(1)
 
-def set_swarm_ready(sock, uavid, localip, uavip, ready):
-    # Trigger the aircraft to be swarm-ready, or not, based on 'uavstat'
-    sr = messages.SwarmReady()
-    sr.msg_dst = int(uavid)
-    sr.msg_secs = 0
-    sr.msg_nsecs = 0
-    sr.ready = ready
-    sock.send(sr)
+        # Start up a MAVProxy instance and connect to slave channel
+        try:
+            self.mav_popen = subprocess.Popen( \
+                "xterm -e mavproxy.py --master %s --load-module preflight" % \
+                    self.mav_channel,
+                shell=True,
+                cwd="/tmp")
+            print "Started MAVProxy at " + str(time.time())
+        except Exception as ex:
+            print "Could not start MAVProxy session: " + str(ex.args[0])
+            self._destroySlaveChannel()
+            self.mav_popen = None
 
-    # Also set (FOR FX20) the trigger to the staging (ingress/"swarm ready") waypoint, currently WP#3
-    wg = messages.WaypointGoto()
-    wg.msg_dst = int(uavid)
-    wg.msg_secs = 0
-    wg.msg_nsecs = 0
-    wg.index = 3
-    sock.send(wg)
+    def handleFlightReady(self):
+        item = self.currentItem()
+        if item is None or not item.getID():
+            print "No entry selected"
+            return
+        if item.getState() == UAVListWidgetItem.STATE_NOT_READY:
+            ready = True
+        elif item.getState() == UAVListWidgetItem.STATE_READY:
+            ready = False
+        else:
+            print "Cannot change flight-ready state for this aircraft"
+            return
 
-def set_aircraft_ready(sock, uavid, localip, uavip, ready):
-    # Toggle the aircraft to be flight-ready, or not, based on 'uavstat'
-    fr = messages.FlightReady()
-    fr.msg_dst = int(uavid)
-    fr.msg_secs = 0
-    fr.msg_nsecs = 0
-    fr.ready = ready
-    sock.send(fr)
+        # Toggle the aircraft to be flight-ready, or not
+        fr = messages.FlightReady()
+        fr.msg_dst = int(item.getID())
+        fr.msg_secs = 0
+        fr.msg_nsecs = 0
+        fr.ready = ready
+        for i in range(self.SEND_RETRY):
+            self._sock.send(fr)
 
-def shutdown_aircraft(sock, uavid, localip, uavip):
-    # Send a command to shut down the payload
-    ps = messages.PayloadShutdown()
-    ps.msg_dst = int(uavid)
-    ps.msg_secs = 0
-    ps.msg_nsecs = 0
-    sock.send(ps)
+    def handleSwarmReady(self):
+        item = self.currentItem()
+        if item is None or not item.getID():
+            print "No entry selected"
+            return
+        if item.getState() not in [UAVListWidgetItem.STATE_FLYING]:
+            print "Cannot set swarm-ready on grounded aircraft"
+            return
+        mbx = QMessageBox()
+        mbx.setText("Confirm aircraft %d?" % item.getID())
+        mbx.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        mbx.setDefaultButton(QMessageBox.No)
+        if mbx.exec_() != QMessageBox.Yes:
+            return
+
+        # Trigger the aircraft to be swarm-ready
+        sr = messages.SwarmReady()
+        sr.msg_dst = int(item.getID())
+        sr.msg_secs = 0
+        sr.msg_nsecs = 0
+        sr.ready = True
+        for i in range(self.SEND_RETRY):
+            self._sock.send(sr)
+
+        # Also send (FOR FX20) to the staging (ingressi) waypoint
+        wg = messages.WaypointGoto()
+        wg.msg_dst = int(item.getID())
+        wg.msg_secs = 0
+        wg.msg_nsecs = 0
+        wg.index = 3
+        for i in range(self.SEND_RETRY):
+            self._sock.send(wg)
+
+    def handleShutdown(self):
+        item = self.currentItem()
+        if item is None or not item.getID() or \
+           item.getState() in [UAVListWidgetItem.STATE_FLYING]:
+            print "Cannot shut down a flying aircraft"
+            return
+        mbx = QMessageBox()
+        mbx.setText("Shut down aircraft %d?" % item.getID())
+        mbx.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        mbx.setDefaultButton(QMessageBox.No)
+        if mbx.exec_() != QMessageBox.Yes:
+            return
+
+        # Send a command to shut down the payload
+        ps = messages.PayloadShutdown()
+        ps.msg_dst = int(item.getID())
+        ps.msg_secs = 0
+        ps.msg_nsecs = 0
+        for i in range(self.SEND_RETRY):
+            self._sock.send(ps)
+
+''' Main code '''
 
 if __name__ == '__main__':
     # Grok args
@@ -241,31 +385,20 @@ if __name__ == '__main__':
     # Build up the window itself
     app = QApplication([])
     win = QWidget()
-    win.resize(300, 400)
+    win.resize(400, 450)
     layout = QVBoxLayout()
     win.setLayout(layout)
-
-    # Listbox of UAVs
-    lst = UAVListWidget(sock, win)
-    layout.addWidget(lst)
-
-    # Provide color-key for states
-    hlayout = QHBoxLayout()
-    for st in [ UAVListWidget.STATE_OFFLINE, UAVListWidget.STATE_BOOTING,
-                UAVListWidget.STATE_NOT_READY, UAVListWidget.STATE_READY,
-                UAVListWidget.STATE_FLYING ]:
-        lbl = QLabel(st.text)
-        plt = lbl.palette()
-        plt.setBrush(QPalette.Background, st.color)
-        lbl.setPalette(plt)
-        lbl.setAutoFillBackground(True)
-        hlayout.addWidget(lbl)
-    layout.addLayout(hlayout)
 
     # Status of currently-selected UAV
     # NOTE: The way updates are done is a bit hackish,
     #  relies on a signal being emitted by the UAVListWidget
     lblStat = QLabel("No Aircraft Selected")
+    layout.addWidget(lblStat)
+
+    # Listbox of UAVs
+    lst = UAVListWidget(sock, win)
+    layout.addWidget(lst)
+    # Connect list-click to status text
     def do_update_stat():
         if lst.currentItem() is None:
             lblStat.setText("No Aircraft Selected")
@@ -274,64 +407,40 @@ if __name__ == '__main__':
     lst.setSortingEnabled(True)
     lst.itemClicked.connect(do_update_stat)
     lst.itemSelectionChanged.connect(do_update_stat)
-    layout.addWidget(lblStat)
 
-    # Pre-flight button
-    btPreflight = QPushButton("Pre-Flight")
-    def do_preflight():
-        item = lst.currentItem()
-        if item is None or item.ident <= 0 or \
-           item.state not in [UAVListWidget.STATE_READY,
-                              UAVListWidget.STATE_NOT_READY]:
-            return
-        print "START  %f" % time.time()
-        preflight_aircraft(sock, item.ident, my_ip, item.ip)
-        print "STOP   %f" % time.time()
-    btPreflight.clicked.connect(do_preflight)
-    layout.addWidget(btPreflight)
+    # Provide color-key for states
+    hlayout = QHBoxLayout()
+    for st in [ UAVListWidgetItem.STATE_OFFLINE,
+                UAVListWidgetItem.STATE_BOOTING,
+                UAVListWidgetItem.STATE_NOT_READY,
+                UAVListWidgetItem.STATE_READY,
+                UAVListWidgetItem.STATE_FLYING ]:
+        lbl = QLabel(st.text)
+        plt = lbl.palette()
+        plt.setBrush(QPalette.Background, st.color)
+        lbl.setPalette(plt)
+        lbl.setAutoFillBackground(True)
+        hlayout.addWidget(lbl)
+    layout.addLayout(hlayout)
+
+    # MAVProxy button
+    btMAVProxy = QPushButton("Open MAVProxy + PreFlight")
+    btMAVProxy.clicked.connect(lst.handleMAVProxy)
+    layout.addWidget(btMAVProxy)
 
     # Flight-ready button
     btToggle = QPushButton("Toggle Flight Ready")
-    def do_toggle():
-        item = lst.currentItem()
-        if item is None or item.ident <= 0:
-            return
-        if item.state == UAVListWidget.STATE_NOT_READY:
-            set_aircraft_ready(sock, item.ident, my_ip, item.ip, True)
-        elif item.state == UAVListWidget.STATE_READY:
-            set_aircraft_ready(sock, item.ident, my_ip, item.ip, False)
-    btToggle.clicked.connect(do_toggle)
+    btToggle.clicked.connect(lst.handleFlightReady)
     layout.addWidget(btToggle)
 
     # Swarm-ready button
     btSwarmReady = QPushButton("Confirm Swarm Ready")
-    def do_swarm():
-        item = lst.currentItem()
-        if item is None or item.ident <= 0:
-            return
-        mbx = QMessageBox()
-        mbx.setText("Confirm aircraft %d?" % item.ident)
-        mbx.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        mbx.setDefaultButton(QMessageBox.No)
-        if mbx.exec_() == QMessageBox.Yes:
-            set_swarm_ready(sock, item.ident, my_ip, item.ip, True)
-    btSwarmReady.clicked.connect(do_swarm)
+    btSwarmReady.clicked.connect(lst.handleSwarmReady)
     layout.addWidget(btSwarmReady)
 
     # Shutdown button
     btShutdown = QPushButton("Shut Down Payload")
-    def do_shutdown():
-        item = lst.currentItem()
-        if item is None or item.ident <= 0 or \
-           item.state in [UAVListWidget.STATE_FLYING]:
-            return
-        mbx = QMessageBox()
-        mbx.setText("Shut down aircraft %d?" % item.ident)
-        mbx.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        mbx.setDefaultButton(QMessageBox.No)
-        if mbx.exec_() == QMessageBox.Yes:
-            shutdown_aircraft(sock, item.ident, my_ip, item.ip)
-    btShutdown.clicked.connect(do_shutdown)
+    btShutdown.clicked.connect(lst.handleShutdown)
     layout.addWidget(btShutdown)
 
     # Exit button
