@@ -186,6 +186,7 @@ def set_swarm_ready(sock, uavid, localip, uavip, ready):
     fr.msg_dst = int(uavid)
     fr.msg_secs = 0
     fr.msg_nsecs = 0
+    fr.index = 3
     sock.send(fr)
 
 def set_aircraft_ready(sock, uavid, localip, uavip, ready):
