@@ -172,6 +172,22 @@ def preflight_aircraft(sock, uavid, localip, uavip):
     for i in range(send_retry):
         sock.send(ss)
 
+def set_swarm_ready(sock, uavid, localip, uavip, ready):
+    # Trigger the aircraft to be swarm-ready, or not, based on 'uavstat'
+    fr = messages.SwarmReady()
+    fr.msg_dst = int(uavid)
+    fr.msg_secs = 0
+    fr.msg_nsecs = 0
+    fr.ready = ready
+    sock.send(fr)
+
+    # Also set (FOR FX20) the trigger to the staging (ingress/"swarm ready") waypoint, currently WP#3
+    fr = messages.WaypointGoto()
+    fr.msg_dst = int(uavid)
+    fr.msg_secs = 0
+    fr.msg_nsecs = 0
+    sock.send(fr)
+
 def set_aircraft_ready(sock, uavid, localip, uavip, ready):
     # Toggle the aircraft to be flight-ready, or not, based on 'uavstat'
     fr = messages.FlightReady()
@@ -285,6 +301,16 @@ if __name__ == '__main__':
             set_aircraft_ready(sock, item.ident, my_ip, item.ip, False)
     btToggle.clicked.connect(do_toggle)
     layout.addWidget(btToggle)
+
+    # Swarm-ready button
+    btSwarmReady = QPushButton("Confirm Swarm Ready")
+    def do_swarm():
+        item = lst.currentItem()
+        if item is None or item.ident <= 0:
+            return
+        set_swarm_ready(sock, item.ident, my_ip, item.ip, True)
+    btSwarmReady.clicked.connect(do_swarm)
+    layout.addWidget(btSwarmReady)
 
     # Shutdown button
     btShutdown = QPushButton("Shut Down Payload")
