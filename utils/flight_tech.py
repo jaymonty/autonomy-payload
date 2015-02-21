@@ -209,9 +209,9 @@ def shutdown_aircraft(sock, uavid, localip, uavip):
 if __name__ == '__main__':
     # Grok args
     parser = OptionParser("flight_tech.py [options]")
-    parser.add_option("--device", dest="device",
+    parser.add_option("-d", "--device", dest="device",
                       help="Network device to listen on", default='')
-    parser.add_option("--port", dest="port", type="int",
+    parser.add_option("-p", "--port", dest="port", type="int",
                       help="Network port to listen on", default=5554)
     parser.add_option("--lo-reverse", dest="lo_reverse",
                       action="store_true", default=False,

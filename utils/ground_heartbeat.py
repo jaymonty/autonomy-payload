@@ -15,9 +15,9 @@ from ap_lib.acs_socket import Socket
 if __name__ == '__main__':
     # Grok args
     parser = OptionParser("ground_heartbeat.py [options]")
-    parser.add_option("--device", dest="device", 
+    parser.add_option("-d", "--device", dest="device", 
                       help="Network device to send on", default='')
-    parser.add_option("--port", dest="port", type="int",
+    parser.add_option("-p", "--port", dest="port", type="int",
                       help="Network port to send to", default=5554)
     parser.add_option("--rate", dest="rate", type="int",
                       help="Rate at which to send (Hz)", default=2)

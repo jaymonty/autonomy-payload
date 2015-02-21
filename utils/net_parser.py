@@ -15,9 +15,9 @@ from ap_lib.acs_socket import Socket
 if __name__ == '__main__':
     # Grok args
     parser = OptionParser("net_parser.py [options]")
-    parser.add_option("--device", dest="device", 
+    parser.add_option("-d", "--device", dest="device", 
                       help="Network device to listen on", default='')
-    parser.add_option("--port", dest="port", type="int",
+    parser.add_option("-p", "--port", dest="port", type="int",
                       help="Network port to listen on", default=5554)
     parser.add_option("--repeat", dest="repeat",
                       action="store_true", default=False)

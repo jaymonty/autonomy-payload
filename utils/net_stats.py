@@ -72,9 +72,9 @@ class MsgStats(object):
 if __name__ == '__main__':
     # Grok args
     parser = OptionParser("net_parser.py [options]")
-    parser.add_option("--device", dest="device", 
+    parser.add_option("-d", "--device", dest="device", 
                       help="Network device to listen on", default='')
-    parser.add_option("--port", dest="port", type="int",
+    parser.add_option("-p", "--port", dest="port", type="int",
                       help="Network port to listen on", default=5554)
     parser.add_option("--rolling", dest="rolling", type="int",
                       help="Size of rolling average", default=10)

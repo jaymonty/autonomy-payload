@@ -13,15 +13,15 @@ from ap_lib.acs_socket import Socket
 if __name__ == '__main__':
     # Grok args
     parser = OptionParser("slave_setup.py [options]")
-    parser.add_option("--device", dest="device", 
+    parser.add_option("-d", "--device", dest="device", 
                       help="Network device to send from", default='')
-    parser.add_option("--port", dest="port", type="int",
+    parser.add_option("-p", "--port", dest="port", type="int",
                       help="Network port to send to", default=5554)
-    parser.add_option("--target", dest="target", type="int",
+    parser.add_option("-t", "--target", dest="target", type="int",
                       help="Target aircraft", default=0)
-    parser.add_option("--enable", dest="enable",
+    parser.add_option("-E", "--enable", dest="enable",
                       help="channel to enable", default='')
-    parser.add_option("--disable", dest="disable",
+    parser.add_option("-D", "--disable", dest="disable",
                       help="channel to disable", default='')
     parser.add_option("--lo-reverse", dest="lo_reverse",
                       action="store_true", default=False,
