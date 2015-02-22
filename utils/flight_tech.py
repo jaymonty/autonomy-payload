@@ -255,8 +255,9 @@ class UAVListWidget(QListWidget):
     ''' Task handlers '''
 
     def handleMAVProxy(self):
-        item = self._checkItemState([UAVListWidgetItem.STATE_OFFLINE,
-                                     UAVListWidgetItem.STATE_BOOTING])
+        item = self._checkItemState([UAVListWidgetItem.STATE_NOT_READY,
+                                     UAVListWidgetItem.STATE_READY,
+                                     UAVListWidgetItem.STATE_FLYING])
         if item is None:
             return
 
