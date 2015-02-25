@@ -32,8 +32,8 @@ class UAVListWidgetItem(QListWidgetItem):
     STATE_READY= UAVState('READY', QBrush(QColor.fromRgb(0,200,0)))
     STATE_FLYING = UAVState('FLYING', QBrush(QColor.fromRgb(160,160,160)))
 
-    def __init__(self):
-        QListWidgetItem.__init__(self)
+    def __init__(self, *args, **kwargs):
+        QListWidgetItem.__init__(self, *args, **kwargs)
 
         # Attributes of an item
         self._msg = None     # Last-received FlightStatus message
@@ -43,15 +43,20 @@ class UAVListWidgetItem(QListWidgetItem):
         self.setFont(self.FONT)
 
     def __str__(self):
-        state_text = "UNKNOWN"
-        if self._state is not None:
-            state_text = self._state.text
+        if self._state is None or self._msg is None:
+            return "UNKNOWN"
         return "%s : %s (%d / %s / %2.3fv)" % \
                (self._msg.name,
-                state_text,
+                self._state.text,
                 self._msg.msg_src,
                 self._msg.msg_src_ip,
                 self._msg.batt_vcc / 1000.0)
+
+    # Make explicit the ordering for sorted lists
+    def __lt__(self, other):
+        if not self.getID(): return True
+        if not other.getID(): return False
+        return bool(self.getID() < other.getID())
 
     def getID(self):
         if self._msg:
@@ -75,7 +80,7 @@ class UAVListWidgetItem(QListWidgetItem):
         if self._state:
             self.setBackground(self._state.color)
         else:
-            self.setBackground(QBrush(QColor('white')))
+            self.setBackground(self.STATE_NONE.color)
 
     # Process a status message
     def processStatus(self, msg):
