@@ -163,7 +163,7 @@ class UAVListWidget(QListWidget):
             print "No entry selected"
             return None
         if ok_states != [] and item.getState() not in ok_states:
-            print "Can't do that to a %s aircraft!" % item.getState()
+            print "Can't do that to a %s aircraft!" % item.getState().text
             return None
         return item
 
@@ -210,14 +210,13 @@ class UAVListWidget(QListWidget):
         # If a subprocess is open, see if we can cull it
         if self.mav_popen is not None:
             p = self.mav_popen.poll()
-            if p is None:
-                return
-            self._destroySlaveChannel()
-            del self.mav_popen
-            self.mav_popen = None
-            print "Ended MAVProxy session; " \
-                + "was open for %0.03f seconds and returned code %d" \
-                % (time.time()-self.mav_start_time, p)
+            if p is not None:
+                self._destroySlaveChannel()
+                del self.mav_popen
+                self.mav_popen = None
+                print "Ended MAVProxy session; " \
+                    + "was open for %0.03f seconds and returned code %d" \
+                    % (time.time()-self.mav_start_time, p)
 
         # Handle received messages
         while True:
