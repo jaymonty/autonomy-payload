@@ -4,7 +4,7 @@
   <arg name="gps_arg" default="--gps-time-hack" if="$(arg gps)" />
   <arg name="gps_arg" default="" unless="$(arg gps)" />
   <arg name="ctrlr" default="1" />  <!-- Run the controller nodes -->
-  <arg name="do_swarm" default="0" /> <!-- Run the swarm manager node -->
+  <arg name="do_swarm" default="1" /> <!-- Run the swarm manager node -->
 
   <arg name="subswarm" default="0" />
 
@@ -49,14 +49,14 @@
   <group if="$(arg ctrlr)">
     <node name="follower" pkg="ap_path_planning" type="follower_node.py" output="screen" args="">
       <remap from="follower/payload_waypoint" to="autopilot/payload_waypoint" />
-      <remap from="follower/ctlr_status" to="controllers/status" />
+      <remap from="follower/ctlr_status" to="controllers/ctlr_status" />
       <remap from="follower/swarm_uav_states" to="swarm_tracker/swarm_uav_states" />
       <remap from="follower/follower_set" to="controllers/follower_set" />
     </node>
 
     <node name="wp_sequencer" pkg="ap_path_planning" type="wp_sequencer_node.py" output="screen" args="">
       <remap from="wp_sequencer/payload_waypoint" to="autopilot/payload_waypoint" />
-      <remap from="wp_sequencer/ctlr_status" to="controllers/status" />
+      <remap from="wp_sequencer/ctlr_status" to="controllers/ctlr_status" />
       <remap from="wp_sequencer/acs_pose" to="autopilot/acs_pose" />
       <remap from="wp_sequencer/wp_sequencer_set" to="controllers/wp_sequencer_set" />
     </node>
