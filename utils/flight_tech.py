@@ -303,6 +303,32 @@ class UAVListWidget(QListWidget):
             self._destroySlaveChannel()
             self.mav_popen = None
 
+    def handleArm(self):
+        item = self._checkItemState([UAVListWidgetItem.STATE_READY])
+        if item is None:
+            return
+
+        # Toggle the (software) arming of the throttle
+        ad = messages.Arm()
+        ad.msg_dst = int(item.getID())
+        ad.msg_secs = 0
+        ad.msg_nsecs = 0
+        ad.enable = True         # Boolean
+        self._sendMessage(ad)
+
+    def handleDisArm(self):
+        item = self._checkItemState([UAVListWidgetItem.STATE_READY])
+        if item is None:
+            return
+
+        # Toggle the (software) arming of the throttle
+        ad = messages.Arm()
+        ad.msg_dst = int(item.getID())
+        ad.msg_secs = 0
+        ad.msg_nsecs = 0
+        ad.enable = False         # Boolean
+        self._sendMessage(ad)
+
     def handleFlightReady(self):
         item = self._checkItemState([UAVListWidgetItem.STATE_NOT_READY,
                                      UAVListWidgetItem.STATE_READY])
@@ -341,6 +367,71 @@ class UAVListWidget(QListWidget):
         wg.msg_nsecs = 0
         wg.index = 3
         self._sendMessage(wg)
+
+    def handleAUTO(self):
+        item = self._checkItemState([UAVListWidgetItem.STATE_FLYING])
+        if item is None:
+            return
+
+        # Get and set desired WP #
+        wp_des = int(lnWP.text())
+        print "WP is %d" % wp_des
+        wpa = messages.WaypointGoto()
+        wpa.msg_dst = int(item.getID())
+        wpa.msg_secs = 0
+        wpa.msg_nsecs = 0
+        wpa.index = wp_des
+        self._sendMessage(wpa)
+
+        # Trigger AUTO
+        au = messages.Mode()
+        au.msg_dst = int(item.getID())
+        au.msg_secs = 0
+        au.msg_nsecs = 0
+        au.mode = 4           # AUTO mode number
+
+        self._sendMessage(au)
+
+    def handleRTL(self):
+        item = self._checkItemState([UAVListWidgetItem.STATE_FLYING])
+        if item is None:
+            return
+
+        # Trigger RTL
+        rtl = messages.Mode()
+        rtl.msg_dst = int(item.getID())
+        rtl.msg_secs = 0
+        rtl.msg_nsecs = 0
+        rtl.mode = 0           # RTL mode number
+
+        self._sendMessage(rtl)
+
+    def handleLand(self):
+        item = self._checkItemState([UAVListWidgetItem.STATE_FLYING])
+        if item is None:
+            return
+
+        # Trigger Land
+        ld = messages.Land()
+        ld.msg_dst = int(item.getID())
+        ld.msg_secs = 0
+        ld.msg_nsecs = 0
+
+        self._sendMessage(ld)
+
+    def handleLandAbort(self):
+        item = self._checkItemState([UAVListWidgetItem.STATE_FLYING])
+        if item is None:
+            return
+
+        # Trigger Land Abort
+        la = messages.LandAbort()
+        la.msg_dst = int(item.getID())
+        la.msg_secs = 0
+        la.msg_nsecs = 0
+        la.alt = 60.0          # climbout until la.alt is reached, then goto RTL
+
+        self._sendMessage(la)
 
     def handleShutdown(self):
         item = self._checkItemState([UAVListWidgetItem.STATE_OFFLINE,
@@ -445,10 +536,49 @@ if __name__ == '__main__':
     btToggle.clicked.connect(lst.handleFlightReady)
     layout.addWidget(btToggle)
 
+    # Arm and disarm throttle buttons
+    alayout = QHBoxLayout()
+    
+    btArm = QPushButton("ARM Throttle")
+    btArm.clicked.connect(lst.handleArm)
+    alayout.addWidget(btArm)
+    btDisArm = QPushButton("Disarm Throttle")
+    btDisArm.clicked.connect(lst.handleDisArm)
+    alayout.addWidget(btDisArm)
+
+    layout.addLayout(alayout)
+
     # Swarm-ready button
     btSwarmReady = QPushButton("Confirm Swarm Ready")
     btSwarmReady.clicked.connect(lst.handleSwarmReady)
     layout.addWidget(btSwarmReady)
+
+    # Mode buttons
+    mlayout = QHBoxLayout()
+    
+    btAUTO = QPushButton("AUTO")
+    btAUTO.clicked.connect(lst.handleAUTO)
+    mlayout.addWidget(btAUTO)
+    lnWP=QLineEdit()
+    lnWP.setFixedWidth(30)
+    mlayout.addWidget(lnWP)
+    btRTL = QPushButton("RTL")
+    btRTL.clicked.connect(lst.handleRTL)
+    mlayout.addWidget(btRTL)
+
+    layout.addLayout(mlayout)
+
+    # Landing buttons
+    llayout = QHBoxLayout()
+    
+    btLand = QPushButton("Land")
+    btLand.clicked.connect(lst.handleLand)
+    llayout.addWidget(btLand)
+    btLandAbort = QPushButton("Land Abort")
+    btLandAbort.clicked.connect(lst.handleLandAbort)
+    llayout.addWidget(btLandAbort)
+
+    layout.addLayout(llayout)
 
     # Shutdown button
     btShutdown = QPushButton("Shut Down Payload")
