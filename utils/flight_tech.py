@@ -369,12 +369,17 @@ class UAVListWidget(QListWidget):
         self._sendMessage(wg)
 
     def handleAUTO(self):
-        item = self._checkItemState([UAVListWidgetItem.STATE_FLYING])
+        item = self._checkItemState([UAVListWidgetItem.STATE_READY,
+                                     UAVListWidgetItem.STATE_FLYING])
         if item is None:
             return
 
         # Get and set desired WP #
-        wp_des = int(lnWP.text())
+        try:
+            wp_des = int(lnWP.text())
+        except:
+            print "You must supply a valid waypoint!"
+            return
         print "WP is %d" % wp_des
         wpa = messages.WaypointGoto()
         wpa.msg_dst = int(item.getID())
@@ -538,7 +543,7 @@ if __name__ == '__main__':
 
     # Arm and disarm throttle buttons
     alayout = QHBoxLayout()
-    
+
     btArm = QPushButton("ARM Throttle")
     btArm.clicked.connect(lst.handleArm)
     alayout.addWidget(btArm)
@@ -555,7 +560,7 @@ if __name__ == '__main__':
 
     # Mode buttons
     mlayout = QHBoxLayout()
-    
+
     btAUTO = QPushButton("AUTO")
     btAUTO.clicked.connect(lst.handleAUTO)
     mlayout.addWidget(btAUTO)
@@ -570,7 +575,7 @@ if __name__ == '__main__':
 
     # Landing buttons
     llayout = QHBoxLayout()
-    
+
     btLand = QPushButton("Land")
     btLand.clicked.connect(lst.handleLand)
     llayout.addWidget(btLand)
