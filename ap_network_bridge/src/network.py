@@ -230,7 +230,11 @@ class NetworkBridge(object):
                     self.msg_handlers[type(msg)](msg)
 
             except Exception as ex:
-                rospy.logwarn("runLoop error: " + str(ex.args[0]))
+                try:
+                    print "runLoop error"  # try to get some info out
+                    rospy.logwarn("runLoop error: " + str(ex.args[0]))
+                except:
+                    pass  # Don't log if it causes another error
 
 #-----------------------------------------------------------------------
 # Timed event handlers
