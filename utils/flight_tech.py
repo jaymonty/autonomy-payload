@@ -416,6 +416,9 @@ class UAVListWidget(QListWidget):
         if item is None:
             return
 
+        if not self._confirmBox("Land aircraft %d?" % item.getID()):
+            return
+
         # Trigger Land
         ld = messages.Land()
         ld.msg_dst = int(item.getID())
