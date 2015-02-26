@@ -125,8 +125,11 @@ class UAVListWidget(QListWidget):
     def __init__(self, sock, parent=None):
         QListWidget.__init__(self, parent)
 
-        # Track UAVs, periodically checking for new messages
-        self._uav_listen_event = self.startTimer(500)
+        # Set up a timer for handling network data
+        self.timer = QTimer(self)
+        self.connect(self.timer, SIGNAL("timeout()"), self.handleTimer)
+        self.timer.start(500)
+
 
         # Add a dummy aircraft to "select none"
         dummy = UAVListWidgetItem()
@@ -199,8 +202,7 @@ class UAVListWidget(QListWidget):
         ss.channel = self.mav_channel
 
         # Send the message a few times (in lieu of reliability)
-        for i in range(self.SEND_RETRY):
-            self._sock.send(ss)
+        self._sendMessage(ss)
 
         self.mav_id = None
         self.mav_channel = None
@@ -208,9 +210,7 @@ class UAVListWidget(QListWidget):
     ''' Handle timer '''
 
     # Periodic event to look for new UAVs and to update the list
-    def timerEvent(self, event):
-        if event.timerId() != self._uav_listen_event:
-            return
+    def handleTimer(self):
 
         # If a subprocess is open, see if we can cull it
         if self.mav_popen is not None:
@@ -318,7 +318,8 @@ class UAVListWidget(QListWidget):
         self._sendMessage(fr)
 
     def handleSwarmReady(self):
-        item = self._checkItemState([UAVListWidgetItem.STATE_FLYING])
+        item = self._checkItemState([UAVListWidgetItem.STATE_READY,  # For dev
+                                     UAVListWidgetItem.STATE_FLYING])
         if item is None:
             return
 
@@ -342,7 +343,8 @@ class UAVListWidget(QListWidget):
         self._sendMessage(wg)
 
     def handleShutdown(self):
-        item = self._checkItemState([UAVListWidgetItem.STATE_BOOTING,
+        item = self._checkItemState([UAVListWidgetItem.STATE_OFFLINE,
+                                     UAVListWidgetItem.STATE_BOOTING,
                                      UAVListWidgetItem.STATE_NOT_READY,
                                      UAVListWidgetItem.STATE_READY])
         if item is None:
