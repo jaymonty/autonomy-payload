@@ -128,7 +128,7 @@ class UAVListWidget(QListWidget):
         # Set up a timer for handling network data
         self.timer = QTimer(self)
         self.connect(self.timer, SIGNAL("timeout()"), self.handleTimer)
-        self.timer.start(500)
+        self.timer.start(100)
 
 
         # Add a dummy aircraft to "select none"
