@@ -12,58 +12,63 @@ from ap_lib.acs_socket import Socket
 class MsgTypeStat(object):
     def __init__(self, msg_type, rolling=10):
         self.msg_type = msg_type
+
+        # Counts
         self.total = 0
         self.period = 0
         self.resets = 0
 
-        # rolling average
-        self.rolling = rolling
-        self.past_periods = []
+        # Rolling average
+        self.roll_max = rolling
+        self.roll_bins = [0]
 
-    def increment(self):
+        # Last time seen
+        self.last = 0
+
+    def increment(self, t=time.time()):
         self.total += 1
         self.period += 1
+        self.roll_bins[-1] += 1
+        self.last = t
 
     def reset(self):
-        self.past_periods.append(self.period)
-        while len(self.past_periods) > self.rolling:
-            self.past_periods = self.past_periods[1:]
         self.period = 0
         self.resets += 1
+        self.roll_bins.append(0)
+        extra_bins = len(self.roll_bins) - self.roll_max
+        if extra_bins > 0:
+            self.roll_bins = self.roll_bins[extra_bins:]
 
-    def __str__(self):
-        rol_cnt = min(self.rolling, len(self.past_periods))
-        rol_avg = 'NaN'
-        if rol_cnt > 0:
-            rol_avg = "%1.1f" % \
-                      (sum(self.past_periods) / float(rol_cnt))
-
-        return "%2X: %1u/%s/%1.1f/%5u" % \
+    def report(self, t=time.time()):
+        return "%2X: %1u/%3.1f/%3.1f/%5u/%4.1f" % \
                (self.msg_type,
                 self.period,
-                rol_avg,
+                sum(self.roll_bins) / float(len(self.roll_bins)),
                 float(self.total) / float(self.resets + 1),
-                self.total)
+                self.total,
+                t - self.last)
 
 class MsgStats(object):
     def __init__(self, acid, rolling=10):
         self.acid = acid
-        self.rolling = rolling
+        self.roll_max = rolling
+        self.last = 0
         self.msgtypes = {}
 
-    def update(self, msg_type):
+    def update(self, msg_type, t=time.time()):
+        self.last = t
         if msg_type not in self.msgtypes:
-            self.msgtypes[msg_type] = MsgTypeStat(msg_type, self.rolling)
-        self.msgtypes[msg_type].increment()
+            self.msgtypes[msg_type] = MsgTypeStat(msg_type, self.roll_max)
+        self.msgtypes[msg_type].increment(t)
 
     def reset(self):
-        for t in self.msgtypes:
-            self.msgtypes[t].reset()
+        for mt in self.msgtypes:
+            self.msgtypes[mt].reset()
 
-    def __str__(self):
+    def report(self, t=time.time()):
         line = "ID %3u" % self.acid
-        for t in self.msgtypes:
-            line += "\t%s" % self.msgtypes[t]
+        for mt in self.msgtypes:
+            line += "\t%s" % self.msgtypes[mt].report(t)
         return line
 
 #-----------------------------------------------------------------------
@@ -78,6 +83,8 @@ if __name__ == '__main__':
                       help="Network port to listen on", default=5554)
     parser.add_option("--rolling", dest="rolling", type="int",
                       help="Size of rolling average", default=10)
+    parser.add_option("--offline", dest="offline", type="int",
+                      help="Time before considering offline", default=30)
     parser.add_option("--lo-reverse", dest="lo_reverse",
                       action="store_true", default=False,
                       help="If using lo, reverse the addresses")
@@ -102,20 +109,25 @@ if __name__ == '__main__':
     stats = {}
 
     # Track current second we're in
-    last_time = 0
+    last_sec = 0
     
     while True:
         # If we've rolled over seconds, display and reset
-        t = int(time.time())
-        if t > last_time:
-            os.system('clear')
-            print "ID xxx  TYPE: CUR/ROL(%u)/AVG/TOT  ...\n" % opts.rolling
-            for s in sorted(stats):
-                print stats[s]
-                stats[s].reset()
+        t = time.time()
+        if int(t) > last_sec:
+            last_sec = int(t)
 
+            # Only keep those that are still "online" (reporting)
+            stats = {k:v for k,v in stats.items() if v.last + opts.offline >= t}
+
+            # Refresh screen
+            os.system('clear')
+            print "ID xxx  TYPE: CUR/ROL(%u)/AVG/TOT/LST(%u)  ...\n" % \
+                  (opts.rolling, opts.offline)
+            for s in sorted(stats):
+                print stats[s].report(t)
+                stats[s].reset()
             sys.stdout.flush()
-            last_time = t
 
         # Look for new messages
         msg = sock.recv()
@@ -128,5 +140,5 @@ if __name__ == '__main__':
         # Update stats
         if msg.msg_src not in stats:
             stats[msg.msg_src] = MsgStats(msg.msg_src, opts.rolling)
-        stats[msg.msg_src].update(msg.msg_type)
+        stats[msg.msg_src].update(msg.msg_type, t)
 
