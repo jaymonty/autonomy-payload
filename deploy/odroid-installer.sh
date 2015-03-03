@@ -378,10 +378,18 @@ read -p "Please make sure you have an appropriate Internet gateway set up, then 
 sudo service autonomy-payload stop
 
 # Shut down NTP service and get a proper time hack
-# (important for make to work correctly)
+# (important for make/catkin_make to work correctly)
 sudo service ntp stop
 sudo ntpdate time.nps.edu  # This should be customized later
-check_fail "ntp time sync"
+if [ $? != 0 ]; then
+  echo ""
+  echo "Could not sync time using NTP (perhaps check your network connection?)"
+  echo ""
+  read -p "Enter to abort, or enter time (MMDDhhmm[[CC]YY][.ss]): " CURRENT_TIME
+  if [ -z $CURRENT_TIME ]; then exit 1; fi
+  sudo date $CURRENT_TIME
+  check_fail "set date/time"
+fi
 
 # Conditionally perform base software install
 if [ $INSTALL_BASE == true ]; then
