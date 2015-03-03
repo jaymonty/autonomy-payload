@@ -27,7 +27,7 @@ class UAVListWidgetItem(QListWidgetItem):
     # UAV state
     STATE_NONE = UAVState('INVALID', QBrush(QColor('white')))
     STATE_OFFLINE = UAVState('OFFLINE', QBrush(QColor('red')))
-    STATE_BOOTING = UAVState('BOOTING', QBrush(QColor('cyan').darker(150)))
+    STATE_WAITING_AP = UAVState('WAITING AP', QBrush(QColor('cyan').darker(150)))
     STATE_NOT_READY = UAVState('NOT READY', QBrush(QColor('yellow')))
     STATE_READY= UAVState('READY', QBrush(QColor.fromRgb(0,200,0)))
     STATE_FLYING = UAVState('FLYING', QBrush(QColor.fromRgb(160,160,160)))
@@ -94,7 +94,7 @@ class UAVListWidgetItem(QListWidgetItem):
             state = self.STATE_FLYING
         elif msg.batt_vcc == 0.0 and msg.mode == 15:
             # No voltage ^ Unknown mode -> No autopilot data yet
-            state = self.STATE_BOOTING
+            state = self.STATE_WAITING_AP
         elif msg.ready:
             state = self.STATE_READY
         else:
@@ -120,7 +120,7 @@ class UAVListWidget(QListWidget):
 
     # Time (in seconds) we start culling aircraft
     OFFLINE_TIME = 5.0
-    DELETE_TIME = 60.0
+    DELETE_TIME = 30.0
 
     def __init__(self, sock, parent=None):
         QListWidget.__init__(self, parent)
@@ -243,14 +243,16 @@ class UAVListWidget(QListWidget):
 
         # Cull those we haven't seen in a while
         cur_time = time.time()
+        takeable = []
         for i in range(self.count()):
             if not self.item(i).getID():
                 continue
             if self.item(i).getTime() < (cur_time - self.DELETE_TIME):
-                # TODO Figure out how to delete from list
-                pass
+                takeable.append(i)
             elif self.item(i).getTime() < (cur_time - self.OFFLINE_TIME):
                 self.item(i).setState(UAVListWidgetItem.STATE_OFFLINE)
+        for i in takeable:
+            self.takeItem(i)
 
         # schedule refresh and raise event
         self.update()
@@ -443,7 +445,7 @@ class UAVListWidget(QListWidget):
 
     def handleShutdown(self):
         item = self._checkItemState([UAVListWidgetItem.STATE_OFFLINE,
-                                     UAVListWidgetItem.STATE_BOOTING,
+                                     UAVListWidgetItem.STATE_WAITING_AP,
                                      UAVListWidgetItem.STATE_NOT_READY,
                                      UAVListWidgetItem.STATE_READY])
         if item is None:
@@ -522,7 +524,7 @@ if __name__ == '__main__':
     # Provide color-key for states
     hlayout = QHBoxLayout()
     for st in [ UAVListWidgetItem.STATE_OFFLINE,
-                UAVListWidgetItem.STATE_BOOTING,
+                UAVListWidgetItem.STATE_WAITING_AP,
                 UAVListWidgetItem.STATE_NOT_READY,
                 UAVListWidgetItem.STATE_READY,
                 UAVListWidgetItem.STATE_FLYING ]:
