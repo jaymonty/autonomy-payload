@@ -106,10 +106,6 @@ Simple visualization for the swarm, run within the ROS environment of a payload.
 
 These are various scripts that might come in handy but that require some hand-editing for use or that must be used with caution.
 
-## autopilot\_demo.sh
-
-Can be used to test autopilot functionality via ROS message publications. NOTE: this is likely out of date, and should instead be used as examples for understanding the ROS topics and messages, rather than run as a script.
-
 ## latency.py
 
 Super simple script that can help show messaging latency for bagged and possibly live messagesi (after minor modification). See the code for details.
