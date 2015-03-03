@@ -46,13 +46,23 @@ Example usage using a bridge (requires sudo password):
 
 ## net\_parser.py
 
-Prints received ACS network messages to the screen.
+Prints received ACS network messages to the screen. Like a very basic 'tcpdump' for ACS traffic.
 
 Example (use 'lo' for SITL):
 
-	python net_parser.py --device wlan0
+	./net_parser.py --device wlan0
 
 Use '--help' for all options. Note that '--repeat' can be used to repeat all received messages but with source ID = 255 (0xff).
+
+## net\_stats.py
+
+Displays statistics about messages received from payloads (or other ground systems). Useful for quickly seeing what systems are online and the rates at which messages are being observed.
+
+Example:
+
+	./net_stats.py --device wlan0
+
+Use '--help' or '-h' to see all options; can control length of rolling average and offline timeout.
 
 ## repeater.py
 
@@ -64,7 +74,7 @@ Example usage:
 
 First, start repeater.py for however many payloads you wish to run:
 
-	python repeater.py 2
+	./repeater.py 2
 
 Next, start SITLs as before with different -I values.
 
@@ -78,15 +88,15 @@ Do the same for the second payload instance, adjusting all parameters (note that
 
 If you wish to run utilities such as net\_parser.py or flight\_tech.py, you will need to request an extra repeated port from repeater.py:
 
-	python repeater.py -e 1234 2
+	./repeater.py -e 1234 2
 
 and use the --port and --lo-reverse options in those utilities:
 
-	python net_parser.py --device lo --lo-reverse --port 1234
+	./net_parser.py --device lo --lo-reverse --port 1234
 
 To use repeater.py with actual aircraft, specify a real-world broadcast IP and port using -I and -P, respectively:
 
-	python repeater.py -I 192.168.2.255 -P 5554 2
+	./repeater.py -I 192.168.2.255 -P 5554 2
 
 ## slave\_setup.py
 
@@ -94,7 +104,7 @@ Opens (or closes) a mavlink slave channel via the payload. Right now, slave chan
 
 Example (from a groundstation at 192.168.2.123 on interface wlan0 running e.g. MAVProxy on UDP port 1234, open a UDP slave channel on aircraft 5 (192.168.2.5)):
 
-	python slave_setup.py --device wlan0 --target 5 --enable udp:192.168.2.123:1234
+	./slave_setup.py --device wlan0 --target 5 --enable udp:192.168.2.123:1234
 
 Use '--help' for all options. Use '--enable CHANNEL' to open a channel, and '--disable CHANNEL' to disable it.
 
