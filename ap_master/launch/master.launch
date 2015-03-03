@@ -1,25 +1,43 @@
-<launch>
-  <arg name="gps" default="true" />
+<!-- This is the main launch file for all autonomy-payload instance -->
 
+<!-- Note: args 'id' and 'name' are mandatory -->
+
+<launch>
+
+  <!-- User-supplied arguments -->
+  <arg name="id" default="0" />           <!-- Aircraft ID -->
+  <arg name="name" default="foo" />       <!-- Aircraft Name -->
+  <arg name="gps" default="1" />          <!-- Autopilot has GPS signal; sync clock -->
+  <arg name="do_ctlr" default="1" />      <!-- Run the controller nodes -->
+  <arg name="do_bag" default="1" />       <!-- Enable rosbagging -->
+  <arg name="do_sitl" default="0" />      <!-- Run as a SITL payload -->
+  <arg name="sitl_dev" default="" />      <!-- Device string for SITL -->
+  <arg name="net_dev" default="wlan0" />  <!-- Network device -->
+  <arg name="net_port" default="5554" />  <!-- Network port -->
+
+  <!-- Derived (conditional) arguments -->
+  <arg name="apdev_arg" default="--device $(arg sitl_dev)" if="$(arg do_sitl)" />
+  <arg name="apdev_arg" default="" unless="$(arg do_sitl)" />
   <arg name="gps_arg" default="--gps-time-hack" if="$(arg gps)" />
   <arg name="gps_arg" default="" unless="$(arg gps)" />
-  <arg name="ctrlr" default="1" />  <!-- Run the controller nodes -->
-  <arg name="do_swarm" default="1" /> <!-- Run the swarm manager node -->
 
-  <arg name="subswarm" default="0" />
-
+  <!-- Instance ROS parameters -->
   <param name="aircraft_id" type="int" value="$(arg id)" />
-  <param name="subswarm_id" type="int" value="$(arg subswarm)" />
   <param name="aircraft_name" type="str" value="$(arg name)" />
-  <param name="rosbag_enable" type="bool" value="true" />
+  <param name="network_device" type="str" value="$(arg net_dev)" />
+  <param name="network_port" type="int" value="$(arg net_port)" />
+  <param name="subswarm_id" type="int" value="0" />
+  <param name="rosbag_enable" type="bool" value="$(arg do_bag)" />
 
-  <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--baudrate 115200 --serial-relief 1024 --module acs --module param --module slave --module wp $(arg gps_arg)" />
+  <!-- Core Nodes -->
+
+  <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--baudrate 115200 --serial-relief 1024 --module acs --module param --module slave --module wp $(arg apdev_arg) $(arg gps_arg)" />
 
   <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" >
     <remap from="safety/heartbeat" to="autopilot/heartbeat_onboard" />
   </node>
 
-  <node name="network" pkg="ap_network_bridge" type="network.py" output="screen" args="--device wlan0" >
+  <node name="network" pkg="ap_network_bridge" type="network.py" output="screen" args="" >
     <remap from="network/recv_heart_ground" to="autopilot/heartbeat_ground" />
     <remap from="network/recv_arm" to="autopilot/arm" />
     <remap from="network/recv_mode" to="autopilot/mode_num" />
@@ -46,7 +64,9 @@
 
   <node name="run_once" pkg="ap_tasks" type="run_once.py" output="screen" args="" />
 
-  <group if="$(arg ctrlr)">
+  <!-- Controller Nodes -->
+
+  <group if="$(arg do_ctlr)">
     <node name="follower" pkg="ap_path_planning" type="follower_node.py" output="screen" args="">
       <remap from="follower/payload_waypoint" to="autopilot/payload_waypoint" />
       <remap from="follower/ctlr_status" to="controllers/ctlr_status" />
@@ -72,7 +92,7 @@
       <remap from="ctlr_selector/selector_status" to="controllers/selector_status" />
     </node>
 
-    <node name="swarm_manager" if="$(arg do_swarm)" pkg="ap_mission_planning" type="swarm_manager.py" output="screen" args="" >
+    <node name="swarm_manager" pkg="ap_mission_planning" type="swarm_manager.py" output="screen" args="" >
       <remap from="swarm_manager/swarm_uav_states" to="swarm_tracker/swarm_uav_states" />
       <remap from="swarm_manager/subswarm_uav_states" to="swarm_tracker/subswarm_uav_states" />
       <remap from="swarm_manager/update_subswarm" to="swarm_tracker/update_subswarm" />
@@ -86,4 +106,5 @@
       <remap from="swarm_manager/status" to="autopilot/status" />
     </node>
   </group>
+
 </launch>

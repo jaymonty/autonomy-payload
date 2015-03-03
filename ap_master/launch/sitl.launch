@@ -1,98 +1,35 @@
+<!-- Wrapper launch file for SITL instances -->
+
+<!-- Note: args 'id' and 'name' are mandatory -->
+
 <launch>
+
+  <!-- Arguments to SITL instance -->
   <arg name="sitl" default="tcp:127.0.0.1:5762" />
   <arg name="dev" default="lo" />
   <arg name="port" default="5554" />
-  <arg name="subswarm" default="0" />
   <arg name="ns" default="/" />
+
+  <!-- Optional features -->
   <arg name="bag" default="0" />    <!-- Generate ROS bag files -->
   <arg name="viz" default="0" />    <!-- Run the vizualizer -->
-  <arg name="ctrlr" default="1" />  <!-- Run the controller nodes -->
-  <arg name="do_swarm" default="1" /> <!-- Run the swarm manager node -->
+  <arg name="ctlr" default="1" />   <!-- Run the controller nodes -->
 
-  <group ns="$(arg ns)" >
-    <param name="aircraft_id" type="int" value="$(arg id)" />
-    <param name="aircraft_name" type="str" value="$(arg name)" />
-    <param name="network_device" type="str" value="$(arg dev)" />
-    <param name="network_port" type="int" value="$(arg port)" />
-    <param name="subswarm_id" type="int" value="$(arg subswarm)" />
-    <param name="rosbag_enable" type="bool" value="true" if="$(arg bag)" />
+  <!-- Launch master with modified args and optional namespace -->
 
-    <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--device $(arg sitl) --module acs --module param --module slave --module wp" />
+  <include file="$(find ap_master)/launch/master.launch" ns="$(arg ns)" >
+    <!-- pass ID and Name through -->
+    <arg name="id" default="$(arg id)" />
+    <arg name="name" default="$(arg name)" />
 
-    <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" >
-      <remap from="safety/heartbeat" to="autopilot/heartbeat_onboard" />
-    </node>
+    <!-- set or pass SITL-specific args -->
+    <arg name="gps" default="0" />
+    <arg name="do_ctlr" default="$(arg ctlr)" />
+    <arg name="do_bag" default="$(arg bag)" />
+    <arg name="do_sitl" default="1" />
+    <arg name="sitl_dev" default="$(arg sitl)" />
+    <arg name="net_dev" default="$(arg dev)" />
+    <arg name="net_port" default="$(arg port)" />
+  </include>
 
-    <node name="network" pkg="ap_network_bridge" type="network.py" output="screen" args="" >
-      <remap from="network/recv_heart_ground" to="autopilot/heartbeat_ground" />
-      <remap from="network/recv_arm" to="autopilot/arm" />
-      <remap from="network/recv_mode" to="autopilot/mode_num" />
-      <remap from="network/recv_land" to="autopilot/land" />
-      <remap from="network/recv_land_abort" to="autopilot/land_abort" />
-      <remap from="network/recv_guided_goto" to="autopilot/guided_goto" />
-      <remap from="network/recv_waypoint_goto" to="autopilot/waypoint_goto" />
-      <remap from="network/recv_follower_set" to="controllers/follower_set" />
-      <remap from="network/recv_sequencer_set" to="controllers/wp_sequencer_set" />
-      <remap from="network/send_pose" to="autopilot/acs_pose" />
-      <remap from="network/update_subswarm" to="swarm_tracker/update_subswarm" />
-      <remap from="network/swarm_state" to="swarm_manager/swarm_state" />
-      <remap from="network/update_flight_status" to="autopilot/status" />
-      <remap from="network/update_ctlr_status" to="controllers/selector_status" />
-      <remap from="network/slave_setup" to="autopilot/slave_setup" />
-      <remap from="network/controller_mode" to="ctlr_selector/set_selector_mode" />
-      <remap from="network/health_state" to="safety/set_health_state" />
-    </node>
-
-    <node name="swarm_tracker" pkg="ap_perception" type="swarm_tracker_node.py" output="screen" args="" >
-      <remap from="swarm_tracker/acs_pose" to="autopilot/acs_pose" />
-      <remap from="swarm_tracker/recv_pose" to="network/recv_pose" />
-    </node>
-
-    <node name="run_once" pkg="ap_tasks" type="run_once.py" output="screen" args="" />
-
-    <group if="$(arg viz)">
-      <node name="multi_viz" pkg="ap_perception" type="multi_viz.py" output="screen" args="" />
-    </group>
-
-    <group if="$(arg ctrlr)">
-      <node name="follower" pkg="ap_path_planning" type="follower_node.py" output="screen" args="">
-        <remap from="follower/payload_waypoint" to="autopilot/payload_waypoint" />
-        <remap from="follower/ctlr_status" to="controllers/ctlr_status" />
-        <remap from="follower/swarm_uav_states" to="swarm_tracker/swarm_uav_states" />
-        <remap from="follower/follower_set" to="controllers/follower_set" />
-      </node>
-
-      <node name="wp_sequencer" pkg="ap_path_planning" type="wp_sequencer_node.py" output="screen" args="">
-        <remap from="wp_sequencer/payload_waypoint" to="autopilot/payload_waypoint" />
-        <remap from="wp_sequencer/ctlr_status" to="controllers/ctlr_status" />
-        <remap from="wp_sequencer/acs_pose" to="autopilot/acs_pose" />
-        <remap from="wp_sequencer/wp_sequencer_set" to="controllers/wp_sequencer_set" />
-      </node>
-
-      <node name="ctlr_selector" pkg="ap_mission_planning" type="ctlr_select.py" output="screen" args="" >
-        <remap from="ctlr_selector/wp_getall" to="autopilot/wp_getall" />
-        <remap from="ctlr_selector/wp_getlast" to="autopilot/wp_getlast" />
-        <remap from="ctlr_selector/acs_pose" to="autopilot/acs_pose" />
-        <remap from="ctlr_selector/status" to="autopilot/status" />
-        <remap from="ctlr_selector/waypoint_goto" to="autopilot/waypoint_goto" />
-        <remap from="ctlr_selector/payload_waypoint" to="autopilot/payload_waypoint" />
-        <remap from="ctlr_selector/ctlr_status" to="controllers/ctlr_status" />
-        <remap from="ctlr_selector/selector_status" to="controllers/selector_status" />
-      </node>
-
-      <node name="swarm_manager" if="$(arg do_swarm)" pkg="ap_mission_planning" type="swarm_manager.py" output="screen" args="" >
-        <remap from="swarm_manager/swarm_uav_states" to="swarm_tracker/swarm_uav_states" />
-        <remap from="swarm_manager/subswarm_uav_states" to="swarm_tracker/subswarm_uav_states" />
-        <remap from="swarm_manager/update_subswarm" to="swarm_tracker/update_subswarm" />
-        <remap from="swarm_manager/swarm_formation_set" to="controllers/swarm_formation_set" />
-        <remap from="swarm_manager/follower_set" to="controllers/follower_set" />
-        <remap from="swarm_manager/selector_status" to="controllers/selector_status" />
-        <remap from="swarm_manager/set_selector_mode" to="ctlr_selector/set_selector_mode" />
-        <remap from="swarm_manager/selector_status" to="controllers/selector_status" />
-        <remap from="swarm_manager/recv_subswarm" to="network/recv_subswarm" />
-        <remap from="swarm_manager/acs_pose" to="autopilot/acs_pose" />
-        <remap from="swarm_manager/status" to="autopilot/status" />
-      </node>
-    </group>
-  </group>
 </launch>
