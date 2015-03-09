@@ -62,7 +62,7 @@
     <remap from="swarm_tracker/recv_pose" to="network/recv_pose" />
   </node>
 
-  <node name="run_once" pkg="ap_tasks" type="run_once.py" output="screen" args="" />
+  <node name="task_runner" pkg="ap_tasks" type="task_runner.py" output="screen" args="" />
 
   <!-- Controller Nodes -->
 
