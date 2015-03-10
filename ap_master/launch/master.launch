@@ -43,7 +43,7 @@
     <remap from="network/recv_mode" to="autopilot/mode_num" />
     <remap from="network/recv_land" to="autopilot/land" />
     <remap from="network/recv_land_abort" to="autopilot/land_abort" />
-    <remap from="network/recv_guided_goto" to="autopilot/guided_goto" />
+    <remap from="network/recv_guided_goto" to="autopilot/payload_waypoint" />
     <remap from="network/recv_waypoint_goto" to="autopilot/waypoint_goto" />
     <remap from="network/recv_follower_set" to="controllers/follower_set" />
     <remap from="network/recv_sequencer_set" to="controllers/wp_sequencer_set" />
