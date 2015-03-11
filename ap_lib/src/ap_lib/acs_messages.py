@@ -180,7 +180,6 @@ class FlightStatus(Message):
         self.mode = None	# Aircraft guidance mode (0-15, see enum)
         self.armed = None	# Boolean: Throttle Armed?
         self.ready = None	# Boolean: Ready for flight? (user-settable)
-        self.swarming = None	# Boolean: Ready for swarming? (user-settable)
         self.ok_ahrs = None	# Boolean: AHRS OK?
         self.ok_as = None	# Boolean: Airspeed Sensor OK?
         self.ok_gps = None	# Boolean: GPS sensor OK?
@@ -213,8 +212,7 @@ class FlightStatus(Message):
                        | (0x0040 & _bool16(self.ok_mag)) \
                        | (0x0020 & _bool16(self.ok_pwr)) \
                        | (0x0010 & _bool16(self.ready)) \
-                       | (0x0008 & _bool16(self.swarming)) \
-                       & 0xfff8  # Zeroize unused bits
+                       & 0xfff0  # Zeroize unused bits
         batt_rem = 255
         if 0 <= self.batt_rem <= 100:  # Set invalid values to max unsigned
             batt_rem = self.batt_rem
@@ -254,7 +252,6 @@ class FlightStatus(Message):
         self.ok_mag = bool(modeflag & 0x0040)
         self.ok_pwr = bool(modeflag & 0x0020)
         self.ready = bool(modeflag & 0x0010)
-        self.swarming = bool(modeflag & 0x0008)
         self.swarm_state = int((fields.pop(0) & 0xF0) >>4)
         self.batt_rem = fields.pop(0)
         if self.batt_rem == 255:  # Account for invalid values
@@ -604,23 +601,20 @@ class WPSequencerSetup(Message):
             self.wp_list.append(lla)
             offset += type(self).msg_fmt_wp_sz
 
-class SwarmReady(Message):
+class CalPress(Message):
     msg_type = 0x8D
-    msg_fmt = '>B3x'
 
     def __init__(self):
         Message.__init__(self)
 
-        self.ready = None         # Boolean
-        # 3 padding bytes = 0x00
+        pass
 
     def _pack(self):
-        tupl = (int(self.ready),)
-        return struct.pack(type(self).msg_fmt, *tupl)
+        return ''
 
     def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.ready = bool(fields[0])
+        pass
+
 
 class PayloadHeartbeat(Message):
     msg_type = 0xFE
