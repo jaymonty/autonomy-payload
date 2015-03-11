@@ -354,14 +354,6 @@ class UAVListWidget(QListWidget):
         if not self._confirmBox("Confirm aircraft %d?" % item.getID()):
             return
 
-        # Trigger the aircraft to be swarm-ready
-        sr = messages.SwarmReady()
-        sr.msg_dst = int(item.getID())
-        sr.msg_secs = 0
-        sr.msg_nsecs = 0
-        sr.ready = True
-        self._sendMessage(sr)
-
         # Also send (FOR FX20) to the staging (ingress) waypoint
         wg = messages.WaypointGoto()
         wg.msg_dst = int(item.getID())
