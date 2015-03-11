@@ -4,6 +4,7 @@
 from argparse import ArgumentParser
 import os
 import sys
+import threading
 import time
 
 # General ROS imports
@@ -90,6 +91,23 @@ class NetworkBridge(object):
             self.publishers[topic].obj.publish(msg)
         except Exception as ex:
             raise Exception("publish: " + str(ex.args[0]))
+
+    # NOTE: Optional error_cb fires if any of the tries below fail (use care!)
+    def doInThread(self, main_cb, error_cb=None):
+        def wrapper():
+            try:
+                main_cb()
+            except Exception as ex:
+                if callable(error_cb): error_cb()
+                rospy.logwarn("THREAD ERROR: " + str(ex.args[0]))
+        try:
+            # NOTE: t might get gc'ed before the thread finishes
+            t = threading.Thread(target=wrapper)
+            t.setDaemon(True)  # Allows termination with outstanding threads
+            t.start()
+        except Exception as ex:
+            if callable(error_cb): error_cb()
+            raise Exception("doInThread: " + str(ex.args[0]))
 
     def callService(self, s_name, s_type, **s_fields):
         try:
@@ -278,7 +296,8 @@ def timed_status(bridge):
         message.mode = timed_status.f_status.mode
         message.armed = timed_status.f_status.armed
         message.ok_ahrs = timed_status.f_status.ahrs_ok
-        message.ok_as = timed_status.f_status.as_ok
+        message.ok_as = timed_status.f_status.as_ok and \
+                        bool(timed_status.calpress_done)  # Have we calibrated?
         message.ok_gps = timed_status.f_status.gps_ok and \
                          (timed_status.f_status.gps_sats >= 6)  # Current reqt
         message.ok_ins = timed_status.f_status.ins_ok
@@ -295,8 +314,6 @@ def timed_status(bridge):
     # Populate flight- and swarm-ready flags from params
     message.ready = rospy.has_param("flight_ready") and \
                     bool(rospy.get_param("flight_ready"))
-    message.swarming = rospy.has_param("swarm_ready") and \
-                       bool(rospy.get_param("swarm_ready"))
 
     # Add friendly name
     message.name = bridge.ac_name
@@ -304,9 +321,10 @@ def timed_status(bridge):
     # Send it!
     bridge.sendMessage(message)
 
-timed_status.c_status = None  # Controller status
-timed_status.f_status = None  # Flight status
-timed_status.swarm_state = 0
+timed_status.c_status = None        # Controller status
+timed_status.f_status = None        # Flight status
+timed_status.swarm_state = 0        # Current swarm state
+timed_status.calpress_done = False  # Airspeed calibration done?
 
 #-----------------------------------------------------------------------
 # ROS subscription handlers
@@ -455,8 +473,24 @@ def net_sequencer_set(message, bridge):
         msg.waypoints.append(lla)
     bridge.publish('recv_sequencer_set', msg, latched=True)
 
-def net_swarm_ready(message, bridge):
-    bridge.setParam('swarm_ready', message.ready)
+def net_calpress(message, bridge):
+    def main():
+        try:
+            res = bridge.callService('calpress', pilot_srv.TimedAction,
+                                     timeout=5.0)
+            # Set flag for use in the status message
+            timed_status.calpress_done = bool(res.ok)
+        except Exception as ex:
+            raise Exception("net_calpress: " + str(ex.args[0]))
+    def error():
+        timed_status.calpress_done = False  # Reset to boolean
+    # None = Currently calibrating, don't restart it
+    # NOTE: since network msg processing is single-threaded, this
+    # set-then-check shouldn't be a race condition.
+    if timed_status.calpress_done is None:
+        raise Exception("calibrating currently in progress")
+    timed_status.calpress_done = None
+    bridge.doInThread(main, error)
 
 def net_health_state(message, bridge):
     bridge.callService('health_state', ap_srv.SetBoolean,
@@ -519,7 +553,7 @@ if __name__ == '__main__':
         bridge.addNetHandler(messages.SetController, net_controller_mode)
         bridge.addNetHandler(messages.FollowerSetup, net_follower_set)
         bridge.addNetHandler(messages.WPSequencerSetup, net_sequencer_set)
-        bridge.addNetHandler(messages.SwarmReady, net_swarm_ready)
+        bridge.addNetHandler(messages.CalPress, net_calpress)
         bridge.addNetHandler(messages.PayloadHeartbeat, net_health_state)
         bridge.addNetHandler(messages.PayloadShutdown, net_shutdown)
 
