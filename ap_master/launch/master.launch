@@ -54,6 +54,7 @@
     <remap from="network/update_ctlr_status" to="controllers/selector_status" />
     <remap from="network/slave_setup" to="autopilot/slave_setup" />
     <remap from="network/controller_mode" to="ctlr_selector/set_selector_mode" />
+    <remap from="network/calpress" to="autopilot/calpress" />
     <remap from="network/health_state" to="safety/set_health_state" />
   </node>
 
