@@ -11,6 +11,7 @@
 
 import sys
 import threading
+import time
 
 import rospy
 
@@ -22,7 +23,8 @@ import autopilot_bridge.srv as mavbridge_srv
 from ap_lib import controller
 from ap_lib import nodeable
 
-INFINITE_LOITER_CMD = 17  # Autopilot command ID for infinite loiter waypoints
+INFINITE_LOITER_CMD = 17    # Autopilot command ID for infinite loiter wypts
+MODE_SWITCH_LOCKOUT_T = 3.0 # Post-mode-switch time to ignore active errors
 
 #-----------------------------------------------------------------------
 # Class definitions
@@ -101,8 +103,7 @@ class ControllerType(object):
 #   _wp_get_all: proxy for wp_getall service calls
 #   _wp_getlast: proxy for wp_getlast service calls
 #   _lock: prevent unsafe thread interaction between services and callbacks
-#   _new_ap_status: allows up to 1 erroneous AP status following mode switch
-#   _new_ctlr_status: allows up to 1 erroneous status per ctlr following mode switch
+#   _mode_change_time: time of last control mode change (for error check lockout)
 #
 # Inherited from Nodeable:
 #   nodeName:  Name of the node to start or node in which the object is
@@ -127,8 +128,7 @@ class ControllerSelector(nodeable.Nodeable):
         self._loiter_wps = []
         self._safety_wp = mavbridge_msgs.LLA()
         self._lock = threading.RLock()
-        self._new_ap_status = False
-        self._new_ctlr_status = dict()
+        self._mode_change_time = None
         self.WARN_PRINT = True
 
         # Maintain the controller types by ID
@@ -249,9 +249,11 @@ class ControllerSelector(nodeable.Nodeable):
                 raise Exception("Unknown controller type")
 
             # Have we heard from the autopilot recently?
-            if self._ap_status is None or \
-               self._ap_status_last < stale_time:
-                raise Exception("Unknown or stale autopilot status")
+            # NOTE: commented out for now based on autopilot pub rate observed
+            #       worst rate--uncomment if required when rate issue resolved
+#            if self._ap_status is None or \
+#               self._ap_status_last < stale_time:
+#                raise Exception("Unknown or stale autopilot status")
 
             # Is the autopilot in AUTO?
             if self._ap_status.mode != mavbridge_msgs.Status.MODE_AUTO:
@@ -291,7 +293,10 @@ class ControllerSelector(nodeable.Nodeable):
                 wpindex = std_msgs.UInt16()
                 wpindex.data = self._loiter_wp_id
                 self._pub_wpindex.publish(wpindex)
+                self._lock.release()
+                time.sleep(2.0) # delay to wait for the next autopilot update
                 # TODO: See item 6 in class header (make sure new controller took)
+                self._lock.acquire()
 
             # Activate controller
             success = self._controllers[mode].set_active(True)
@@ -299,8 +304,6 @@ class ControllerSelector(nodeable.Nodeable):
             # Update internal state
             if success:
                 self._current_mode = mode
-                self._new_ap_status = True
-                self._new_ctlr_status.clear()
             else:
                 self._current_mode = controller.NO_PAYLOAD_CONTROL
 
@@ -311,6 +314,7 @@ class ControllerSelector(nodeable.Nodeable):
             self.log_warn("Set Control Mode: " + ex.args[0])
 
         finally:
+            self._mode_change_time = rospy.Time.now()
             self._lock.release()
             return self._current_mode
 
@@ -347,27 +351,29 @@ class ControllerSelector(nodeable.Nodeable):
     # in a delay of no more than 1 second for an actual controller status error
     # @param msg: controller status message being processed
     def _sub_ctlr_status(self, msg):
-        self._lock.acquire()
-        if msg.controller_id not in self._controllers:
-            self.log_warn("Received status message from unknown controller type")
-            raise Exception("Received status message from unknown controller type")
-        self._controllers[msg.controller_id].update_status(msg)
-        if msg.controller_id == self._current_mode and \
-           msg.is_active == False:
-            if msg.controller_id in self._new_ctlr_status:
+        with self._lock:
+            if msg.controller_id not in self._controllers:
+                self.log_warn("Received status message from unknown controller type")
+                raise Exception("Received status message from unknown controller type")
+            self._controllers[msg.controller_id].update_status(msg)
+
+            current_time = rospy.Time.now()
+            if self._mode_change_time == None:
+                self._mode_change_time = current_time
+
+            # ignore state errors for a bit after a mode change
+            lockout_check = (current_time - self._mode_change_time).to_sec()
+            if lockout_check < MODE_SWITCH_LOCKOUT_T:
+                pass
+            elif msg.controller_id == self._current_mode and \
+                 msg.is_active == False:
                 self.log_warn("Activated controller reporting inactive status")
                 self._deactivate_all_controllers(True)
-            else:
-                self._new_ctlr_status[msg.controller_id] = True
-        elif msg.is_active == True and \
-             msg.controller_id != self._current_mode:
-            if msg.controller_id in self._new_ctlr_status:
+            elif msg.is_active == True and \
+                 msg.controller_id != self._current_mode:
                 self.log_warn("Inactive controller (" + \
                               str(msg.controller_id) + ") reporting active status")
                 self._deactivate_all_controllers(True)
-            else:
-                self._new_ctlr_status[msg.controller_id] = True
-        self._lock.release()
 
 
     # Callback for handling autopilot status messages
@@ -377,16 +383,18 @@ class ControllerSelector(nodeable.Nodeable):
     # status message waiting to be processed when payload control is initiated).
     # @param msg: new autopilot status message
     def _sub_ap_status(self, msg):
-        self._lock.acquire()
-        self._ap_status = msg
-        self._ap_status_last = rospy.Time.now()
-        if not self._new_ap_status and self._current_mode != 0:
-            if self._ap_status.mode != mavbridge_msgs.Status.MODE_AUTO or \
-               self._ap_status.mis_cur != self._loiter_wp_id:
-                self.log_warn("Autopilot mode not compatible with waypoint control")
-                self._deactivate_all_controllers(False) # don't send to safety waypoint
-        self._new_ap_status = False
-        self._lock.release()
+        with self._lock:
+            self._ap_status = msg
+            self._ap_status_last = rospy.Time.now()
+            if self._current_mode != 0:
+                if self._ap_status.mode != mavbridge_msgs.Status.MODE_AUTO:
+                    self.log_warn("autopilot mode (%d) not compatible with waypoint control" \
+                                  %self._ap_status.mode)
+                    self._deactivate_all_controllers(False) # don't send to safety waypoint
+                elif self._ap_status.mis_cur != self._loiter_wp_id:
+                    self.log_warn("autopilot waypoint number (%d) not correct" \
+                                  %self._ap_status.mis_cur)
+                    self._deactivate_all_controllers(False) # don't send to safety waypoint
 
 
     # Callback for handling pose messages for this aircraft
