@@ -31,7 +31,7 @@ ALT_SEP_MODE = 1   # enumeration indicating altitude separation mode
 
 OVERSHOOT = 250.0      # default "ahead" distance to place waypoint to avoid capture
 FOLLOW_DISTANCE = 50.0 # default distance behind the lead to place the follow point
-
+MAX_LOOKAHEAD = 10.0   # max DR time for intercept point computation
 
 # Object that creates or receives waypoint sequences and monitors the
 # vehicle's progress through the series of waypoints
@@ -228,6 +228,7 @@ class FollowController(WaypointController):
         time_to_intercept = gps_utils.gps_distance(self.ownLat, self.ownLon, \
                                                    self.tgtLat, self.tgtLon) / \
                             math.hypot(self.ownVx, self.ownVy)
+        time_to_intercept = max(time_to_intercept, MAX_LOOKAHEAD)
         tgt_travel = math.hypot(self.followVx, self.followVy) * time_to_intercept
         self.tgtLat, self.tgtLon = \
             gps_utils.gps_newpos(self.tgtLat, self.tgtLon, self.tgtCrs, tgt_travel)
