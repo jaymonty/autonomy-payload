@@ -444,10 +444,16 @@ def net_subswarm_id(message, bridge):
     msg.data = message.subswarm
     bridge.publish('recv_subswarm', msg, latched=True)
 
+def net_swarm_behavior(message, bridge):
+    bridge.callService('set_swarm_behavior', ap_srv.SetInteger,
+                       setting=message.swarm_behavior)
+
+# Possible candidate for deprication
 def net_controller_mode(message, bridge):
     bridge.callService('controller_mode', ap_srv.SetInteger,
                        setting=message.controller)
 
+# Possible candidate for deprication
 def net_follower_set(message, bridge):
     msg = ap_msg.FormationOrderStamped()
     msg.header.seq = message.seq
@@ -460,6 +466,7 @@ def net_follower_set(message, bridge):
     msg.order.control_alt = message.control_alt
     bridge.publish('recv_follower_set', msg, latched=True)
 
+# Possible candidate for deprication
 def net_sequencer_set(message, bridge):
     msg = ap_msg.WaypointListStamped()
     msg.header.seq = message.seq
@@ -550,9 +557,10 @@ if __name__ == '__main__':
         bridge.addNetHandler(messages.SlaveSetup, net_slave_setup)
         bridge.addNetHandler(messages.FlightReady, net_flight_ready)
         bridge.addNetHandler(messages.SetSubswarm, net_subswarm_id)
-        bridge.addNetHandler(messages.SetController, net_controller_mode)
-        bridge.addNetHandler(messages.FollowerSetup, net_follower_set)
-        bridge.addNetHandler(messages.WPSequencerSetup, net_sequencer_set)
+        bridge.addNetHandler(messages.SwarmBehavior, net_swarm_behavior)
+        bridge.addNetHandler(messages.SetController, net_controller_mode) #depricate?
+        bridge.addNetHandler(messages.FollowerSetup, net_follower_set) #depricate?
+        bridge.addNetHandler(messages.WPSequencerSetup, net_sequencer_set) #depricate?
         bridge.addNetHandler(messages.CalPress, net_calpress)
         bridge.addNetHandler(messages.PayloadHeartbeat, net_health_state)
         bridge.addNetHandler(messages.PayloadShutdown, net_shutdown)
