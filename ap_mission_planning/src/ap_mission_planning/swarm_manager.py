@@ -8,6 +8,7 @@
 # Standard python library imports
 import sys
 import math
+import time
 
 # ROS library imports
 import rospy
@@ -31,15 +32,14 @@ import autopilot_bridge.msg as apmsgs
 #
 # Class member variables:
 #   _ownID: ID of this aircraft
-#   _ownSubswarmID: ID of the subswarm to which this vehicle belongs
-#   _rqd_control_mode: ID (int) of the controller implementing the swarm command
-#   _last_control_mode: ID (int) of the most recent set_selector_mode order
+#   _subswarm_id: ID of the subswarm to which this vehicle belongs
 #   _swarm_uav_states: dictionary object containing state of all swarm aircraft
 #   _swarm_keys: list of all aircraft IDs (keys) in the swarm dictionary
 #   _subswarm_keys: list of subswarm aircraft IDs (keys) in the swarm dictionary
 #   _update_subswarm_publisher: ROS publisher to assign vehicle to a subswarm
 #   _swarm_state_publisher: ROS publisher to publish the current swarming state
 #   _follow_publisher: ROS publisher to the follow controller set topic
+#   _wp_goto_publisher: ROS publisher to direct the vehicle to a waypoint #
 #   _ctlr_select_srv_proxy: ROS proxy for the ctlr_selector set mode service
 #
 # Inherited from Nodeable:
@@ -52,40 +52,80 @@ import autopilot_bridge.msg as apmsgs
 #   callBackSetup: implementation of the Nodeable virtual function
 #   publisherSetup: implementation of the Nodeable virtual function
 #   serviceSetup: implementation of the Nodeable virtual function
+#   register_swarm_behavior: registers functions to implement swarm behaviors
 #   _swarm_sort: utility for sorting swarm aircraft by an arbitrary criteria
 #   _process_subswarm_update: callback for update subswarm messages
 #   _process_swarm_uav_states: callback for swarm state messages
 #   _process_subswarm_uav_states: callback for subswarm state messages
 #   _process_selector_status: callback for ctlr_selector/status messages
-#   _process_swarm_control_run: implements the activate/deactivate ROS service
-#   _process_swarm_formation_order: callback for swarm formation messages
+#   _process_set_swarm_behavior: implements the set_swarm_behavior service
+#   _set_swarm_state: method for updating the swarm state to a new value
+#   _set_subswarm: method for normal or forced subswarm_id set
+#   _activate_swarm_standby: implements the swarm standby behavior
+#   _activate_egress: implements the egress behavior
+#   _activate_fixed_follow: implements the fixed-following behavior
 class SwarmManager(nodeable.Nodeable):
 
     # Fixed (per convention) state-specific waypoints
     TAKEOFF_WP = 1       # Airborne
-    SWARM_INGRESS_WP = 4 # Available for tasking
+    SWARM_STANDBY_WP = 4 # Available for tasking
     SWARM_EGRESS_WP = 5  # Leaving swarm for recovery
+    LANDING_WP = 6       # Waypoint used for the landing point
     RACETRACK_WP = 7     # First racetrack waypoint
+
+    # Enumeration for available swarm behavior
+    SWARM_STANDBY = 0  # No swarm behavior (set no payload control)
+    FIXED_FOLLOW = 1   # Canned follow positions based on side #
+    SWARM_EGRESS = 99  # Egress the swarm for recovery
 
     # Enumeration for swarming states
     # Swarm Operator has control when IN_SWARM (subswarm active)
     # All other states under control of ground station or flight crew
     PRE_FLIGHT = 0   # Powered on, going through pre-fllight checks
     FLIGHT_READY = 1 # Awaiting launch
-    LAUNCH = 2       # Airborne, waiting for handoff to swarm operator
-    IN_SWARM = 3     # Swarming-available or swarming-active
-    EGRESS = 4       # Transit to recovery staging (still required?)
-    LANDING = 5      # Flight crew has control for landing
-    ON_DECK = 6      # Aircraft has landed
+    INGRESS = 2      # Airborne, waiting for handoff to swarm operator
+    SWARM_READY = 3  # Available for swarm behavior (standby loiter)
+    SWARM_ACTIVE = 4 # Executing an active swarm behavior
+    EGRESS = 5       # Transit to recovery staging (still required?)
+    LANDING = 6      # Flight crew has control for landing
+    ON_DECK = 7      # Aircraft has landed
 
     # For user interface use or debugging
     STATE_STRINGS = { PRE_FLIGHT: 'Preflight', \
                       FLIGHT_READY: 'Flight Ready', \
-                      LAUNCH: 'Launched', \
-                      IN_SWARM: 'Swarming', \
-                      EGRESS: 'Egressing', \
+                      INGRESS: 'Ingress', \
+                      SWARM_READY: 'Swarm Ready', \
+                      SWARM_ACTIVE: 'Swarm Ready', \
+                      EGRESS: 'Egress', \
                       LANDING: 'Landing', \
                       ON_DECK: 'On Deck' }
+
+    # Hard-coded preset altitudes for fixed-follow swarming
+    UAV_ALTS = {   4:375,
+                   6:400,
+                  11:425,
+                   9:450,
+                  12:475,
+                   7:500,
+                  10:525,
+                  13:550,
+                  14:575,
+                  15:600,
+                   5:625,
+                 101:385,
+                 102:410,
+                 103:435,
+                 104:460,
+                 105:485,
+                 106:510,
+                 107:535,
+                 108:560,
+                 109:585,
+                 110:610,
+                 111:635 }
+
+    FIXED_FOLLOW_DIST = 25.0
+    TIMING_DELAY = 2.0
 
 
     # Class initializer initializes class variables.
@@ -101,12 +141,10 @@ class SwarmManager(nodeable.Nodeable):
         self._ownID = rospy.get_param("aircraft_id")
         self._subswarm_id = 0
         self._swarm_state = SwarmManager.PRE_FLIGHT
-        self._rqd_control_mode = controller.NO_PAYLOAD_CTRL
-        self._last_control_mode = controller.NO_PAYLOAD_CTRL
+        self._swarm_behaviors = dict()
         self._swarm_uav_states = dict()
         self._swarm_keys = []
         self._subswarm_keys = []
-#        self._subswarm_uav_states = None
         self._follow_publisher = None
         self._swarm_state_publisher = None
         self._ctlr_select_srv_proxy = \
@@ -131,14 +169,9 @@ class SwarmManager(nodeable.Nodeable):
     def callbackSetup(self, params=[]):
         self.createSubscriber("swarm_uav_states", apmsg.SwarmStateStamped, \
                               self._process_swarm_uav_states)
-#        self.createSubscriber("subswarm_uav_states", apmsg.SwarmStateStamped, \
-#                              self._process_subswarm_uav_states)
         self.createSubscriber("selector_status", \
                               apmsg.ControllerGroupStateStamped, \
                               self._process_selector_status)
-        self.createSubscriber("swarm_formation_set", \
-                              apmsg.SwarmFormationOrderStamped, \
-                              self._process_swarm_formation_order)
         self.createSubscriber("recv_subswarm", stdmsg.UInt8, \
                               self._process_subswarm_update)
         self.createSubscriber("status", apmsgs.Status, \
@@ -156,10 +189,12 @@ class SwarmManager(nodeable.Nodeable):
             self.createPublisher("follower_set", apmsg.FormationOrderStamped, 1)
         self._swarm_state_publisher = \
             self.createPublisher("swarm_state", stdmsg.UInt8, 1, True)
+        self._wp_goto_publisher = \
+            self.createPublisher("waypoint_goto", stdmsg.UInt16, 1, False)
 
         # Publish one message now to initialize the latched publishers with "0"
-        self._update_subswarm_publisher.publish(stdmsg.UInt8(0))
-        self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.PRE_FLIGHT))
+        self._set_swarm_state(SwarmManager.PRE_FLIGHT)
+        self._set_subswarm(0)
 
 
     # Establishes the services for the SwarmManager object.  The object
@@ -167,8 +202,8 @@ class SwarmManager(nodeable.Nodeable):
     # the required control mode.
     # @param params: list of required parameters (none are at present)
     def serviceSetup(self, params=[]):
-        self.createService("swarm_control_run", \
-                           apsrv.SetBoolean, self._process_swarm_control_run)
+        self.createService("set_swarm_behavior", apsrv.SetInteger, \
+                           self._process_set_swarm_behavior)
 
 
     # Executes one iteration of the timed loop.  At present, with the exception
@@ -178,14 +213,113 @@ class SwarmManager(nodeable.Nodeable):
         if ((self._swarm_state == SwarmManager.PRE_FLIGHT) and \
             (rospy.has_param("flight_ready")) and \
             (bool(rospy.get_param("flight_ready")))):
-                self._swarm_state = SwarmManager.FLIGHT_READY
-                self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.FLIGHT_READY))
-                self.log_dbug("Swarm state updated to %d" %self._swarm_state)
+                self._set_swarm_state(SwarmManager.FLIGHT_READY)
 
 
     #--------------------------
     # Object-specific functions
     #--------------------------
+
+    # Sets a new swarm state for the aircraft
+    # @param newState:  new swarm state (int)
+    def _set_swarm_state(self, newState):
+        self._swarm_state = newState
+        self._swarm_state_publisher.publish(stdmsg.UInt8(newState))
+        self.log_dbug("Swarm state updated to %d" %self._swarm_state)
+
+
+    # Sets a new subswarm for the aircraft
+    # Can be used for either a normal or forced update
+    # @param newSubswarm:  new subswarm ID (int)
+    def _set_subswarm(self, newSubswarm):
+        self._subswarm_id = newSubswarm
+        self._update_subswarm_publisher.publish(stdmsg.UInt8(newSubswarm))
+        self.log_dbug("Subswarm updated to %d" %self._subswarm_id)
+
+
+    # Used to register implementing functions for swarm behaviors.  The
+    # function should take the service request object as a parameter so
+    # that any required parameters (which will eventually be incorporated
+    # into the message) will be available to the implementing function.
+    # Implementing functions should return a Boolean value indicating
+    # success or failure of the behavior initiation.
+    # @param behavior_id: integer identifier of the behavior being registered
+    # @param function: implementing function for the behavior
+    def register_swarm_behavior(self, behavior_id, function):
+        self._swarm_behaviors[behavior_id] = function
+
+
+    # Activates the swarm standby behavior (no payload control, vehicle sent
+    # to the loiter point)
+    # @param srvReq service request message (not used for this behavior)
+    # @return Boolean value indicating behavior initiation success or failure
+    def _activate_swarm_standby(self, srvReq=None):
+        success = self._ctlr_select_srv_proxy(controller.NO_PAYLOAD_CTRL).result
+        if success:
+            time.sleep(SwarmManager.TIMING_DELAY) # give the controller switch time to take
+            self._wp_goto_publisher.publish(stdmsg.UInt16(SwarmManager.SWARM_STANDBY_WP))
+        return success
+
+
+    # Activates the egress behavior
+    # Note:  For now, this is hard coded to direct the vehicle to waypoint 5
+    #        (the egress waypoint), but we will want to make this "smarter"
+    #        eventually so that it doesn't depend on mission file organization
+    # @param srvReq service request message (not used for this behavior)
+    # @return Boolean value indicating behavior initiation success or failure
+    def _activate_egress(self, srvReq=None):
+        success = self._ctlr_select_srv_proxy(controller.NO_PAYLOAD_CTRL).result
+        if success:
+            time.sleep(SwarmManager.TIMING_DELAY) # give the controller switch time to take
+            self._wp_goto_publisher.publish(stdmsg.UInt16(SwarmManager.SWARM_EGRESS_WP))
+            self._set_swarm_state(SwarmManager.EGRESS)
+            self._set_subswarm(0)
+        return success
+
+
+
+    # Computes and activates the fixed-follow swarm behavior.  A predermined
+    # altitude for each aircraft is utilized to determine follow order (high
+    # aircraft leads).  If the aircraft is the lead aircraft, it is ordered
+    # @param srvReq service request message (not used for this behavior)
+    # @return Boolean value indicating behavior initiation success or failure
+    def _activate_fixed_follow(self, srvReq=None):
+        success = False
+        try:
+            # ID the lead (highest) aircraft in the subswarm
+            high_ac_id, high_ac_alt = 0, 0.0
+            for acft in self._subswarm_keys:
+                if SwarmManager.UAV_ALTS[acft] > high_ac_alt:
+                    high_ac_id = acft
+                    high_ac_alt = SwarmManager.UAV_ALTS[acft]
+
+            # If leader acft, set NO_PAYLOAD_CTRL and send to the racetrack
+            if high_ac_id == self._ownID:  # This AC is leader
+                success = self._ctlr_select_srv_proxy(controller.NO_PAYLOAD_CTRL).result
+                if success:
+                    time.sleep(SwarmManager.TIMING_DELAY) # give the controller switch time to take
+                    self._wp_goto_publisher.publish(stdmsg.UInt16(SwarmManager.RACETRACK_WP))
+
+            # If follower acft, set and initiate the follow controller
+            else:
+                form_msg = apmsg.FormationOrderStamped()
+                form_msg.header.stamp = rospy.Time.now()
+                form_msg.header.frame_id = 'base_footprint'
+                form_msg.order.leader_id = high_ac_id
+                form_msg.order.range = SwarmManager.FIXED_FOLLOW_DIST
+                form_msg.order.angle = math.pi
+                form_msg.order.alt_mode = follower.BASE_ALT_MODE
+                form_msg.order.control_alt = SwarmManager.UAV_ALTS[self._ownID]
+                self._follow_publisher.publish(form_msg)
+                time.sleep(SwarmManager.TIMING_DELAY) # give the form set message a second to take
+                success = self._ctlr_select_srv_proxy(controller.FOLLOW_CTRLR).result
+
+        except Exception as ex:
+            # Should never get here, but just in case
+            self.log_warn("Set Control Mode: " + str(ex))           
+
+        return success
+
 
     # Sorts a list of tuples into ascending order.  The tuples are
     # assumed to be of the form [ acftID, sortCriteria ].  The list
@@ -201,17 +335,38 @@ class SwarmManager(nodeable.Nodeable):
     #-----------------------------------------------------
 
     # Handle swarm control activation/deactivation service requests
-    # @param actavateSrv: Activation/deactivation request (ap_srvs/SetBoolean)
-    def _process_swarm_control_run(self, activateSrv):
-        newMode = controller.NO_PAYLOAD_CTRL
-        if activateSrv.enable:
-            newMode = self._rqd_control_mode
-        resp = self._ctlr_select_srv_proxy(newMode)
-        if resp.result:
-            self.log_dbug("swarm command activation: " + str(newMode) + " success")
+    # @param behaviorSrv: message indicating which mode to activate
+    def _process_set_swarm_behavior(self, activateSrv):
+        success = False
+        # Special cases first (egress)
+        if ((self._swarm_state == SwarmManager.INGRESS) or \
+            (self._swarm_state == SwarmManager.SWARM_READY) or \
+            (self._swarm_state == SwarmManager.SWARM_ACTIVE) or \
+            (self._swarm_state == SwarmManager.EGRESS)) and \
+            activateSrv.setting == SwarmManager.SWARM_EGRESS:
+            init_method = self._swarm_behaviors[activateSrv.setting]
+            success = init_method(activateSrv)
+
+        # Now the regular cases (must be SWARM_READY or SWARM_ACTIVE)
+        elif self._swarm_state != SwarmManager.SWARM_READY and \
+           self._swarm_state != SwarmManager.SWARM_ACTIVE:
+            self.log_warn("aircraft not in correct state to activate swarm behavior")
+        elif activateSrv.setting not in self._swarm_behaviors:
+            self._log_warn("request to activate unavailable swarm behavior: %d" %activateSrv.setting)
         else:
-            self.log_dbug("swarm command activation: " + str(newMode) + " failed")
-        return apsrv.SetBooleanResponse(resp.result)
+            init_method = self._swarm_behaviors[activateSrv.setting]
+            success = init_method(activateSrv)
+
+        if success:
+            if activateSrv.setting == SwarmManager.SWARM_STANDBY:
+                self._set_swarm_state(SwarmManager.SWARM_READY)
+            elif activateSrv.setting != SwarmManager.SWARM_EGRESS:
+                self._set_swarm_state(SwarmManager.SWARM_ACTIVE)
+            self.log_dbug("successful activation of swarm behavior %d" %activateSrv.setting)
+        else:
+            self.log_warn("failed to activate swarm behavior %d" %activateSrv.setting)
+
+        return apsrv.SetIntegerResponse(success)
 
 
     #------------------------------------------
@@ -224,7 +379,6 @@ class SwarmManager(nodeable.Nodeable):
         self._swarm_uav_states.clear()
         del self._swarm_keys[:]
         del self._subswarm_keys[:]
-#        self._swarm_uav_states = swarmMsg
         for vehicle in swarmMsg.swarm:
             self._swarm_uav_states[vehicle.vehicle_id] = vehicle
             self._swarm_keys.append(vehicle.vehicle_id)
@@ -232,138 +386,56 @@ class SwarmManager(nodeable.Nodeable):
                 self._subswarm_keys.append(vehicle.vehicle_id)
 
 
-    # Handle incoming swarm_uav_states messages
-    # @param swarmMsg: message containing swarm data (SwarmStateStamped)
-#    def _process_subswarm_uav_states(self, subswarmMsg):
-#        self._subswarm_uav_states = subswarmMsg
-
-
     # Process ctlr_selector status messages 
     # (only rqd to keep track of the "active" controller)
     # @param statusMsg: selector mode message
     def _process_selector_status(self, statusMsg):
-        self._last_control_mode = statusMsg.state.active_controller
+        pass # Not being used for now, but might be useful later
 
 
     # Process recv_subswarm messages.  Messages will be ignored if the
-    # vehicle's swarm_state is anything other than IN_SWARM, in which case
+    # vehicle's swarm_state is anything other than SWARM_READY, in which case
     # the new swarm assignment will be published to the update_swwarm topic
     # @param subswarmMsg: message containing new subswarm assignment
     def _process_subswarm_update(self, subswarmMsg):
-        if self._swarm_state == SwarmManager.IN_SWARM:
-            self._subswarm_id = subswarmMsg.data
-            self._update_subswarm_publisher.publish(stdmsg.UInt8(subswarmMsg.data))
-            self.log_dbug("Subswarm updated to %d" %self._subswarm_id)
+        if self._swarm_state == SwarmManager.SWARM_READY:
+            self._set_subswarm(subswarmMsg.data)
         else:
             self.log_warn("Cannot assign to subswarm %d in swarm state %s" \
                           %(subswarmMsg.data, SwarmManager.STATE_STRINGS[self._swarm_state]))
 
 
-    # Process acs_pose messages.  Messages are tested primarily to identify
-    # vehicle launch (i.e., current state == PRE_FLIGHT and aircraft is now
-    # airborne) and landed (i.e., aircraft was airborne, but is now on deck)
-    # NOTE:  Not required in SITL (callback disabled)--verify in aircraft
-    # @param poseMsg: Geodometry message with the new pose
-    def _process_acs_pose(self, poseMsg):
-        if ((self._swarm_state == SwarmManager.PRE_FLIGHT) or \
-            (self._swarm_state == SwarmManager.FLIGHT_READY)):
-            vel = math.hypot(poseMsg.twist.twist.linear.x, \
-                             poseMsg.twist.twist.linear.y);
-            # If it's moving and above ground, it's flying
-            if ((vel >= 5.0) and (poseMsg.pose.pose.position.rel_alt > 5.0)):
-                self._swarm_state = SwarmManager.LAUNCH
-                self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.LAUNCH))
-                self.log_dbug("Swarm state updated to %d" %self._swarm_state)
-
-
     # Process autopilot status messages.  Messages are tested primarily to
     # detect swarm_state changes as follows:
-    #    PRE_FLIGHT or FLIGHT_READY to LAUNCH when mis_cur goes fm 0 to 1
-    #    LAUNCH to IN_SWARM when mis_cur goes to SWARM_INGRESS_WP or higher
-    #    LAUNCH or IN_SWARM to EGRESS when mis_cur goes to SWARM_EGRESS_WP
-    #    Anything to LANDING when mode goes to RTL
+    #    PRE_FLIGHT or FLIGHT_READY to INGRESS when mis_cur goes fm 0 to 1
+    #    INGRESS to SWARM_READY when mis_cur goes to SWARM_STANDBY_WP or higher
+    #    Anything to LANDING when the landing waypoint is active
     #    LANDING to ON_DECK when as_read <= 5.0
     # @param statusMsg: Status message
     def _process_autopilot_status(self, statusMsg):
+        # Transition to "INGRESS" based on altitude
         if ((self._swarm_state == SwarmManager.PRE_FLIGHT) or \
             (self._swarm_state == SwarmManager.FLIGHT_READY)):
-            if (statusMsg.mis_cur == SwarmManager.TAKEOFF_WP):
-                self._swarm_state = SwarmManager.LAUNCH
-                self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.LAUNCH))
-                self.log_dbug("Swarm state updated to %d" %self._swarm_state)
+#            if (statusMsg.mis_cur == SwarmManager.TAKEOFF_WP):
+            if statusMsg.alt_rel > 5000.0:  # about 21' AGL
+                self._set_swarm_state(SwarmManager.INGRESS)
 
-        elif (self._swarm_state == SwarmManager.LAUNCH):
-            if (statusMsg.mis_cur >= SwarmManager.SWARM_INGRESS_WP):
-                self._swarm_state = SwarmManager.IN_SWARM
-                self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.IN_SWARM))
-                self.log_dbug("Swarm state updated to %d" %self._swarm_state)
-            elif (statusMsg.mis_cur == SwarmManager.SWARM_EGRESS_WP):
-                self._swarm_state = SwarmManager.EGRESS
-                self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.EGRESS))
-                self.log_dbug("Swarm state updated to %d" %self._swarm_state)
-
-        elif (self._swarm_state == SwarmManager.IN_SWARM):
-            if (statusMsg.mis_cur == SwarmManager.SWARM_EGRESS_WP):
-                self._swarm_state = SwarmManager.EGRESS
-                self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.EGRESS))
-                self.log_dbug("Swarm state updated to %d" %self._swarm_state)
+        # NOTE:  This check is hardcoded as a fixed waypoint ID for now.  Will
+        #        need to change to remove dependence on mission file organization
+        elif (self._swarm_state == SwarmManager.INGRESS):
+            if (statusMsg.mis_cur >= SwarmManager.SWARM_STANDBY_WP):
+                self._set_swarm_state(SwarmManager.SWARM_READY)
 
         if (self._swarm_state == SwarmManager.LANDING):
             if (statusMsg.as_read <= 5.0):
-                self._swarm_state = SwarmManager.ON_DECK
-                self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.ON_DECK))
-                self.log_dbug("Swarm state updated to %d" %self._swarm_state)
+                self._set_swarm_state(SwarmManager.ON_DECK)
 
         # Can transition to LANDING at any time after launch
-        elif ((self._swarm_state != SwarmManager.PRE_FLIGHT) and \
-            (self._swarm_state != SwarmManager.FLIGHT_READY) and \
-            (statusMsg.mode == apmsgs.Status.MODE_RALLY)):
-                self._swarm_state = SwarmManager.LANDING
-                self._swarm_state_publisher.publish(stdmsg.UInt8(SwarmManager.LANDING))
-                self._subswarm_id = 0
-                self._update_subswarm_publisher.publish(stdmsg.UInt8(self._subswarm_id))
-                self.log_dbug("Swarm state updated to %d" %self._swarm_state)
-              
-
-    # Specific swarm command callbacks
-
-    # Process incoming swarm formation order message.
-    # Computes the required formation order for this aircraft and publishes it
-    # to the follower_set topic.
-    # NOTE:  This behavior operates at the subswarm level (i.e., if the swarm
-    #        formation order applies to subswarm other than the one to which this
-    #        vehicle belongs, it will be ignored.
-    # @param formMsg: swarm formation requirements msg (SwarmFormationOrderStamped)
-    def _process_swarm_formation_order(self, formMsg):
-        swarmRecs = []
-        appliesTo = self._swarm_uav_states.swarm
-        if formMsg.order.subswarm_only:
-            appliesTo = self._subswarm_uav_states.swarm
-
-        # sort by altitude & find this acft in the list
-        for acft in appliesTo:
-            swarmRecs.append([ acft.vehicle_id, acft.state.pose.pose.position.alt ])
-        swarmRecs = self._swarm_sort(swarmRecs)
-        if formMsg.order.alt_separation < 0.0:   # Descending order for stepdown (lead-high)
-            swarmRecs.reverse()
-        ownIndex = 0
-        while swarmRecs[ownIndex][0] != self._ownID:
-            ownIndex += 1
-
-        if ownIndex == 0:  # This is the "lead" aircraft
-            self._rqd_control_mode = self._last_control_mode
-            self.log_dbug("swarm formation set as lead aircraft")
-        else:
-            self._rqd_control_mode = controller.FOLLOW_CTRLR
-            order = apmsg.FormationOrderStamped()
-            order.header.stamp = rospy.Time.now()
-            order.order.leader_id = swarmRecs[ownIndex - 1][0]
-            order.order.range = formMsg.order.range
-            order.order.angle = formMsg.order.angle
-            order.order.control_alt = formMsg.order.alt_separation
-            order.order.alt_mode = follower.ALT_SEP_MODE
-            self._follow_publisher.publish(order)
-            self.log_dbug("swarm formation set as dash " + str(ownIndex + 1))
+        # NOTE:  This check is hardcoded as a fixed waypoint ID for now.  Will
+        #        need to change to remove dependence on mission file organization
+        elif ((statusMsg.mis_cur == SwarmManager.LANDING_WP)):
+            self._set_swarm_state(SwarmManager.LANDING)
+            self._set_subswarm(0)
 
 
 #-----------------------------------------------------------------------
@@ -372,5 +444,11 @@ class SwarmManager(nodeable.Nodeable):
 if __name__ == '__main__':
     args = rospy.myargv(argv=sys.argv)
     swarm_manager = SwarmManager("swarm_manager")
+    swarm_manager.register_swarm_behavior(SwarmManager.SWARM_STANDBY, \
+                                          swarm_manager._activate_swarm_standby)
+    swarm_manager.register_swarm_behavior(SwarmManager.FIXED_FOLLOW, \
+                                          swarm_manager._activate_fixed_follow)
+    swarm_manager.register_swarm_behavior(SwarmManager.SWARM_EGRESS, \
+                                          swarm_manager._activate_egress)
     swarm_manager.runAsNode(10.0, [], [], [])
 
