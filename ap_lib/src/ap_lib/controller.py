@@ -94,7 +94,14 @@ class Controller(nodeable.Nodeable):
     # controller is ready and active, the object-specific control
     # method will be called.  Status messages will be published regardless
     def executeTimedLoop(self):
-        self._sendStatusMessage()
+        if self._statusStamp == None: self._statusStamp = rospy.Time.now()
+
+        # Publish a status message at 1-second intervals
+        time = rospy.Time.now()
+        interval = (time.secs + (time.nsecs / 1e9)) - \
+                   (self._statusStamp.secs + (self._statusStamp.nsecs / 1e9))
+        if interval >= 1.0:
+            self._sendStatusMessage(time)
         if self.is_ready and self.is_active:
             self.runController()
 
@@ -103,16 +110,20 @@ class Controller(nodeable.Nodeable):
     # Class-specific methods implementing class functionality
     #---------------------------------------------------------
 
-    # Activates or deactivates the controller
-    # Will not activate a controller that is not "ready"
+    # Activates or deactivates the controller.  Will not activate a controller
+    # that is not "ready" or one that is already active
     # @param activate: Boolean value to activate or deactivate the controller
     def set_active(self, activate):
         if activate and not self.is_ready:
             self.is_active = False
             self.log_warn("attempt to activate uninitialized controller")
-        else:
+        elif activate and not self.is_active:
             self.is_active = activate
             self.log_dbug("activation command: " + str(activate))
+            self._sendStatusMessage(rospy.Time.now())
+        elif activate == False and self.is_active:
+            self.is_active = False
+            self._sendStatusMessage(rospy.Time.now())
         return self.is_active
 
 
@@ -126,30 +137,30 @@ class Controller(nodeable.Nodeable):
 
     # Sets the controller's ready state when new control inputs are received
     # Will also ensure that the controller is deactivated if the ready state
+    # Publishes an updated controller status message if the ready state changes
     # is set to false
     # @param ready: Boolean value to set the controller's ready state
     def set_ready_state(self, ready):
-        if ready:
+        # Only needs to do anything if the ready state is changing
+        if ready and self.is_ready == False:
             self.is_ready = True
+            self._sendStatusMessage(rospy.Time.now())
             self.log_dbug("ready state set to 'True'")
-        else:
+        elif ready == False and self.is_ready:
             self.is_ready = False
             self.is_active = False
+            self._sendStatusMessage(rospy.Time.now())
             self.log_dbug("ready state and active state set to 'False'")
 
 
-    # Publishes a ControllerState message to the 
-    def _sendStatusMessage(self):
-        if self._statusStamp == None: self._statusStamp = rospy.Time.now()
-        time = rospy.Time.now()
-        interval = (time.secs + (time.nsecs / 1e9)) - \
-                   (self._statusStamp.secs + (self._statusStamp.nsecs / 1e9))
-        if interval >= 1.0:
-            self._statusStamp = time
-            status = apmsg.ControllerState()
-            status.controller_id = self.controllerID
-            status.sequence = self._sequence
-            status.is_ready = self.is_ready
-            status.is_active = self.is_active
-            self._statusPublisher.publish(status)
+    # Publishes a ControllerState message to the controller status topic
+    # @param time: timestamp for the message
+    def _sendStatusMessage(self, time):
+        self._statusStamp = time
+        status = apmsg.ControllerState()
+        status.controller_id = self.controllerID
+        status.sequence = self._sequence
+        status.is_ready = self.is_ready
+        status.is_active = self.is_active
+        self._statusPublisher.publish(status)
 
