@@ -517,6 +517,9 @@ class SetSubswarm(Message):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.subswarm = int(fields[0]) 
 
+# Might want to depricate this eventually (direct controller setup and
+# invocation via network message bypasses the swarm_manager node and
+# has potential race conditions that might lead to unsafe situations.
 class SetController(Message):
     msg_type = 0x8A
     msg_fmt = '>B3x'
@@ -535,6 +538,9 @@ class SetController(Message):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.controller = int(fields[0]) 
 
+# Might want to depricate this eventually (direct controller setup and
+# invocation via network message bypasses the swarm_manager node and
+# has potential race conditions that might lead to unsafe situations.
 class FollowerSetup(Message):
     msg_type = 0x8B
     msg_fmt = '>BBhhhh2x'
@@ -568,6 +574,9 @@ class FollowerSetup(Message):
         self.offset_angle = float(fields[4]) / 1e3
         self.control_alt = float(fields[5])
 
+# Might want to depricate this eventually (direct controller setup and
+# invocation via network message bypasses the swarm_manager node and
+# has potential race conditions that might lead to unsafe situations.
 class WPSequencerSetup(Message):
     msg_type = 0x8C
     msg_fmt_base = '>BxH'
@@ -615,6 +624,26 @@ class CalPress(Message):
     def _unpack(self, data):
         pass
 
+
+class SwarmBehavior(Message):
+    msg_type = 0x8E
+    msg_fmt = '>B3x'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.swarm_behavior = None  # swarm_behavior type
+        # TODO:  replace 3-byte padding with parameter values
+        #        associated with specific swarm behaviors
+        #        as they are implemented
+
+    def _pack(self):
+        tupl = (int(self.swarm_behavior),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.swarm_behavior = int(fields[0]) 
 
 class PayloadHeartbeat(Message):
     msg_type = 0xFE
