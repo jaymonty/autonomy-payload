@@ -170,7 +170,8 @@ class Example(Message):
 class FlightStatus(Message):
     # Define message type parameters
     msg_type = 0x00
-    msg_fmt = '>HBBHhhHxBH16s'
+#    msg_fmt = '>HBBHhhHxBH16s'
+    msg_fmt = '>HBBHhhHBBH16s'
 
     def __init__(self):
         Message.__init__(self)
@@ -195,6 +196,7 @@ class FlightStatus(Message):
         self.alt_rel = None	# AGL (int, millimeters)
         self.mis_cur = None	# Current mission (waypoint) index (0-65535)
         # Unused byte
+        self.swarm_behavior = 0  # Swarm behavior (follow, standby, etc.)
         self.ctl_mode = None	# Controller mode (byte, but only use 0-16)
         self.ctl_ready = [False] * (16 + 1)   # Ctlr ready flags (bit array)
                                 # (Index 1 is low bit, 16 is high bit,
@@ -230,6 +232,7 @@ class FlightStatus(Message):
                 int(self.airspeed * 1e02),  # TODO: Are these large enough?
                 int(self.alt_rel / 1e02),
                 int(self.mis_cur),
+                int(self.swarm_behavior),
                 int(self.ctl_mode),
                 ctl_ready_bits,
                 self.name)
@@ -262,6 +265,7 @@ class FlightStatus(Message):
         self.airspeed = fields.pop(0) / 1e02
         self.alt_rel = fields.pop(0) * 1e02
         self.mis_cur = fields.pop(0)
+        self.swarm_behavior = fields.pop(0)
         self.ctl_mode = fields.pop(0)
         ctlready = fields.pop(0)
         for bit in range(1, len(self.ctl_ready)):
@@ -624,7 +628,6 @@ class CalPress(Message):
     def _unpack(self, data):
         pass
 
-
 class SwarmBehavior(Message):
     msg_type = 0x8E
     msg_fmt = '>B3x'
@@ -644,6 +647,23 @@ class SwarmBehavior(Message):
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.swarm_behavior = int(fields[0]) 
+
+class SwarmState(Message):
+    msg_type = 0x8F
+    msg_fmt = '>B3x'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.swarm_state = 0  # swarm_state value
+
+    def _pack(self):
+        tupl = (int(self.swarm_state),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.swarm_state = int(fields[0]) 
 
 class PayloadHeartbeat(Message):
     msg_type = 0xFE
