@@ -203,6 +203,8 @@ class NetworkBridge(object):
         except Exception as ex:
             raise ex
 
+        self.swarm_behavior = 0
+
         # Initialize subswarm ID - socket library can filter messages destined for
         # subswarms; need to keep socket synced with aircraft's subswarm ID
         try:
@@ -274,6 +276,7 @@ def timed_status(bridge):
     message.ok_mag = False
     message.ok_pwr = False
     message.swarm_state = timed_status.swarm_state
+    message.swarm_behavior = timed_status.swarm_behavior
     message.batt_rem = 0
     message.batt_vcc = 0
     message.batt_cur = 0
@@ -324,6 +327,7 @@ def timed_status(bridge):
 timed_status.c_status = None        # Controller status
 timed_status.f_status = None        # Flight status
 timed_status.swarm_state = 0        # Current swarm state
+timed_status.swarm_behavior = 0     # Currently active swarm behavior
 timed_status.calpress_done = False  # Airspeed calibration done?
 
 #-----------------------------------------------------------------------
@@ -344,6 +348,10 @@ def sub_flight_status(msg, bridge):
 def sub_swarm_state(msg, bridge):
     # Just update the swarm_state; timed event will do the send
     timed_status.swarm_state = msg.data
+
+def sub_swarm_behavior(msg, bridge):
+    # Just update the swarm_behavior; timed event will do the send
+    timed_status.swarm_behavior = msg.data
 
 def sub_pose(msg, bridge):
     message = messages.Pose()
@@ -448,6 +456,10 @@ def net_swarm_behavior(message, bridge):
     bridge.callService('set_swarm_behavior', ap_srv.SetInteger,
                        setting=message.swarm_behavior)
 
+def net_swarm_state(message, bridge):
+    bridge.callService('set_swarm_state', ap_srv.SetInteger,
+                       setting=message.swarm_state)
+
 # Possible candidate for deprication
 def net_controller_mode(message, bridge):
     bridge.callService('controller_mode', ap_srv.SetInteger,
@@ -537,6 +549,8 @@ if __name__ == '__main__':
         bridge.addTimedHandler(2.0, timed_status)
         bridge.addSubHandler('update_subswarm',
                              std_msgs.msg.UInt8, sub_subswarm_id)
+        bridge.addSubHandler('swarm_behavior',
+                             std_msgs.msg.UInt8, sub_swarm_behavior)
         bridge.addSubHandler('update_ctlr_status',
                              ap_msg.ControllerGroupStateStamped,
                              sub_controller_status)
@@ -558,6 +572,7 @@ if __name__ == '__main__':
         bridge.addNetHandler(messages.FlightReady, net_flight_ready)
         bridge.addNetHandler(messages.SetSubswarm, net_subswarm_id)
         bridge.addNetHandler(messages.SwarmBehavior, net_swarm_behavior)
+        bridge.addNetHandler(messages.SwarmState, net_swarm_state)
         bridge.addNetHandler(messages.SetController, net_controller_mode) #depricate?
         bridge.addNetHandler(messages.FollowerSetup, net_follower_set) #depricate?
         bridge.addNetHandler(messages.WPSequencerSetup, net_sequencer_set) #depricate?

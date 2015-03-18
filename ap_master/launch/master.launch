@@ -57,6 +57,8 @@
     <remap from="network/calpress" to="autopilot/calpress" />
     <remap from="network/health_state" to="safety/set_health_state" />
     <remap from="network/set_swarm_behavior" to="swarm_manager/set_swarm_behavior" />
+    <remap from="network/swarm_behavior" to="swarm_manager/swarm_behavior" />
+    <remap from="network/set_swarm_state" to="swarm_manager/set_swarm_state" />
   </node>
 
   <node name="swarm_tracker" pkg="ap_perception" type="swarm_tracker_node.py" output="screen" args="" >
