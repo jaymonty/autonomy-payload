@@ -21,6 +21,14 @@ fi
 
 ### Process Command-Line Options ###
 
+# option defaults
+USE_CONTAINER=0
+USE_PORT_OFFSET=0
+ROS_USER_TO_USE=$USER
+NET_DEVICE="lo"
+SITL_CONNECT=""
+LAUNCH_PREFIX="sitl"
+
 usage()
 {
 cat <<EOF
@@ -29,19 +37,15 @@ Options:
     -B              Set up and use SITL bridge (implies '-D ${BRIDGE_DEV}')
     -C              Use Linux network container (don't use with -P; implies -B)
     -D DEVICE       Override default network device (don't use with -C)
+    -L STRING       Override launch file prefix (default '${LAUNCH_PREFIX}')
     -P              Use calculated port offset for network (don't use with -C)
     -R USER         Username to run ROS as (use with -C only)
+    -S STRING       Override auto-computed SITL/AP connection string
 EOF
 }
 
-# option defaults
-USE_CONTAINER=0
-USE_PORT_OFFSET=0
-ROS_USER_TO_USE=$USER
-NET_DEVICE="lo"
-
 #parse options
-while getopts ":BCD:PR:h" opt; do
+while getopts ":BCD:L:PR:S:h" opt; do
     case $opt in
         B)
             NET_DEVICE=$BRIDGE_DEV
@@ -59,6 +63,9 @@ while getopts ":BCD:PR:h" opt; do
         D)
             NET_DEVICE=$OPTARG
             ;;
+        L)
+            LAUNCH_PREFIX=$OPTARG
+            ;;
         P)
             if [ $USE_CONTAINER == 1 ]; then
                 echo "ERROR. Cannot use -C with -P."
@@ -73,6 +80,9 @@ while getopts ":BCD:PR:h" opt; do
                 echo "ERROR. Unknown user: $OPTARG -- unable to launch payload."
                 exit 1
             fi
+            ;;
+        S)
+            SITL_CONNECT=$OPTARG
             ;;
         h)
             usage
@@ -97,13 +107,15 @@ shift 1  # Shift in case we want to send $@ elsewhere later on
 ### Calculate IPs, Ports, etc ###
 
 # IP and port for connection to SITL autopilot
-SITL_PORT=$((5762+10*${ID}))
-SITL_IP=`ip addr show dev $NET_DEVICE | grep 'inet ' | cut -d ' ' -f 6 | cut -d '/' -f 1`
-if [ $? != 0 ]; then
-    echo "Could not get IP for $NET_DEVICE"
-    exit 1
+if [ -z $SITL_CONNECT ]; then
+    SITL_PORT=$((5762+10*${ID}))
+    SITL_IP=`ip addr show dev $NET_DEVICE | grep 'inet ' | cut -d ' ' -f 6 | cut -d '/' -f 1`
+    if [ $? != 0 ]; then
+        echo "Could not get IP for $NET_DEVICE"
+        exit 1
+    fi
+    SITL_CONNECT="tcp:${SITL_IP}:${SITL_PORT}"
 fi
-SITL_CONNECT="tcp:${SITL_IP}:${SITL_PORT}"
 
 # Port for network comms
 NET_PORT=5554
@@ -117,7 +129,7 @@ fi
 
 # Non-container case
 if [ $USE_CONTAINER == 0 ]; then
-    roslaunch ap_master sitl.launch id:=$ID name:=sitl$ID sitl:=$SITL_CONNECT port:=$NET_PORT ns:=sitl$ID dev:=$NET_DEVICE
+    roslaunch ap_master ${LAUNCH_PREFIX}.launch id:=$ID name:=sitl$ID sitl:=$SITL_CONNECT port:=$NET_PORT ns:=sitl$ID dev:=$NET_DEVICE
 fi
 
 # Container case
@@ -162,7 +174,7 @@ if [ $USE_CONTAINER == 1 ]; then
 
     # Launch a terminal from within the new namespace
     sudo ip netns exec $PAYL_NS \
-        su -l -c "source /opt/ros/$ROS_DISTRO/setup.bash; source $ACS_ROOT/acs_ros_ws/devel/setup.bash; roslaunch ap_master sitl.launch id:=$ID name:=$PAYL_NS dev:=$PAYL_DEV_ALIAS sitl:=$SITL_CONNECT" $ROS_USER_TO_USE
+        su -l -c "source /opt/ros/$ROS_DISTRO/setup.bash; source $ACS_ROOT/acs_ros_ws/devel/setup.bash; roslaunch ap_master ${LAUNCH_PREFIX}.launch id:=$ID name:=$PAYL_NS dev:=$PAYL_DEV_ALIAS sitl:=$SITL_CONNECT" $ROS_USER_TO_USE
 
     echo ""
     echo "Tearing down the namespace (may require sudo password) ..."
