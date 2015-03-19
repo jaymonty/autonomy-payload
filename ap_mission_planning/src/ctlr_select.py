@@ -425,7 +425,7 @@ class ControllerSelector(nodeable.Nodeable):
                 self._wp_getall = \
                     self.setupServiceProxy('wp_getall', mavbridge_srv.WPGetAll)
 
-            self._wp_list = self._wp_getall().wp
+            self._wp_list = self._wp_getall().points
 
             # Identify all of the available infinite loiter waypoints
             self._loiter_wps = []
@@ -448,7 +448,7 @@ class ControllerSelector(nodeable.Nodeable):
                 self._wp_getlast = \
                     self.setupServiceProxy('wp_getlast', mavbridge_srv.WPGetAll)
 
-            self._wp_list = self._wp_getlast().wp
+            self._wp_list = self._wp_getlast().points
             self._loiter_wps = []
             if len(self._wp_list) > 0 and \
                self._wp_list[0].command == INFINITE_LOITER_CMD:
