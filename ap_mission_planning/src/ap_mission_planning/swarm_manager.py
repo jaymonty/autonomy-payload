@@ -21,6 +21,7 @@ import ap_lib.nodeable as nodeable
 import ap_lib.controller as controller
 import ap_path_planning.follow_controller as follower
 import autopilot_bridge.msg as apmsgs
+import autopilot_bridge.srv as apmsrv
 
 
 # Object that ingests swarm commands and computes the appropriate controller
@@ -37,12 +38,14 @@ import autopilot_bridge.msg as apmsgs
 #   _swarm_uav_states: dictionary object containing state of all swarm aircraft
 #   _swarm_keys: list of all aircraft IDs (keys) in the swarm dictionary
 #   _subswarm_keys: list of subswarm aircraft IDs (keys) in the swarm dictionary
+#   _waypoint_types: dictionary mapping waypoint IDs to waypoint type
 #   _update_subswarm_publisher: ROS publisher to assign vehicle to a subswarm
 #   _swarm_state_publisher: ROS publisher to publish the current swarming state
 #   _swarm_behavior_publisher: ROS publisher to publish the active swarm behavior
 #   _follow_publisher: ROS publisher to the follow controller set topic
 #   _wp_goto_publisher: ROS publisher to direct the vehicle to a waypoint #
 #   _ctlr_select_srv_proxy: ROS proxy for the ctlr_selector set mode service
+#   _wp_getrange_srv_proxy: ROS proxy for the wp_getrange service
 #
 # Inherited from Nodeable:
 #   nodeName:  Name of the node to start or node in which the object is
@@ -72,7 +75,7 @@ class SwarmManager(nodeable.Nodeable):
     TAKEOFF_WP = 1       # Airborne
     SWARM_STANDBY_WP = 4 # Available for tasking
     SWARM_EGRESS_WP = 5  # Leaving swarm for recovery
-    LANDING_WP = 6       # Waypoint used for the landing point
+#    LANDING_WP = 6       # Waypoint used for the landing point
     RACETRACK_WP = 7     # First racetrack waypoint
 
     # Enumeration for available swarm behavior
@@ -92,6 +95,13 @@ class SwarmManager(nodeable.Nodeable):
     LANDING = 6      # Flight crew has control for landing
     ON_DECK = 7      # Aircraft has landed
     POST_FLIGHT = 8  # Post landing checks (will probably not be seen)
+
+    # Enumeration for types of waypoints that we might need to test for
+    wp_TYPE_NORMAL = 16
+    WP_TYPE_LOITER = 17
+    WP_TYPE_TURNS = 18
+    WP_TYPE_LAND = 21
+    WP_TYPE_TAKEOFF = 22
 
     # For user interface use or debugging
     STATE_STRINGS = { PRE_FLIGHT: 'Preflight', \
@@ -149,6 +159,7 @@ class SwarmManager(nodeable.Nodeable):
         self._active_behavior = SwarmManager.SWARM_STANDBY
         self._swarm_behaviors = dict()
         self._swarm_uav_states = dict()
+        self._waypoint_types = dict()
         self._swarm_keys = []
         self._subswarm_keys = []
         self._follow_publisher = None
@@ -156,6 +167,9 @@ class SwarmManager(nodeable.Nodeable):
         self._ctlr_select_srv_proxy = \
             rospy.ServiceProxy("ctlr_selector/set_selector_mode", \
                                apsrv.SetInteger)
+        self._wp_getrange_srv_proxy = \
+            rospy.ServiceProxy("autopilot/wp_getrange", apmsrv.WPGetRange)
+
 #        self.DBUG_PRINT = True
 #        self.WARN_PRINT = True
 
@@ -452,16 +466,15 @@ class SwarmManager(nodeable.Nodeable):
 
     # Process autopilot status messages.  Messages are tested primarily to
     # detect swarm_state changes as follows:
-    #    PRE_FLIGHT or FLIGHT_READY to INGRESS when mis_cur goes fm 0 to 1
+    #    PRE_FLIGHT or FLIGHT_READY to INGRESS when rel_alt exceeds 20m
     #    INGRESS to SWARM_READY when mis_cur goes to SWARM_STANDBY_WP or higher
-    #    Anything to LANDING when the landing waypoint is active
+    #    Anything to LANDING when the current waypoint type is "land here"
     #    LANDING to ON_DECK when as_read <= 5.0
     # @param statusMsg: Status message
     def _process_autopilot_status(self, statusMsg):
         # Transition to "INGRESS" based on altitude
         if ((self._swarm_state == SwarmManager.PRE_FLIGHT) or \
             (self._swarm_state == SwarmManager.FLIGHT_READY)):
-#            if (statusMsg.mis_cur == SwarmManager.TAKEOFF_WP):
             if statusMsg.alt_rel > SwarmManager.LAUNCH_ALT:
                 self._set_swarm_state(SwarmManager.INGRESS)
 
@@ -471,16 +484,26 @@ class SwarmManager(nodeable.Nodeable):
             if (statusMsg.mis_cur >= SwarmManager.SWARM_STANDBY_WP):
                 self._set_swarm_state(SwarmManager.SWARM_READY)
 
-        if (self._swarm_state == SwarmManager.LANDING):
-            if (statusMsg.as_read <= 5.0):
-                self._set_swarm_state(SwarmManager.ON_DECK)
+        try:
+            # Capture the type of waypoint that is current if required
+            if not statusMsg.mis_cur in self._waypoint_types:
+                wpt = self._wp_getrange_srv_proxy(statusMsg.mis_cur, \
+                                                  statusMsg.mis_cur).wp[0]
+                self._waypoint_types[statusMsg.mis_cur] = wpt.command
 
-        # Can transition to LANDING at any time after launch
-        # NOTE:  This check is hardcoded as a fixed waypoint ID for now.  Will
-        #        need to change to remove dependence on mission file organization
-        elif ((statusMsg.mis_cur == SwarmManager.LANDING_WP)):
-            self._set_swarm_state(SwarmManager.LANDING)
-            self._set_subswarm(0)
+            if (self._swarm_state == SwarmManager.LANDING):
+                if (statusMsg.as_read <= 5.0):
+                    self._set_swarm_state(SwarmManager.ON_DECK)
+
+            # Can transition to LANDING at any time after launch
+            # NOTE:  This check is hardcoded as a fixed waypoint ID for now.  Will
+            #        need to change to remove dependence on mission file organization
+            elif (self._waypoint_types[statusMsg.mis_cur] == SwarmManager.WP_TYPE_LAND):
+                self._set_swarm_state(SwarmManager.LANDING)
+                self._set_subswarm(0)
+
+        except Exception as ex:
+            self.log_warn('Exception in test for "landing" states: ' + str(ex))
 
 
 #-----------------------------------------------------------------------
