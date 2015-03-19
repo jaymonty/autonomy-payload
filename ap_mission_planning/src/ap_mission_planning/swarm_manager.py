@@ -488,7 +488,7 @@ class SwarmManager(nodeable.Nodeable):
             # Capture the type of waypoint that is current if required
             if not statusMsg.mis_cur in self._waypoint_types:
                 wpt = self._wp_getrange_srv_proxy(statusMsg.mis_cur, \
-                                                  statusMsg.mis_cur).wp[0]
+                                                  statusMsg.mis_cur).points[0]
                 self._waypoint_types[statusMsg.mis_cur] = wpt.command
 
             if (self._swarm_state == SwarmManager.LANDING):
