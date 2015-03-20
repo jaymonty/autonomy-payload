@@ -314,9 +314,16 @@ def timed_status(bridge):
         message.gps_hdop = timed_status.f_status.gps_eph
         message.mis_cur = timed_status.f_status.mis_cur
 
-    # Populate flight- and swarm-ready flags from params
-    message.ready = rospy.has_param("flight_ready") and \
-                    bool(rospy.get_param("flight_ready"))
+    # Populate param-based fields
+    def getboolparam(p):
+        if rospy.has_param(p):
+            return bool(rospy.get_param(p))
+        return False
+    message.ready = getboolparam("flight_ready")
+    message.ok_prm = getboolparam("ok_param")
+    message.ok_fen = getboolparam("ok_fence")
+    message.ok_ral = getboolparam("ok_rally")
+    message.ok_wp = getboolparam("ok_wp")
 
     # Add friendly name
     message.name = bridge.ac_name
