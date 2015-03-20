@@ -10,6 +10,7 @@
   <arg name="gps" default="1" />          <!-- Autopilot has GPS signal; sync clock -->
   <arg name="do_ctlr" default="1" />      <!-- Run the controller nodes -->
   <arg name="do_bag" default="1" />       <!-- Enable rosbagging -->
+  <arg name="do_verify" default="0" />    <!-- Enable param/fence/rally/wp verification -->
   <arg name="do_sitl" default="0" />      <!-- Run as a SITL payload -->
   <arg name="sitl_dev" default="" />      <!-- Device string for SITL -->
   <arg name="net_dev" default="wlan0" />  <!-- Network device -->
@@ -28,10 +29,11 @@
   <param name="network_port" type="int" value="$(arg net_port)" />
   <param name="subswarm_id" type="int" value="0" />
   <param name="rosbag_enable" type="bool" value="$(arg do_bag)" />
+  <param name="verify_enable" type="bool" value="$(arg do_verify)" />
 
   <!-- Core Nodes -->
 
-  <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--baudrate 115200 --serial-relief 1024 -m acs -m slave -m wp -m fpr $(arg apdev_arg) $(arg gps_arg)" />
+  <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--baudrate 115200 --serial-relief 1024 -m acs -m fpr -m slave -m wp $(arg apdev_arg) $(arg gps_arg)" />
 
   <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" >
     <remap from="safety/heartbeat" to="autopilot/heartbeat_onboard" />
