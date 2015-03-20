@@ -1,5 +1,11 @@
 #!/usr/bin/env python
 
+# Super-hackish Flight Tech Interface and Preflight System
+# Mike Clement, 2014-2015
+
+# TODO: This is super ugly, no separation of concerns, yada yada
+# Redesign so we have a legitimate model-view-controller
+
 from PySide.QtCore import *
 from PySide.QtGui import *
 
@@ -39,6 +45,7 @@ class UAVListWidgetItem(QListWidgetItem):
         self._msg = None     # Last-received FlightStatus message
         self._time = 0.0     # Time last message was received
         self._state = None   # State (color coding)
+        self._aspd = []      # History of airspeed readings
 
         self.setFont(self.FONT)
 
@@ -74,6 +81,14 @@ class UAVListWidgetItem(QListWidgetItem):
     def getState(self):
         return self._state
 
+    def getLastMsg(self):
+        return self._msg
+
+    def getAvgAspd(self):
+        if self._msg is None: return None
+        if len(self._aspd) < 10: return None
+        return float(sum(self._aspd)) / float(len(self._aspd))
+
     # Set the state (color)
     def setState(self, state):
         self._state = state
@@ -87,6 +102,10 @@ class UAVListWidgetItem(QListWidgetItem):
         # Update internal data
         self._msg = msg
         self._time = time.time()
+
+        # Update airspeed history
+        while len(self._aspd) > 10: self._aspd.pop(0)
+        self._aspd.append(msg.airspeed)
 
         # Determine color coding / "state"
         if msg.armed and msg.alt_rel > 20000:
@@ -207,6 +226,55 @@ class UAVListWidget(QListWidget):
         self.mav_id = None
         self.mav_channel = None
 
+    ''' Status lights '''
+
+    LIGHT_UNK = "QLabel { color : black; }"
+    LIGHT_BAD = "QLabel { color : red; }"
+    LIGHT_OK = "QLabel { color : green; }"
+
+    def buildStatusRow(self):
+        self.status_row = {}
+        layout = QHBoxLayout()
+        for s in ['ahrs', 'as', 'gps', 'ins', 'mag', 'pwr',
+                  'prm', 'fen', 'ral', 'wp', 'aspd', 'ralt']:
+            lbl = QLabel(s)
+            self.status_row[s] = lbl
+            layout.addWidget(lbl)
+        return layout
+
+    def updateStatusRow(self):
+        if not hasattr(self, 'status_row') or self.status_row is None:
+            return
+        item = self.currentItem()
+        if item is None or \
+           item.getLastMsg() is None or \
+           item.getState() == UAVListWidgetItem.STATE_OFFLINE:
+            for s in ['ahrs', 'as', 'gps', 'ins', 'mag', 'pwr',
+                      'prm', 'fen', 'ral', 'wp', 'aspd', 'ralt']:
+                self.status_row[s].setStyleSheet(self.LIGHT_UNK)
+            return
+        msg = item.getLastMsg()
+        def color(attr):
+            if getattr(msg, attr): return self.LIGHT_OK
+            return self.LIGHT_BAD
+        for s in ['ahrs', 'as', 'gps', 'ins', 'mag', 'pwr',
+                  'prm', 'fen', 'ral', 'wp']:
+            self.status_row[s].setStyleSheet(color('ok_'+s))
+        # relative alt must be +/- 10 m
+        if -10000.0 < msg.alt_rel < 10000.0:
+            self.status_row['ralt'].setStyleSheet(self.LIGHT_OK)
+        else:
+            self.status_row['ralt'].setStyleSheet(self.LIGHT_BAD)
+        # average airspeed (over 10 samples) must have *some*
+        # deviation, but not too much
+        aspd = item.getAvgAspd()
+        if aspd is None:
+            self.status_row['aspd'].setStyleSheet(self.LIGHT_BAD)
+        elif 0.0 < item.getAvgAspd() < 4.0:
+            self.status_row['aspd'].setStyleSheet(self.LIGHT_OK)
+        else:
+            self.status_row['aspd'].setStyleSheet(self.LIGHT_BAD)
+
     ''' Handle timer '''
 
     # Periodic event to look for new UAVs and to update the list
@@ -240,6 +308,10 @@ class UAVListWidget(QListWidget):
 
             # Let the item process the message
             item.processStatus(msg)
+
+            # Update status lights if needed
+            if item is self.currentItem():
+                self.updateStatusRow()
 
         # Cull those we haven't seen in a while
         cur_time = time.time()
@@ -318,7 +390,8 @@ class UAVListWidget(QListWidget):
         self._sendMessage(ad)
 
     def handleArm(self):
-        item = self._checkItemState([UAVListWidgetItem.STATE_READY])
+        item = self._checkItemState([UAVListWidgetItem.STATE_NOT_READY,
+                                     UAVListWidgetItem.STATE_READY])
         if item is None:
             return
 
@@ -331,7 +404,8 @@ class UAVListWidget(QListWidget):
         self._sendMessage(ad)
 
     def handleDisArm(self):
-        item = self._checkItemState([UAVListWidgetItem.STATE_READY])
+        item = self._checkItemState([UAVListWidgetItem.STATE_NOT_READY,
+                                     UAVListWidgetItem.STATE_READY])
         if item is None:
             return
 
@@ -502,7 +576,7 @@ if __name__ == '__main__':
     # Build up the window itself
     app = QApplication([])
     win = QWidget()
-    win.resize(400, 450)
+    win.resize(400, 500)
     layout = QVBoxLayout()
     win.setLayout(layout)
 
@@ -510,20 +584,28 @@ if __name__ == '__main__':
     # NOTE: The way updates are done is a bit hackish,
     #  relies on a signal being emitted by the UAVListWidget
     lblStat = QLabel("No Aircraft Selected")
-    layout.addWidget(lblStat)
 
     # Listbox of UAVs
     lst = UAVListWidget(sock, win)
-    layout.addWidget(lst)
-    # Connect list-click to status text
+
+    # Status lights row
+    layLights = lst.buildStatusRow()
+
+    # Connect list-click to status text and lights
     def do_update_stat():
         if lst.currentItem() is None:
             lblStat.setText("No Aircraft Selected")
         else:
             lblStat.setText(str(lst.currentItem()))
+        lst.updateStatusRow()
     lst.setSortingEnabled(True)
     lst.itemClicked.connect(do_update_stat)
     lst.itemSelectionChanged.connect(do_update_stat)
+
+    # Add labels and listbox in preferred order
+    layout.addWidget(lblStat)
+    layout.addLayout(layLights)
+    layout.addWidget(lst)
 
     # Provide color-key for states
     hlayout = QHBoxLayout()
