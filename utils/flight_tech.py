@@ -305,6 +305,18 @@ class UAVListWidget(QListWidget):
             self._destroySlaveChannel()
             self.mav_popen = None
 
+    def handleCalpress(self):
+        item = self._checkItemState([UAVListWidgetItem.STATE_NOT_READY])
+        if item is None:
+            return
+
+        # Toggle the (software) arming of the throttle
+        ad = messages.CalPress()
+        ad.msg_dst = int(item.getID())
+        ad.msg_secs = 0
+        ad.msg_nsecs = 0
+        self._sendMessage(ad)
+
     def handleArm(self):
         item = self._checkItemState([UAVListWidgetItem.STATE_READY])
         if item is None:
@@ -538,6 +550,11 @@ if __name__ == '__main__':
     btToggle.clicked.connect(lst.handleFlightReady)
     layout.addWidget(btToggle)
 
+    # Airspeed pressure calibration button
+    btCalpress = QPushButton("Calibrate Pressure")
+    btCalpress.clicked.connect(lst.handleCalpress)
+    layout.addWidget(btCalpress)
+
     # Arm and disarm throttle buttons
     alayout = QHBoxLayout()
 
@@ -563,6 +580,7 @@ if __name__ == '__main__':
     mlayout.addWidget(btAUTO)
     lnWP=QLineEdit()
     lnWP.setFixedWidth(30)
+    lnWP.setText("1")
     mlayout.addWidget(lnWP)
     btRTL = QPushButton("RTL")
     btRTL.clicked.connect(lst.handleRTL)
