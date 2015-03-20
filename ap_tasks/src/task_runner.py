@@ -10,7 +10,9 @@
 # Import a bunch of libraries
 
 # Standard Python imports
+import os
 import subprocess
+import time
 
 # General ROS imports
 import rospy
@@ -29,6 +31,9 @@ class Task(object):
     def __init__(self, name):
         self._name = name
         self._acid = rospy.get_param('aircraft_id')
+
+    def _wait(self, srv):
+        rospy.wait_for_service(srv, 3.0)
 
     def getName(self):
         return self._name
@@ -66,48 +71,6 @@ class Task(object):
         return None
 
 #-----------------------------------------------------------------------
-# Task classes
-
-# Start and stop rosbagging
-class rosbagTask(Task):
-
-    def __init__(self):
-        Task.__init__(self, "rosbag")
-        self._folder = "~/bags/"
-        self._prefix = "%s%u" % (self._folder, self._acid)
-        self._proc = None
-
-    def on_status(self):
-        if not rospy.has_param('rosbag_enable') or \
-           not rospy.get_param('rosbag_enable'):
-            return None
-        subprocess.call("ls %s || mkdir %s" % (self._folder, self._folder),
-                        shell=True)
-        self._proc = subprocess.Popen("rosbag record -a -o " + self._prefix,
-                                     shell=True)
-        return bool(self._proc.poll() is None)
-
-    def on_shutdown(self):
-        if self._proc is None:
-            return None
-        if self._proc.poll() is None:
-            self._proc.send_signal(subprocess.signal.SIGINT)
-        return True
-
-# Set params on the autopilot
-class paramTask(Task):
-
-    def __init__(self):
-        Task.__init__(self, "AP param")
-        self._service = "autopilot/param_set"
-
-    def on_status(self):
-        rospy.wait_for_service(self._service, 3.0)
-        srv = rospy.ServiceProxy(self._service, autopilot_srv.ParamSet)
-        res = srv("SYSID_THISMAV", float(self._acid))
-        return res.ok
-
-#-----------------------------------------------------------------------
 # Task-running and event-handling class
 
 class TaskRunner(object):
@@ -127,26 +90,32 @@ class TaskRunner(object):
         # Register callback for shutdown event
         rospy.on_shutdown(self._cb_shutdown)
 
+    def _log(self, event, task, start, success, info=''):
+        end = time.time()
+        s = "Task Runner: Event '%s' Task '%s' Time %0.1fs: " % \
+            (event, task.getName(), end - start)
+        si = ""
+        if info:
+            si = " (%s)" % info
+        if success:
+            rospy.loginfo(s + "Succeeded" + si)
+        else:
+            rospy.logwarn(s + "Failed" + si)
+
     # Perform an event (string name of method) for a given task (Task())
     def _do_event(self, event):
-        rospy.loginfo("Task Runner Event: " + event)
+        rospy.loginfo("Task Runner: Starting Event '%s'" % event)
         for task in self.tasks:
-            header = "Task '%s' Event '%s'" % (task.getName(), event)
+            start = time.time()
             try:
                 result = getattr(task, event)()
                 if result is None:
                     # No action was taken, nothing to log
-                    pass
-                elif result is True:
-                    rospy.loginfo("%s: Succeeded" % header)
-                elif result is False:
-                    rospy.logwarn("%s: Failed" % header)
-                else:
-                    # This shouldn't happen, but we won't log it (for now)
-                    pass
+                    continue
+                self._log(event, task, start, bool(result))
             except Exception as ex:
-                rospy.logwarn("%s: Raised Exception: %s" % \
-                              (header, str(ex.args[0])))
+                self._log(event, task, start, False, str(ex.args[0]))
+        rospy.loginfo("Task Runner: Completed Event '%s'" % event)
 
     # NOTE: Most events are performed by the callback that detects them
 
@@ -182,6 +151,199 @@ class TaskRunner(object):
         rospy.spin()
 
 #-----------------------------------------------------------------------
+# Task classes
+# NOTE: This should be the only part to be customized
+
+# Start and stop rosbagging
+class RosbagTask(Task):
+
+    def __init__(self):
+        Task.__init__(self, "Rosbag")
+        self._folder = "~/bags/"
+        self._prefix = "%s%u" % (self._folder, self._acid)
+        self._proc = None
+
+    def on_status(self):
+        subprocess.call("ls %s || mkdir %s" % (self._folder, self._folder),
+                        shell=True)
+        self._proc = subprocess.Popen("rosbag record -a -o " + self._prefix,
+                                     shell=True)
+        return bool(self._proc.poll() is None)
+
+    def on_shutdown(self):
+        if self._proc is None:
+            return None
+        if self._proc.poll() is None:
+            self._proc.send_signal(subprocess.signal.SIGINT)
+        return True
+
+# Set ID on the autopilot
+class SetIDTask(Task):
+
+    def __init__(self):
+        Task.__init__(self, "AP Set ID")
+        self._srv = "autopilot/fpr_param_set"
+
+    def on_status(self):
+        self._wait(self._srv)
+        srv = rospy.ServiceProxy(self._srv, autopilot_srv.ParamSet)
+        res = srv("SYSID_THISMAV", float(self._acid))
+        return res.ok
+
+# Intermediate class for setting lists of things from a file
+# Initialization arguments:
+#  - name      friendly string name as used by Task
+#  - srv_name  name of setter service
+#  - srv_type  type of setter service
+#  - ext       extension of filename (assumes filename format)
+class _SetlistTask(Task):
+
+    def __init__(self, name, srv_name, srv_type, item_attr, ext):
+        Task.__init__(self, name)
+        self._srv_name = srv_name
+        self._srv_type = srv_type
+        self._item_attr = item_attr
+        self._fname = "%sblessed.%s" % (os.path.expanduser("~/"), ext)
+
+    # Method to parse lines into service req point sub-objects
+    # DEFINE IN EACH SUBTYPE
+    def _parse(self, *args):
+        return None
+
+    # Method to call if/once task succeeds
+    # Probably should set a ROS param or publish a message
+    def _success(self):
+        pass
+
+    def on_status(self):
+        self._wait(self._srv_name)
+        srv = rospy.ServiceProxy(self._srv_name, self._srv_type)
+        with open(self._fname, 'r') as f:
+            # Create a request object (NOTE: hackish, relies on service impl)
+            req = self._srv_type._request_class()
+            # Gets the list attribute of that object
+            items = getattr(req, self._item_attr)
+            # Add items to request object
+            for line in f:
+                line = line.rstrip("\n")
+                # Ignore comments and blanks
+                if not line or line.startswith('#'): continue
+                # NOTE: if file is ill-formatted, fail altogether
+                try:
+                    item = self._parse(*line.split())
+                    # Allow parsers to ignore some lines
+                    if item is None: continue
+                    items.append(item)
+                except:
+                    raise Exception("Format error: " + str(line))
+            # Attempt a few times to set the items
+            # NOTE: trust the service call's response to check if it worked
+            for i in range(3):
+                res = srv(req)
+                if not res.ok: continue
+                self._success()
+                return True
+            return False
+
+class ParamTask(_SetlistTask):
+
+    def __init__(self):
+        _SetlistTask.__init__(self,
+                              "AP Param",
+                              "autopilot/fpr_param_setlist",
+                              autopilot_srv.ParamSetList,
+                              "param",
+                              "parm")
+
+    def _parse(self, *args):
+        p = autopilot_msg.ParamPair()
+        p.name = str(args[0]).upper()
+        p.value = float(args[1])
+        return p
+
+    def _success(self):
+        rospy.set_param("ok_param", True)
+
+# Set fence points based on file
+class FenceTask(_SetlistTask):
+
+    def __init__(self):
+        _SetlistTask.__init__(self,
+                              "AP Fence",
+                              "autopilot/fpr_fence_setall",
+                              autopilot_srv.FenceSetAll,
+                              "points",
+                              "fen")
+
+    def _parse(self, *args):
+        p = autopilot_msg.Fencepoint()
+        p.lat = float(args[0])
+        p.lon = float(args[1])
+        return p
+
+    def _success(self):
+        rospy.set_param("ok_fence", True)
+
+# Set rally points based on file
+class RallyTask(_SetlistTask):
+
+    def __init__(self):
+        _SetlistTask.__init__(self,
+                              "AP Rally",
+                              "autopilot/fpr_rally_setall",
+                              autopilot_srv.RallySetAll,
+                              "points",
+                              "ral")
+
+    def _parse(self, *args):
+        p = autopilot_msg.Rallypoint()
+        p.lat = float(args[1]) * 1e7
+        p.lon = float(args[2]) * 1e7
+        p.alt = float(args[3])
+        p.break_alt = float(args[4])
+        p.land_dir = float(args[5]) * 1e2
+        p.flags = int(args[6])
+        return p
+
+    def _success(self):
+        rospy.set_param("ok_rally", True)
+
+# Set waypoints based on file
+# NOTE: Assumes a "v1.10" formatted waypoint file
+class WPTask(_SetlistTask):
+
+    def __init__(self):
+        _SetlistTask.__init__(self,
+                              "AP WP",
+                              "autopilot/wp_setall",
+                              autopilot_srv.WPSetAll,
+                              "points",
+                              "wp")
+
+    def _parse(self, *args):
+        if args[0] == 'QGC':
+            if args[2] != '110':
+                raise Exception("")
+            return None
+        p = autopilot_msg.Waypoint()
+        p.seq = int(args[0])
+        p.frame = int(args[2])
+        p.command = int(args[3])
+        p.current = bool(int(args[1]))
+        p.autocontinue = bool(int(args[11]))
+        p.param1 = float(args[4])
+        p.param2 = float(args[5])
+        p.param3 = float(args[6])
+        p.param4 = float(args[7])
+        p.x = float(args[8])
+        p.y = float(args[9])
+        p.z = float(args[10])
+        return p
+
+    def _success(self):
+        rospy.set_param("ok_wp", True)
+
+#-----------------------------------------------------------------------
 # Start-up
 
 if __name__ == '__main__':
@@ -190,8 +352,16 @@ if __name__ == '__main__':
     
     # Instantiate TaskRunner and Task instances
     runner = TaskRunner()
-    runner.add_task(rosbagTask())
-    runner.add_task(paramTask())
+    runner.add_task(SetIDTask())
+
+    if rospy.has_param('verify_enable') and rospy.get_param('verify_enable'):
+        runner.add_task(ParamTask())
+        runner.add_task(FenceTask())
+        runner.add_task(RallyTask())
+        runner.add_task(WPTask())
+
+    if rospy.has_param('rosbag_enable') and rospy.get_param('rosbag_enable'):
+        runner.add_task(RosbagTask())
 
     # Run the main loop
     runner.run()
