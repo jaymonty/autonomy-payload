@@ -180,13 +180,17 @@ class FlightStatus(Message):
         # All of these are in the first 'H' (mode_and_flags)
         self.mode = None	# Aircraft guidance mode (0-15, see enum)
         self.armed = None	# Boolean: Throttle Armed?
-        self.ready = None	# Boolean: Ready for flight? (user-settable)
         self.ok_ahrs = None	# Boolean: AHRS OK?
         self.ok_as = None	# Boolean: Airspeed Sensor OK?
         self.ok_gps = None	# Boolean: GPS sensor OK?
         self.ok_ins = None	# Boolean: INS sensor OK?
         self.ok_mag = None	# Boolean: Magnetometer OK?
         self.ok_pwr = None	# Boolean: Power OK?
+        self.ready = None	# Boolean: Ready for flight? (user-settable)
+        self.ok_prm = None  # Boolean: Params verified?
+        self.ok_fen = None  # Boolean: Fence verified?
+        self.ok_ral = None  # Boolean: Rally verified?
+        self.ok_wp = None   # Boolean: Waypoints verified?
         # These are the remainder, starting with the first 'B'
         # Next byte used to be was GPS sats, now 4 bits swarm_state, 4 unused
         self.swarm_state = 0 # Value 0-6
@@ -214,7 +218,11 @@ class FlightStatus(Message):
                        | (0x0040 & _bool16(self.ok_mag)) \
                        | (0x0020 & _bool16(self.ok_pwr)) \
                        | (0x0010 & _bool16(self.ready)) \
-                       & 0xfff0  # Zeroize unused bits
+                       | (0x0008 & _bool16(self.ok_prm)) \
+                       | (0x0004 & _bool16(self.ok_fen)) \
+                       | (0x0002 & _bool16(self.ok_ral)) \
+                       | (0x0001 & _bool16(self.ok_wp)) \
+                       & 0xffff  # Zeroize any unused bits
         batt_rem = 255
         if 0 <= self.batt_rem <= 100:  # Set invalid values to max unsigned
             batt_rem = self.batt_rem
@@ -255,6 +263,10 @@ class FlightStatus(Message):
         self.ok_mag = bool(modeflag & 0x0040)
         self.ok_pwr = bool(modeflag & 0x0020)
         self.ready = bool(modeflag & 0x0010)
+        self.ok_prm = bool(modeflag & 0x0008)
+        self.ok_fen = bool(modeflag & 0x0004)
+        self.ok_ral = bool(modeflag & 0x0002)
+        self.ok_wp = bool(modeflag & 0x0001)
         self.swarm_state = int((fields.pop(0) & 0xF0) >>4)
         self.batt_rem = fields.pop(0)
         if self.batt_rem == 255:  # Account for invalid values
