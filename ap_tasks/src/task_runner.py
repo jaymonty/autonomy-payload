@@ -355,10 +355,10 @@ if __name__ == '__main__':
     runner.add_task(SetIDTask())
 
     if rospy.has_param('verify_enable') and rospy.get_param('verify_enable'):
-        runner.add_task(ParamTask())
-        runner.add_task(FenceTask())
         runner.add_task(RallyTask())
         runner.add_task(WPTask())
+        runner.add_task(FenceTask())
+        runner.add_task(ParamTask())
 
     if rospy.has_param('rosbag_enable') and rospy.get_param('rosbag_enable'):
         runner.add_task(RosbagTask())
