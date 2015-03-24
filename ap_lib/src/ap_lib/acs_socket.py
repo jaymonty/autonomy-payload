@@ -306,7 +306,7 @@ class Socket():
 
         # Print any exception for user's awareness
         except Exception as ex:
-            print(ex.args[0])
+            print("ACS send: " + str(ex.args[0]))
             return False
 
     # Resend any timed out messages
@@ -485,6 +485,6 @@ class Socket():
             
         # Any other unhandled conditions are printed for our awareness
         except Exception as ex:
-            print("sock recv: " + ex.args[0])
+            print("ACS recv: " + str(ex.args[0]))
             return False
 
