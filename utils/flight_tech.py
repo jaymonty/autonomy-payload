@@ -12,6 +12,7 @@ from PySide.QtGui import *
 import ap_lib.acs_messages as messages
 from ap_lib.acs_socket import Socket
 
+from math import asin, atan2, degrees
 from optparse import OptionParser
 import subprocess
 import sys
@@ -42,7 +43,8 @@ class UAVListWidgetItem(QListWidgetItem):
         QListWidgetItem.__init__(self, *args, **kwargs)
 
         # Attributes of an item
-        self._msg = None     # Last-received FlightStatus message
+        self._msg_s = None   # Last-received FlightStatus message
+        self._msg_p = None   # Last-received Pose message
         self._time = 0.0     # Time last message was received
         self._state = None   # State (color coding)
         self._aspd = []      # History of airspeed readings
@@ -50,14 +52,14 @@ class UAVListWidgetItem(QListWidgetItem):
         self.setFont(self.FONT)
 
     def __str__(self):
-        if self._state is None or self._msg is None:
+        if self._state is None or self._msg_s is None:
             return "UNKNOWN"
         return "%s : %s (%d / %s / %2.3fv)" % \
-               (self._msg.name,
+               (self._msg_s.name,
                 self._state.text,
-                self._msg.msg_src,
-                self._msg.msg_src_ip,
-                self._msg.batt_vcc / 1000.0)
+                self._msg_s.msg_src,
+                self._msg_s.msg_src_ip,
+                self._msg_s.batt_vcc / 1000.0)
 
     # Make explicit the ordering for sorted lists
     def __lt__(self, other):
@@ -66,13 +68,13 @@ class UAVListWidgetItem(QListWidgetItem):
         return bool(self.getID() < other.getID())
 
     def getID(self):
-        if self._msg:
-            return self._msg.msg_src
+        if self._msg_s:
+            return self._msg_s.msg_src
         return None
 
     def getIP(self):
-        if self._msg:
-            return self._msg.msg_src_ip
+        if self._msg_s:
+            return self._msg_s.msg_src_ip
         return None
 
     def getTime(self):
@@ -81,11 +83,14 @@ class UAVListWidgetItem(QListWidgetItem):
     def getState(self):
         return self._state
 
-    def getLastMsg(self):
-        return self._msg
+    def getLastStatus(self):
+        return self._msg_s
+
+    def getLastPose(self):
+        return self._msg_p
 
     def getAvgAspd(self):
-        if self._msg is None: return None
+        if self._msg_s is None: return None
         if len(self._aspd) < 10: return None
         return float(sum(self._aspd)) / float(len(self._aspd))
 
@@ -97,10 +102,14 @@ class UAVListWidgetItem(QListWidgetItem):
         else:
             self.setBackground(self.STATE_NONE.color)
 
+    def processPose(self, msg):
+        self._msg_p = msg
+        # TODO: Decide what "offline" means if we see poses but not status
+
     # Process a status message
     def processStatus(self, msg):
         # Update internal data
-        self._msg = msg
+        self._msg_s = msg
         self._time = time.time()
 
         # Update airspeed history
@@ -226,17 +235,18 @@ class UAVListWidget(QListWidget):
         self.mav_id = None
         self.mav_channel = None
 
-    ''' Status lights '''
+    ''' Status and IMU lights '''
 
     LIGHT_UNK = "QLabel { color : black; }"
     LIGHT_BAD = "QLabel { color : red; }"
     LIGHT_OK = "QLabel { color : green; }"
+    MIN_ANGLE = 30.0
 
     def buildStatusRow(self):
         self.status_row = {}
         layout = QHBoxLayout()
-        for s in ['ahrs', 'as', 'gps', 'ins', 'mag', 'pwr',
-                  'prm', 'fen', 'ral', 'wp', 'aspd', 'ralt']:
+        for s in ['ahrs', 'as', 'aspd', 'gps', 'ins', 'mag',
+                  'pwr', 'ralt', 'ral', 'wp', 'fen', 'prm']:
             lbl = QLabel(s)
             self.status_row[s] = lbl
             layout.addWidget(lbl)
@@ -247,13 +257,13 @@ class UAVListWidget(QListWidget):
             return
         item = self.currentItem()
         if item is None or \
-           item.getLastMsg() is None or \
+           item.getLastStatus() is None or \
            item.getState() == UAVListWidgetItem.STATE_OFFLINE:
             for s in ['ahrs', 'as', 'gps', 'ins', 'mag', 'pwr',
                       'prm', 'fen', 'ral', 'wp', 'aspd', 'ralt']:
                 self.status_row[s].setStyleSheet(self.LIGHT_UNK)
             return
-        msg = item.getLastMsg()
+        msg = item.getLastStatus()
         def color(attr):
             if getattr(msg, attr): return self.LIGHT_OK
             return self.LIGHT_BAD
@@ -274,6 +284,41 @@ class UAVListWidget(QListWidget):
             self.status_row['aspd'].setStyleSheet(self.LIGHT_OK)
         else:
             self.status_row['aspd'].setStyleSheet(self.LIGHT_BAD)
+
+    def buildImuRow(self):
+        self.imu_row = {}
+        layout = QHBoxLayout()
+        for s in ['UP', 'DOWN', 'LEFT', 'RIGHT']:
+            lbl = QLabel(s)
+            self.imu_row[s] = lbl
+            layout.addWidget(lbl)
+        return layout
+
+    def updateImuRow(self):
+        if not hasattr(self, 'imu_row') or self.imu_row is None:
+            return
+        item = self.currentItem()
+        if item is None or \
+           item.getLastPose() is None or \
+           item.getState() == UAVListWidgetItem.STATE_OFFLINE:
+            for s in ['UP', 'DOWN', 'LEFT', 'RIGHT']:
+                self.imu_row[s].setStyleSheet(self.LIGHT_UNK)
+            return
+        msg = item.getLastPose()
+        def color(angle, threshold):
+            if angle < threshold < 0.0 or 0.0 < threshold < angle:
+                return self.LIGHT_BAD  # Not "bad", but not level
+            return self.LIGHT_OK
+        # Convert quaternions to Euler angles
+        # NOTE: Code robbed from ArduPilot's AP_Math/quaternion.cpp
+        (q2, q3, q4, q1) = (msg.q_x, msg.q_y, msg.q_z, msg.q_w)
+        roll = degrees(atan2(2.0*(q1*q2 + q3*q4), 1 - 2.0*(q2*q2 + q3*q3)))
+        pitch = degrees(asin(2.0*(q1*q3 - q4*q2)))
+        yaw = degrees(atan2(2.0*(q1*q4 + q2*q3), 1 - 2.0*(q3*q3 + q4*q4)))
+        self.imu_row['UP'].setStyleSheet(color(pitch, self.MIN_ANGLE))
+        self.imu_row['DOWN'].setStyleSheet(color(pitch, -self.MIN_ANGLE))
+        self.imu_row['LEFT'].setStyleSheet(color(roll, -self.MIN_ANGLE))
+        self.imu_row['RIGHT'].setStyleSheet(color(roll, self.MIN_ANGLE))
 
     ''' Handle timer '''
 
@@ -297,21 +342,28 @@ class UAVListWidget(QListWidget):
             msg = self._sock.recv()
             if msg is None:
                 break
-            if not isinstance(msg, messages.FlightStatus):
+            if not (isinstance(msg, messages.FlightStatus) or \
+                    isinstance(msg, messages.Pose)):
                 continue
 
             # Look up item or create it
+            # NOTE: Only create when we see a status message
             item = self.itemByIdent(msg.msg_src)
-            if item is None:
+            if item is None and isinstance(msg, messages.FlightStatus):
                 item = UAVListWidgetItem()
                 self.addItem(item)
+            if item is None:
+                continue
 
             # Let the item process the message
-            item.processStatus(msg)
-
-            # Update status lights if needed
-            if item is self.currentItem():
-                self.updateStatusRow()
+            if isinstance(msg, messages.FlightStatus):
+                item.processStatus(msg)
+                if item is self.currentItem():
+                    self.updateStatusRow()
+            elif isinstance(msg, messages.Pose):
+                item.processPose(msg)
+                if item is self.currentItem():
+                    self.updateImuRow()
 
         # Cull those we haven't seen in a while
         cur_time = time.time()
@@ -548,6 +600,9 @@ if __name__ == '__main__':
                       help="Network device to listen on", default='')
     parser.add_option("-p", "--port", dest="port", type="int",
                       help="Network port to listen on", default=5554)
+    #parser.add_option("-f", "--flight-tech", dest="flight_tech",
+    #                  action="store_true", default=False,
+    #                  help="Flight Tech mode")
     parser.add_option("--lo-reverse", dest="lo_reverse",
                       action="store_true", default=False,
                       help="If using lo, reverse the addresses")
@@ -588,8 +643,9 @@ if __name__ == '__main__':
     # Listbox of UAVs
     lst = UAVListWidget(sock, win)
 
-    # Status lights row
-    layLights = lst.buildStatusRow()
+    # Status and IMU lights rows
+    layStats = lst.buildStatusRow()
+    layImu = lst.buildImuRow()
 
     # Connect list-click to status text and lights
     def do_update_stat():
@@ -598,13 +654,15 @@ if __name__ == '__main__':
         else:
             lblStat.setText(str(lst.currentItem()))
         lst.updateStatusRow()
+        lst.updateImuRow()
     lst.setSortingEnabled(True)
     lst.itemClicked.connect(do_update_stat)
     lst.itemSelectionChanged.connect(do_update_stat)
 
     # Add labels and listbox in preferred order
     layout.addWidget(lblStat)
-    layout.addLayout(layLights)
+    layout.addLayout(layStats)
+    layout.addLayout(layImu)
     layout.addWidget(lst)
 
     # Provide color-key for states
