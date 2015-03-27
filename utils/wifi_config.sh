@@ -49,8 +49,12 @@ fi
 if [ $ROUTER_USE != 0 ]; then
   echo "Setting up router ..."
   sudo sh -c "echo 1 > /proc/sys/net/ipv4/ip_forward"
+  sudo iptables -t nat -F  # Flush old rules first
   sudo iptables -t nat -A POSTROUTING -o $ROUTER_DEV -j MASQUERADE
 fi
+
+# Make sure SITL bridge device isn't running
+sudo ifconfig sitl_bridge down || true
 
 sudo ifconfig $1 down
 sudo iwconfig $1 mode ad-hoc essid zephyr channel 6 \
