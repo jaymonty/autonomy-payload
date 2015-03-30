@@ -225,10 +225,13 @@ class FollowController(WaypointController):
                                  (self.tgtCrs + self.rOffset), self.rFollow)
 
         # Project fwd from follow point to compute a rough "intercept" point
-        time_to_intercept = gps_utils.gps_distance(self.ownLat, self.ownLon, \
-                                                   self.tgtLat, self.tgtLon) / \
-                            math.hypot(self.ownVx, self.ownVy)
+        time_to_intercept = 0.0
+        if (abs(self.ownVy) > 0.1) and (abs(self.ownVy) > 0.1):  # Avoid div by 0!
+            time_to_intercept = gps_utils.gps_distance(self.ownLat, self.ownLon, \
+                                                       self.tgtLat, self.tgtLon) / \
+                                math.hypot(self.ownVx, self.ownVy)
         time_to_intercept = max(time_to_intercept, MAX_LOOKAHEAD)
+
         tgt_travel = math.hypot(self.followVx, self.followVy) * time_to_intercept
         self.tgtLat, self.tgtLon = \
             gps_utils.gps_newpos(self.tgtLat, self.tgtLon, self.tgtCrs, tgt_travel)
