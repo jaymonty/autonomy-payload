@@ -399,6 +399,13 @@ fi
 # Always perform payload software install
 install_payload_software
 
+# Make sure ~/odroid-installer.sh is softlinked to repo version
+rm ~/odroid-installer.sh &> /dev/null
+ln -s ~/acs_ros_ws/src/autonomy-payload/deploy/odroid-installer.sh ~/
+if [ $? != 0 ]; then
+  echo "WARNING: could not softlink install script into home!"
+fi
+
 # If performing an initial install, set up autostart
 if [ $INSTALL_INIT == true ]; then
   install_autostart
