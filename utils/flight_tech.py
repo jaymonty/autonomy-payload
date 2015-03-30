@@ -239,17 +239,25 @@ class UAVListWidget(QListWidget):
 
     LIGHT_UNK = "QLabel { color : black; }"
     LIGHT_BAD = "QLabel { color : red; }"
-    LIGHT_OK = "QLabel { color : green; }"
+    LIGHT_OK = "QLabel { color : orange; }"
+    LIGHT_GOOD = "QLabel { color : green; }"
     MIN_ANGLE = 30.0
+
+    LIGHT_SENS = ['ahrs', 'as', 'aspd', 'batt', 'gps', 'ins', 'mag',
+                  'pwr', 'ralt']
+    LIGHT_CONF = ['fw', 'sw', 'repo', 'ral', 'wp', 'fen', 'prm']
+    LIGHTS = [LIGHT_SENS, LIGHT_CONF]
 
     def buildStatusRow(self):
         self.status_row = {}
-        layout = QHBoxLayout()
-        for s in ['ahrs', 'as', 'aspd', 'gps', 'ins', 'mag',
-                  'pwr', 'ralt', 'ral', 'wp', 'fen', 'prm']:
-            lbl = QLabel(s)
-            self.status_row[s] = lbl
-            layout.addWidget(lbl)
+        layout = QVBoxLayout()
+        for row in self.LIGHTS:
+            hlay = QHBoxLayout()
+            for l in row:
+                lbl = QLabel(l)
+                self.status_row[l] = lbl
+                hlay.addWidget(lbl)
+            layout.addLayout(hlay)
         return layout
 
     def updateStatusRow(self):
@@ -259,20 +267,19 @@ class UAVListWidget(QListWidget):
         if item is None or \
            item.getLastStatus() is None or \
            item.getState() == UAVListWidgetItem.STATE_OFFLINE:
-            for s in ['ahrs', 'as', 'gps', 'ins', 'mag', 'pwr',
-                      'prm', 'fen', 'ral', 'wp', 'aspd', 'ralt']:
+            for s in self.LIGHT_SENS + self.LIGHT_CONF:
                 self.status_row[s].setStyleSheet(self.LIGHT_UNK)
             return
         msg = item.getLastStatus()
         def color(attr):
-            if getattr(msg, attr): return self.LIGHT_OK
+            if getattr(msg, attr): return self.LIGHT_GOOD
             return self.LIGHT_BAD
         for s in ['ahrs', 'as', 'gps', 'ins', 'mag', 'pwr',
                   'prm', 'fen', 'ral', 'wp']:
             self.status_row[s].setStyleSheet(color('ok_'+s))
         # relative alt must be +/- 10 m
         if -10000.0 < msg.alt_rel < 10000.0:
-            self.status_row['ralt'].setStyleSheet(self.LIGHT_OK)
+            self.status_row['ralt'].setStyleSheet(self.LIGHT_GOOD)
         else:
             self.status_row['ralt'].setStyleSheet(self.LIGHT_BAD)
         # average airspeed (over 10 samples) must have *some*
@@ -281,9 +288,18 @@ class UAVListWidget(QListWidget):
         if aspd is None:
             self.status_row['aspd'].setStyleSheet(self.LIGHT_BAD)
         elif 0.0 < item.getAvgAspd() < 4.0:
-            self.status_row['aspd'].setStyleSheet(self.LIGHT_OK)
+            self.status_row['aspd'].setStyleSheet(self.LIGHT_GOOD)
         else:
             self.status_row['aspd'].setStyleSheet(self.LIGHT_BAD)
+        # battery voltage should be > 12.4 V at takeoff
+        if msg.batt_vcc > 12400:
+            self.status_row['batt'].setStyleSheet(self.LIGHT_GOOD)
+        # so we don't freak people out with red right after takeoff
+        elif msg.batt_vcc > 11500:
+            self.status_row['batt'].setStyleSheet(self.LIGHT_OK)
+        # but do freak them out when the battery gets quite low
+        else:
+            self.status_row['batt'].setStyleSheet(self.LIGHT_BAD)
 
     def buildImuRow(self):
         self.imu_row = {}
@@ -308,7 +324,7 @@ class UAVListWidget(QListWidget):
         def color(angle, threshold):
             if angle < threshold < 0.0 or 0.0 < threshold < angle:
                 return self.LIGHT_BAD  # Not "bad", but not level
-            return self.LIGHT_OK
+            return self.LIGHT_GOOD
         # Convert quaternions to Euler angles
         # NOTE: Code robbed from ArduPilot's AP_Math/quaternion.cpp
         (q2, q3, q4, q1) = (msg.q_x, msg.q_y, msg.q_z, msg.q_w)
