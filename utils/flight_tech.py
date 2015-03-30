@@ -35,7 +35,7 @@ class UAVListWidgetItem(QListWidgetItem):
     STATE_NONE = UAVState('INVALID', QBrush(QColor('white')))
     STATE_OFFLINE = UAVState('OFFLINE', QBrush(QColor('red')))
     STATE_WAITING_AP = UAVState('WAITING AP', QBrush(QColor('cyan').darker(150)))
-    STATE_NOT_READY = UAVState('NOT READY', QBrush(QColor('yellow')))
+    STATE_PREFLIGHT = UAVState('PREFLIGHT', QBrush(QColor('yellow')))
     STATE_READY= UAVState('READY', QBrush(QColor.fromRgb(0,200,0)))
     STATE_FLYING = UAVState('FLYING', QBrush(QColor.fromRgb(160,160,160)))
 
@@ -126,7 +126,7 @@ class UAVListWidgetItem(QListWidgetItem):
         elif msg.ready:
             state = self.STATE_READY
         else:
-            state = self.STATE_NOT_READY
+            state = self.STATE_PREFLIGHT
         self.setState(state)
 
         # Update UI
@@ -385,7 +385,7 @@ class UAVListWidget(QListWidget):
     ''' Task handlers '''
 
     def handleMAVProxy(self):
-        item = self._checkItemState([UAVListWidgetItem.STATE_NOT_READY,
+        item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT,
                                      UAVListWidgetItem.STATE_READY,
                                      UAVListWidgetItem.STATE_FLYING])
         if item is None:
@@ -430,7 +430,7 @@ class UAVListWidget(QListWidget):
             self.mav_popen = None
 
     def handleCalpress(self):
-        item = self._checkItemState([UAVListWidgetItem.STATE_NOT_READY])
+        item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT])
         if item is None:
             return
 
@@ -442,7 +442,7 @@ class UAVListWidget(QListWidget):
         self._sendMessage(ad)
 
     def handleArm(self):
-        item = self._checkItemState([UAVListWidgetItem.STATE_NOT_READY,
+        item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT,
                                      UAVListWidgetItem.STATE_READY])
         if item is None:
             return
@@ -456,7 +456,7 @@ class UAVListWidget(QListWidget):
         self._sendMessage(ad)
 
     def handleDisArm(self):
-        item = self._checkItemState([UAVListWidgetItem.STATE_NOT_READY,
+        item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT,
                                      UAVListWidgetItem.STATE_READY])
         if item is None:
             return
@@ -470,7 +470,7 @@ class UAVListWidget(QListWidget):
         self._sendMessage(ad)
 
     def handleFlightReady(self):
-        item = self._checkItemState([UAVListWidgetItem.STATE_NOT_READY,
+        item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT,
                                      UAVListWidgetItem.STATE_READY])
         if item is None:
             return
@@ -480,7 +480,7 @@ class UAVListWidget(QListWidget):
         fr.msg_dst = int(item.getID())
         fr.msg_secs = 0
         fr.msg_nsecs = 0
-        fr.ready = (item.getState() == UAVListWidgetItem.STATE_NOT_READY)
+        fr.ready = (item.getState() == UAVListWidgetItem.STATE_PREFLIGHT)
         self._sendMessage(fr)
 
     def handleSwarmReady(self):
@@ -576,7 +576,7 @@ class UAVListWidget(QListWidget):
     def handleShutdown(self):
         item = self._checkItemState([UAVListWidgetItem.STATE_OFFLINE,
                                      UAVListWidgetItem.STATE_WAITING_AP,
-                                     UAVListWidgetItem.STATE_NOT_READY,
+                                     UAVListWidgetItem.STATE_PREFLIGHT,
                                      UAVListWidgetItem.STATE_READY])
         if item is None:
             return
@@ -669,7 +669,7 @@ if __name__ == '__main__':
     hlayout = QHBoxLayout()
     for st in [ UAVListWidgetItem.STATE_OFFLINE,
                 UAVListWidgetItem.STATE_WAITING_AP,
-                UAVListWidgetItem.STATE_NOT_READY,
+                UAVListWidgetItem.STATE_PREFLIGHT,
                 UAVListWidgetItem.STATE_READY,
                 UAVListWidgetItem.STATE_FLYING ]:
         lbl = QLabel(st.text)
