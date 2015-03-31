@@ -457,6 +457,14 @@ class UAVListWidget(QListWidget):
         ad.msg_nsecs = 0
         self._sendMessage(ad)
 
+    def handleServos(self):
+        print "I don't know how to do that yet!"
+        return
+
+    def handleMotor(self):
+        print "I don't know how to do that yet!"
+        return
+
     def handleArm(self):
         item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT,
                                      UAVListWidgetItem.STATE_READY])
@@ -616,13 +624,28 @@ if __name__ == '__main__':
                       help="Network device to listen on", default='')
     parser.add_option("-p", "--port", dest="port", type="int",
                       help="Network port to listen on", default=5554)
-    #parser.add_option("-f", "--flight-tech", dest="flight_tech",
-    #                  action="store_true", default=False,
-    #                  help="Flight Tech mode")
+    parser.add_option("-f", "--flight-tech", dest="ft_mode",
+                      action="store_true", default=False,
+                      help="Flight Tech mode")
+    parser.add_option("-o", "--operator", dest="op_mode",
+                      action="store_true", default=False,
+                      help="UAV Operator mode")
     parser.add_option("--lo-reverse", dest="lo_reverse",
                       action="store_true", default=False,
                       help="If using lo, reverse the addresses")
     (opts, args) = parser.parse_args()
+
+    # Can constrain which widgets we see based on roles
+    show_ft = not opts.op_mode
+    show_op = not opts.ft_mode
+    mode_string = ""
+    if not show_ft and not show_op:
+        print "Please only specify at most one role flag (-f or -o)"
+        sys.exit(1)
+    if opts.ft_mode:
+        mode_string = " -- Flight Tech mode"
+    if opts.op_mode:
+        mode_string = " -- Operator mode"
 
     # NOTE: This is a hack to work with SITL
     my_ip = None
@@ -647,7 +670,8 @@ if __name__ == '__main__':
     # Build up the window itself
     app = QApplication([])
     win = QWidget()
-    win.resize(400, 500)
+    win.resize(400, 470 + 120 * int(show_ft and show_op))
+    win.setWindowTitle("FTI" + mode_string)
     layout = QVBoxLayout()
     win.setLayout(layout)
 
@@ -661,7 +685,8 @@ if __name__ == '__main__':
 
     # Status and IMU lights rows
     layStats = lst.buildStatusRow()
-    layImu = lst.buildImuRow()
+    if show_ft:
+        layImu = lst.buildImuRow()
 
     # Connect list-click to status text and lights
     def do_update_stat():
@@ -678,7 +703,8 @@ if __name__ == '__main__':
     # Add labels and listbox in preferred order
     layout.addWidget(lblStat)
     layout.addLayout(layStats)
-    layout.addLayout(layImu)
+    if show_ft:
+        layout.addLayout(layImu)
     layout.addWidget(lst)
 
     # Provide color-key for states
@@ -696,65 +722,70 @@ if __name__ == '__main__':
         hlayout.addWidget(lbl)
     layout.addLayout(hlayout)
 
-    # MAVProxy button
-    btMAVProxy = QPushButton("Open MAVProxy + PreFlight")
-    btMAVProxy.clicked.connect(lst.handleMAVProxy)
-    layout.addWidget(btMAVProxy)
+    if show_ft:
+        # MAVProxy button
+        btMAVProxy = QPushButton("Open MAVProxy + PreFlight")
+        btMAVProxy.clicked.connect(lst.handleMAVProxy)
+        layout.addWidget(btMAVProxy)
 
-    # Flight-ready button
-    btToggle = QPushButton("Toggle Flight Ready")
-    btToggle.clicked.connect(lst.handleFlightReady)
-    layout.addWidget(btToggle)
-
-    # Airspeed pressure calibration button
-    btCalpress = QPushButton("Calibrate Pressure")
-    btCalpress.clicked.connect(lst.handleCalpress)
-    layout.addWidget(btCalpress)
+        # Mechanical preflight buttons
+        mlayout = QHBoxLayout()
+        btCalpress = QPushButton("Cal Pressure")
+        btCalpress.clicked.connect(lst.handleCalpress)
+        mlayout.addWidget(btCalpress)
+        btServos = QPushButton("Demo Servos")
+        btServos.clicked.connect(lst.handleServos)
+        mlayout.addWidget(btServos)
+        btMotor = QPushButton("Run Motor")
+        btMotor.clicked.connect(lst.handleMotor)
+        mlayout.addWidget(btMotor)
+        layout.addLayout(mlayout)
 
     # Arm and disarm throttle buttons
     alayout = QHBoxLayout()
-
     btArm = QPushButton("ARM Throttle")
     btArm.clicked.connect(lst.handleArm)
     alayout.addWidget(btArm)
     btDisArm = QPushButton("Disarm Throttle")
     btDisArm.clicked.connect(lst.handleDisArm)
     alayout.addWidget(btDisArm)
-
     layout.addLayout(alayout)
 
-    # Swarm-ready button
-    btSwarmReady = QPushButton("Confirm Swarm Ready")
-    btSwarmReady.clicked.connect(lst.handleSwarmReady)
-    layout.addWidget(btSwarmReady)
+    if show_ft:
+        # Flight-ready button
+        btToggle = QPushButton("Toggle Flight Ready")
+        btToggle.clicked.connect(lst.handleFlightReady)
+        layout.addWidget(btToggle)
 
-    # Mode buttons
-    mlayout = QHBoxLayout()
+    if show_op:
+        # Mode buttons
+        mlayout = QHBoxLayout()
+        btAUTO = QPushButton("AUTO")
+        btAUTO.clicked.connect(lst.handleAUTO)
+        mlayout.addWidget(btAUTO)
+        lnWP=QLineEdit()
+        lnWP.setFixedWidth(50)
+        lnWP.setText("1")
+        mlayout.addWidget(lnWP)
+        btRTL = QPushButton("RTL")
+        btRTL.clicked.connect(lst.handleRTL)
+        mlayout.addWidget(btRTL)
+        layout.addLayout(mlayout)
 
-    btAUTO = QPushButton("AUTO")
-    btAUTO.clicked.connect(lst.handleAUTO)
-    mlayout.addWidget(btAUTO)
-    lnWP=QLineEdit()
-    lnWP.setFixedWidth(30)
-    lnWP.setText("1")
-    mlayout.addWidget(lnWP)
-    btRTL = QPushButton("RTL")
-    btRTL.clicked.connect(lst.handleRTL)
-    mlayout.addWidget(btRTL)
+        # Swarm-ready button
+        btSwarmReady = QPushButton("Confirm Swarm Ready")
+        btSwarmReady.clicked.connect(lst.handleSwarmReady)
+        layout.addWidget(btSwarmReady)
 
-    layout.addLayout(mlayout)
-
-    # Landing buttons
-    llayout = QHBoxLayout()
-
-    btLand = QPushButton("Land")
-    btLand.clicked.connect(lst.handleLand)
-    llayout.addWidget(btLand)
-    btLandAbort = QPushButton("Land Abort")
-    btLandAbort.clicked.connect(lst.handleLandAbort)
-    llayout.addWidget(btLandAbort)
-
-    layout.addLayout(llayout)
+        # Landing buttons
+        llayout = QHBoxLayout()
+        btLand = QPushButton("Land")
+        btLand.clicked.connect(lst.handleLand)
+        llayout.addWidget(btLand)
+        btLandAbort = QPushButton("Land Abort")
+        btLandAbort.clicked.connect(lst.handleLandAbort)
+        llayout.addWidget(btLandAbort)
+        layout.addLayout(llayout)
 
     # Shutdown button
     btShutdown = QPushButton("Shut Down Payload")
