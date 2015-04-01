@@ -172,6 +172,12 @@ class UAVListWidget(QListWidget):
         # ACS protocol connection
         self._sock = sock
 
+        # Lights
+        self.lights = {}
+        self.lights_sta = False
+        self.lights_cfg = False
+        self.lights_imu = False
+
     ''' API Extensions '''
 
     # Return the *singly-selected* list item
@@ -244,104 +250,118 @@ class UAVListWidget(QListWidget):
 
     ''' Status and IMU lights '''
 
-    LIGHT_UNK = "QLabel { color : black; }"
-    LIGHT_BAD = "QLabel { color : red; }"
-    LIGHT_OK = "QLabel { color : orange; }"
-    LIGHT_GOOD = "QLabel { color : green; }"
-    MIN_ANGLE = 30.0
+    class _QLight(QLabel):
 
-    LIGHT_SENS = ['ahrs', 'as', 'aspd', 'batt', 'gps', 'ins', 'mag',
-                  'pwr', 'ralt']
-    LIGHT_CONF = ['fw', 'sw', 'repo', 'ral', 'wp', 'fen', 'prm']
-    LIGHTS = [LIGHT_SENS, LIGHT_CONF]
+        def __init__(self, name):
+            QLabel.__init__(self, name)
 
-    def buildStatusRow(self):
-        self.status_row = {}
-        layout = QVBoxLayout()
-        for row in self.LIGHTS:
-            hlay = QHBoxLayout()
-            for l in row:
-                lbl = QLabel(l)
-                self.status_row[l] = lbl
-                hlay.addWidget(lbl)
-            layout.addLayout(hlay)
+        def unknown(self):
+            self.setStyleSheet("QLabel { color : black; }")
+
+        def bad(self):
+            self.setStyleSheet("QLabel { color : red; }")
+
+        def ok(self):
+            self.setStyleSheet("QLabel { color : orange; }")
+
+        def good(self):
+            self.setStyleSheet("QLabel { color : green; }")
+
+        def setbool(self, b_good, b_ok=False):
+            if b_good: self.good()
+            elif b_ok: self.ok()
+            else: self.bad()
+
+    def _buildLights(self, light_list):
+        layout = QHBoxLayout()
+        for l in light_list:
+            lbl = self._QLight(l)
+            self.lights[l] = lbl
+            layout.addWidget(lbl)
         return layout
 
-    def updateStatusRow(self):
-        if not hasattr(self, 'status_row') or self.status_row is None:
-            return
+    LIGHT_STA_OK = ['ahrs', 'as', 'gps', 'ins', 'mag', 'pwr']
+    LIGHT_STA_CP = ['aspd', 'batt', 'ralt']
+    LIGHT_STA = sorted(LIGHT_STA_OK + LIGHT_STA_CP)
+    LIGHT_CFG_OK = ['ral', 'wp', 'fen', 'prm']
+    LIGHT_CFG_CP = ['fw', 'sw', 'repo']
+    LIGHT_CFG = LIGHT_CFG_CP + LIGHT_CFG_OK
+    LIGHT_IMU = ['UP', 'DOWN', 'LEFT', 'RIGHT']
+
+    def buildStatusLights(self):
+        self.lights_sta = True
+        return self._buildLights(self.LIGHT_STA)
+
+    def buildConfigLights(self):
+        self.lights_cfg = True
+        return self._buildLights(self.LIGHT_CFG)
+
+    def buildImuLights(self):
+        self.lights_imu = True
+        return self._buildLights(self.LIGHT_IMU)
+
+    def updateStatusLights(self):
+        # If no aircraft is selected or aircraft is online,
+        # blank out ALL lights
         item = self.currentItem()
         if item is None or \
            item.getLastStatus() is None or \
            item.getState() == UAVListWidgetItem.STATE_OFFLINE:
-            for s in self.LIGHT_SENS + self.LIGHT_CONF:
-                self.status_row[s].setStyleSheet(self.LIGHT_UNK)
+            for light in self.lights:
+                self.lights[light].unknown()
             return
+
+        # Done if not using lights based on status message
+        if not self.lights_sta and not self.lights_cfg:
+            return
+
+        # Update all lights based on OK flags
         msg = item.getLastStatus()
-        def color(attr):
-            if getattr(msg, attr): return self.LIGHT_GOOD
-            return self.LIGHT_BAD
-        for s in ['ahrs', 'as', 'gps', 'ins', 'mag', 'pwr',
-                  'prm', 'fen', 'ral', 'wp']:
-            self.status_row[s].setStyleSheet(color('ok_'+s))
+        for light in self.LIGHT_STA_OK + self.LIGHT_CFG_OK:
+            if light not in self.lights:
+                continue
+            if getattr(msg, 'ok_'+light):
+                self.lights[light].good()
+            else:
+                self.lights[light].bad()
+
+        # Update remaining (computed) lights
         # relative alt must be +/- 10 m
-        if -10000.0 < msg.alt_rel < 10000.0:
-            self.status_row['ralt'].setStyleSheet(self.LIGHT_GOOD)
-        else:
-            self.status_row['ralt'].setStyleSheet(self.LIGHT_BAD)
+        self.lights['ralt'].setbool(-10000.0 < msg.alt_rel < 10000.0)
         # average airspeed (over 10 samples) must have *some*
         # deviation, but not too much
         aspd = item.getAvgAspd()
-        if aspd is None:
-            self.status_row['aspd'].setStyleSheet(self.LIGHT_BAD)
-        elif 0.0 < item.getAvgAspd() < 4.0:
-            self.status_row['aspd'].setStyleSheet(self.LIGHT_GOOD)
-        else:
-            self.status_row['aspd'].setStyleSheet(self.LIGHT_BAD)
+        self.lights['aspd'].setbool(aspd and 0.0 < aspd < 4.0)
         # battery voltage should be > 12.4 V at takeoff
-        if msg.batt_vcc > 12400:
-            self.status_row['batt'].setStyleSheet(self.LIGHT_GOOD)
-        # so we don't freak people out with red right after takeoff
-        elif msg.batt_vcc > 11500:
-            self.status_row['batt'].setStyleSheet(self.LIGHT_OK)
-        # but do freak them out when the battery gets quite low
-        else:
-            self.status_row['batt'].setStyleSheet(self.LIGHT_BAD)
+        # using "ok" color to distinguish from actual problem
+        vcc = msg.batt_vcc
+        self.lights['batt'].setbool(vcc > 12400, vcc > 11000)
 
-    def buildImuRow(self):
-        self.imu_row = {}
-        layout = QHBoxLayout()
-        for s in ['UP', 'DOWN', 'LEFT', 'RIGHT']:
-            lbl = QLabel(s)
-            self.imu_row[s] = lbl
-            layout.addWidget(lbl)
-        return layout
+    def updatePoseLights(self):
+        THRESH = 30.0  # Minimum angle in degrees
 
-    def updateImuRow(self):
-        if not hasattr(self, 'imu_row') or self.imu_row is None:
-            return
+        # If invalid to update this aircraft, just return
+        # (updateStatusLights() handles this case for us)
         item = self.currentItem()
-        if item is None or \
+        if not self.lights_imu or \
+           item is None or \
            item.getLastPose() is None or \
            item.getState() == UAVListWidgetItem.STATE_OFFLINE:
-            for s in ['UP', 'DOWN', 'LEFT', 'RIGHT']:
-                self.imu_row[s].setStyleSheet(self.LIGHT_UNK)
             return
+
+        # Get pose and calculate Euler angles from quaternions
         msg = item.getLastPose()
-        def color(angle, threshold):
-            if angle < threshold < 0.0 or 0.0 < threshold < angle:
-                return self.LIGHT_BAD  # Not "bad", but not level
-            return self.LIGHT_GOOD
-        # Convert quaternions to Euler angles
-        # NOTE: Code robbed from ArduPilot's AP_Math/quaternion.cpp
+        # NOTE: Code based on ArduPilot's AP_Math/quaternion.cpp
         (q2, q3, q4, q1) = (msg.q_x, msg.q_y, msg.q_z, msg.q_w)
         roll = degrees(atan2(2.0*(q1*q2 + q3*q4), 1 - 2.0*(q2*q2 + q3*q3)))
         pitch = degrees(asin(2.0*(q1*q3 - q4*q2)))
         yaw = degrees(atan2(2.0*(q1*q4 + q2*q3), 1 - 2.0*(q3*q3 + q4*q4)))
-        self.imu_row['UP'].setStyleSheet(color(pitch, self.MIN_ANGLE))
-        self.imu_row['DOWN'].setStyleSheet(color(pitch, -self.MIN_ANGLE))
-        self.imu_row['LEFT'].setStyleSheet(color(roll, -self.MIN_ANGLE))
-        self.imu_row['RIGHT'].setStyleSheet(color(roll, self.MIN_ANGLE))
+
+        # Color lights RED if beyond threshold angle
+        self.lights['UP'].setbool(pitch < THRESH)
+        self.lights['DOWN'].setbool(pitch > -THRESH)
+        self.lights['LEFT'].setbool(roll > -THRESH)
+        self.lights['RIGHT'].setbool(roll < THRESH)
 
     ''' Handle timer '''
 
@@ -382,11 +402,11 @@ class UAVListWidget(QListWidget):
             if isinstance(msg, messages.FlightStatus):
                 item.processStatus(msg)
                 if item is self.currentItem():
-                    self.updateStatusRow()
+                    self.updateStatusLights()
             elif isinstance(msg, messages.Pose):
                 item.processPose(msg)
                 if item is self.currentItem():
-                    self.updateImuRow()
+                    self.updatePoseLights()
 
         # Cull those we haven't seen in a while
         cur_time = time.time()
@@ -720,9 +740,10 @@ if __name__ == '__main__':
     lst = UAVListWidget(sock, win)
 
     # Status and IMU lights rows
-    layStats = lst.buildStatusRow()
+    laySta = lst.buildStatusLights()
     if show_ft:
-        layImu = lst.buildImuRow()
+        layCfg = lst.buildConfigLights()
+        layImu = lst.buildImuLights()
 
     # Connect list-click to status text and lights
     def do_update_stat():
@@ -730,16 +751,17 @@ if __name__ == '__main__':
             lblStat.setText("No Aircraft Selected")
         else:
             lblStat.setText(str(lst.currentItem()))
-        lst.updateStatusRow()
-        lst.updateImuRow()
+        lst.updateStatusLights()
+        lst.updatePoseLights()
     lst.setSortingEnabled(True)
     lst.itemClicked.connect(do_update_stat)
     lst.itemSelectionChanged.connect(do_update_stat)
 
     # Add labels and listbox in preferred order
     layout.addWidget(lblStat)
-    layout.addLayout(layStats)
+    layout.addLayout(laySta)
     if show_ft:
+        layout.addLayout(layCfg)
         layout.addLayout(layImu)
     layout.addWidget(lst)
 
