@@ -677,6 +677,24 @@ class SwarmState(Message):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.swarm_state = int(fields[0]) 
 
+class Demo(Message):
+    msg_type = 0x90
+    msg_fmt = '>B3x'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.demo = None     # Numeric ID of demo
+        # 3 padding bytes
+
+    def _pack(self):
+        tupl = (int(self.demo),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.demo = int(fields[0]) 
+
 class PayloadHeartbeat(Message):
     msg_type = 0xFE
     msg_fmt = '>B3x'
