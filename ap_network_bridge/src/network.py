@@ -10,6 +10,7 @@ import time
 # General ROS imports
 import rospy
 import std_msgs
+from std_srvs import srv as std_srv
 
 # AP-specific imports
 import ap_lib.acs_messages as messages
@@ -518,6 +519,24 @@ def net_calpress(message, bridge):
     timed_status.calpress_done = None
     bridge.doInThread(main, error)
 
+def net_demo(message, bridge):
+    def main():
+        if message.demo == 1:
+            srvname = 'demo_servos'
+        elif message.demo == 2:
+            srvname = 'demo_motor'
+        else:
+            raise Exception("invalid demo type")
+        bridge.callService(srvname, std_srv.Empty)
+        net_demo.active = False
+    def error():
+        net_demo.active = False
+    if net_demo.active:
+        raise Exception("demo currently in progress")
+    net_demo.active = True
+    bridge.doInThread(main, error)
+net_demo.active = False
+
 def net_health_state(message, bridge):
     bridge.callService('health_state', ap_srv.SetBoolean,
                        enable=message.enable)
@@ -584,6 +603,7 @@ if __name__ == '__main__':
         bridge.addNetHandler(messages.FollowerSetup, net_follower_set) #depricate?
         bridge.addNetHandler(messages.WPSequencerSetup, net_sequencer_set) #depricate?
         bridge.addNetHandler(messages.CalPress, net_calpress)
+        bridge.addNetHandler(messages.Demo, net_demo)
         bridge.addNetHandler(messages.PayloadHeartbeat, net_health_state)
         bridge.addNetHandler(messages.PayloadShutdown, net_shutdown)
 
