@@ -57,6 +57,8 @@
     <remap from="network/slave_setup" to="autopilot/slave_setup" />
     <remap from="network/controller_mode" to="ctlr_selector/set_selector_mode" />
     <remap from="network/calpress" to="autopilot/calpress" />
+    <remap from="network/demo_servos" to="autopilot/demo_servos" />
+    <remap from="network/demo_motor" to="autopilot/demo_motor" />
     <remap from="network/health_state" to="safety/set_health_state" />
     <remap from="network/set_swarm_behavior" to="swarm_manager/set_swarm_behavior" />
     <remap from="network/swarm_behavior" to="swarm_manager/swarm_behavior" />
