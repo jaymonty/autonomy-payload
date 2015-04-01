@@ -158,7 +158,6 @@ class UAVListWidget(QListWidget):
         self.connect(self.timer, SIGNAL("timeout()"), self.handleTimer)
         self.timer.start(100)
 
-
         # Add a dummy aircraft to "select none"
         dummy = UAVListWidgetItem()
         dummy.setText(" <<None>>")
@@ -202,6 +201,14 @@ class UAVListWidget(QListWidget):
             print "Can't do that to a %s aircraft!" % item.getState().text
             return None
         return item
+
+    # Pop up a message box
+    def _okBox(self, text):
+        mbx = QMessageBox()
+        mbx.setText(text)
+        mbx.setStandardButtons(QMessageBox.Ok)
+        mbx.setDefaultButton(QMessageBox.Ok)
+        mbx.exec_()
 
     # Pop up a confirmation box and return boolean result
     def _confirmBox(self, text):
@@ -458,12 +465,41 @@ class UAVListWidget(QListWidget):
         self._sendMessage(ad)
 
     def handleServos(self):
-        print "I don't know how to do that yet!"
-        return
+        item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT])
+        if item is None:
+            return
+
+        # Toggle the (software) arming of the throttle
+        dm = messages.Demo()
+        dm.msg_dst = int(item.getID())
+        dm.msg_secs = 0
+        dm.msg_nsecs = 0
+        dm.demo = 1  # ID for servo demo
+        self._sendMessage(dm)
+
+        # The first time running a demo will take a few seconds.
+        # We may want to inform the user so they don't overclick
+        # (which in theory shouldn't hurt anything)
+        #self._okBox("Please wait ...")
 
     def handleMotor(self):
-        print "I don't know how to do that yet!"
-        return
+        item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT])
+        if item is None:
+            return
+        if not item.getLastStatus().armed:
+            self._okBox("Aircraft must be ARMED first")
+            return
+
+        if not self._confirmBox("WARNING: Run motor for aircraft %d?" % item.getID()):
+            return
+
+        # Toggle the (software) arming of the throttle
+        dm = messages.Demo()
+        dm.msg_dst = int(item.getID())
+        dm.msg_secs = 0
+        dm.msg_nsecs = 0
+        dm.demo = 2  # ID for motor demo
+        self._sendMessage(dm)
 
     def handleArm(self):
         item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT,
