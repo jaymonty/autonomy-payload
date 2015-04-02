@@ -626,19 +626,23 @@ class WPSequencerSetup(Message):
             self.wp_list.append(lla)
             offset += type(self).msg_fmt_wp_sz
 
-class CalPress(Message):
+class Calibrate(Message):
     msg_type = 0x8D
+    msg_fmt = '>B3x'
 
     def __init__(self):
         Message.__init__(self)
 
-        pass
+        self.index = None   # Numeric ID of calibration
+        # 3 bytes of padding
 
     def _pack(self):
-        return ''
+        tupl = (int(self.index),)
+        return struct.pack(type(self).msg_fmt, *tupl)
 
     def _unpack(self, data):
-        pass
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.index = int(fields[0]) 
 
 class SwarmBehavior(Message):
     msg_type = 0x8E
@@ -694,6 +698,20 @@ class Demo(Message):
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.demo = int(fields[0]) 
+
+class AutopilotReboot(Message):
+    msg_type = 0xFD
+
+    def __init__(self):
+        Message.__init__(self)
+
+        pass
+
+    def _pack(self):
+        return ''
+
+    def _unpack(self, data):
+        pass
 
 class PayloadHeartbeat(Message):
     msg_type = 0xFE
