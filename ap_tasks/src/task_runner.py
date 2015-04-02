@@ -66,6 +66,16 @@ class Task(object):
     def on_disarm(self):
         return None
 
+    # Called when flight_ready flag is set
+    # NOTE: may occur multiple times
+    def on_ready(self):
+        return None
+
+    # Called when flight_ready flag is UNset
+    # NOTE: may occur multiple times
+    def on_not_ready(self):
+        return None
+
     # Called when ROS signals node to shut down
     def on_shutdown(self):
         return None
@@ -79,16 +89,14 @@ class TaskRunner(object):
         # List of Task instances
         self.tasks = []
 
-        # Default "last" ROS message instances
+        # Default "last" ROS message/param instances
         self.last_status = autopilot_msg.Status()
+        self.last_flightready = False
 
         # ROS subscriptions (assumes rospy is initialized)
         self.sub_status = rospy.Subscriber("autopilot/status",
                                            autopilot_msg.Status,
                                            self._cb_status)
-
-        # Register callback for shutdown event
-        rospy.on_shutdown(self._cb_shutdown)
 
     def _log(self, event, task, start, success, info=''):
         end = time.time()
@@ -133,10 +141,6 @@ class TaskRunner(object):
 
         self.last_status = status
 
-    # Handle rospy shutdown
-    def _cb_shutdown(self):
-        self._do_event('on_shutdown')
-
     # Add a Task() to be run
     def add_task(self, task):
         self.tasks.append(task)
@@ -148,7 +152,22 @@ class TaskRunner(object):
         self._do_event('on_start')
 
         # Wait until ROS shuts down (callbacks will handle other events)
-        rospy.spin()
+        r = rospy.Rate(1.0)
+        while not rospy.is_shutdown():
+            # Check flight ready status
+            flightready = rospy.has_param("flight_ready") and \
+                          rospy.get_param("flight_ready")
+            if flightready and not self.last_flightready:
+                self._do_event('on_ready')
+            if not flightready and self.last_flightready:
+                self._do_event('on_not_ready')
+            self.last_flightready = flightready
+
+            # Sleep for a bit, let subscribers run
+            r.sleep()
+
+        # Handle the shutdown event
+        self._do_event('on_shutdown')
 
 #-----------------------------------------------------------------------
 # Task classes
@@ -189,6 +208,26 @@ class SetIDTask(Task):
         srv = rospy.ServiceProxy(self._srv, autopilot_srv.ParamSet)
         res = srv("SYSID_THISMAV", float(self._acid))
         return res.ok
+
+# Increase/decrease power based on arming state
+class TxPowerTask(Task):
+
+    def __init__(self):
+        Task.__init__(self, "Tx Power")
+
+    def _set(self, level):
+        res = subprocess.call("sudo iwconfig wlan0 txpower %u" % level,
+                              shell=True)
+        return bool(res == 0)
+
+    def on_start(self):
+        return self._set(10)
+
+    def on_ready(self):
+        return self._set(20)
+
+    def on_not_ready(self):
+        return self._set(10)
 
 # Intermediate class for setting lists of things from a file
 # Initialization arguments:
@@ -353,6 +392,7 @@ if __name__ == '__main__':
     # Instantiate TaskRunner and Task instances
     runner = TaskRunner()
     runner.add_task(SetIDTask())
+    runner.add_task(TxPowerTask())
 
     if rospy.has_param('verify_enable') and rospy.get_param('verify_enable'):
         runner.add_task(RallyTask())
