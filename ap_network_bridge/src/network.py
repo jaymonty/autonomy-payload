@@ -299,9 +299,10 @@ def timed_status(bridge):
         message.msg_nsecs = timed_status.f_status.header.stamp.nsecs
         message.mode = timed_status.f_status.mode
         message.armed = timed_status.f_status.armed
-        message.ok_ahrs = timed_status.f_status.ahrs_ok
+        message.ok_ahrs = timed_status.f_status.ahrs_ok and \
+                          bool(timed_status.calgyros_done)
         message.ok_as = timed_status.f_status.as_ok and \
-                        bool(timed_status.calpress_done)  # Have we calibrated?
+                        bool(timed_status.calpress_done)
         message.ok_gps = timed_status.f_status.gps_ok and \
                          (timed_status.f_status.gps_sats >= 6)  # Current reqt
         message.ok_ins = timed_status.f_status.ins_ok
@@ -337,6 +338,7 @@ timed_status.f_status = None        # Flight status
 timed_status.swarm_state = 0        # Current swarm state
 timed_status.swarm_behavior = 0     # Currently active swarm behavior
 timed_status.calpress_done = False  # Airspeed calibration done?
+timed_status.calgyros_done = True   # Gyros calibration done?
 
 #-----------------------------------------------------------------------
 # ROS subscription handlers
@@ -500,24 +502,37 @@ def net_sequencer_set(message, bridge):
         msg.waypoints.append(lla)
     bridge.publish('recv_sequencer_set', msg, latched=True)
 
-def net_calpress(message, bridge):
+def net_calibrate(message, bridge):
     def main():
         try:
-            res = bridge.callService('calpress', pilot_srv.TimedAction,
-                                     timeout=5.0)
-            # Set flag for use in the status message
-            timed_status.calpress_done = bool(res.ok)
+            if message.index == 1:
+                srvname = 'cal_pressure'
+                timeout = 5.0
+                timed_status.calpress_done = False
+            elif message.index == 2:
+                srvname = 'cal_gyros'
+                timeout = 10.0
+                timed_status.calgyros_done = False
+            else:
+                raise Exception("invalid calibration type")
+            res = bridge.callService(srvname, pilot_srv.TimedAction,
+                                     timeout=timeout)
+            # If pressure, update flag for status message
+            if message.index == 1:
+                timed_status.calpress_done = bool(res.ok)
+            elif message.index == 2:
+                timed_status.calgyros_done = bool(res.ok)
         except Exception as ex:
-            raise Exception("net_calpress: " + str(ex.args[0]))
+            raise Exception("net_calibrate: " + str(ex.args[0]))
+        finally:
+            net_calibrate.active = False
     def error():
-        timed_status.calpress_done = False  # Reset to boolean
-    # None = Currently calibrating, don't restart it
-    # NOTE: since network msg processing is single-threaded, this
-    # set-then-check shouldn't be a race condition.
-    if timed_status.calpress_done is None:
-        raise Exception("calibrating currently in progress")
-    timed_status.calpress_done = None
+        net_calibrate.active = False
+    if net_calibrate.active:
+        raise Exception("calibration currently in progress")
+    net_calibrate.active = True
     bridge.doInThread(main, error)
+net_calibrate.active = False
 
 def net_demo(message, bridge):
     def main():
@@ -536,6 +551,12 @@ def net_demo(message, bridge):
     net_demo.active = True
     bridge.doInThread(main, error)
 net_demo.active = False
+
+# Highest-numbered are administrative/debug messages
+
+def net_ap_reboot(message, bridge):
+    msg = std_msgs.msg.Empty()
+    bridge.publish('recv_ap_reboot', msg, latched=True)
 
 def net_health_state(message, bridge):
     bridge.callService('health_state', ap_srv.SetBoolean,
@@ -602,8 +623,9 @@ if __name__ == '__main__':
         bridge.addNetHandler(messages.SetController, net_controller_mode) #depricate?
         bridge.addNetHandler(messages.FollowerSetup, net_follower_set) #depricate?
         bridge.addNetHandler(messages.WPSequencerSetup, net_sequencer_set) #depricate?
-        bridge.addNetHandler(messages.CalPress, net_calpress)
+        bridge.addNetHandler(messages.Calibrate, net_calibrate)
         bridge.addNetHandler(messages.Demo, net_demo)
+        bridge.addNetHandler(messages.AutopilotReboot, net_ap_reboot)
         bridge.addNetHandler(messages.PayloadHeartbeat, net_health_state)
         bridge.addNetHandler(messages.PayloadShutdown, net_shutdown)
 
