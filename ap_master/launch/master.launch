@@ -49,6 +49,7 @@
     <remap from="network/recv_waypoint_goto" to="autopilot/waypoint_goto" />
     <remap from="network/recv_follower_set" to="controllers/follower_set" />
     <remap from="network/recv_sequencer_set" to="controllers/wp_sequencer_set" />
+    <remap from="network/recv_ap_reboot" to="autopilot/reboot" />
     <remap from="network/send_pose" to="autopilot/acs_pose" />
     <remap from="network/update_subswarm" to="swarm_tracker/update_subswarm" />
     <remap from="network/swarm_state" to="swarm_manager/swarm_state" />
@@ -56,7 +57,8 @@
     <remap from="network/update_ctlr_status" to="controllers/selector_status" />
     <remap from="network/slave_setup" to="autopilot/slave_setup" />
     <remap from="network/controller_mode" to="ctlr_selector/set_selector_mode" />
-    <remap from="network/calpress" to="autopilot/calpress" />
+    <remap from="network/cal_pressure" to="autopilot/cal_pressure" />
+    <remap from="network/cal_gyros" to="autopilot/cal_gyros" />
     <remap from="network/demo_servos" to="autopilot/demo_servos" />
     <remap from="network/demo_motor" to="autopilot/demo_motor" />
     <remap from="network/health_state" to="safety/set_health_state" />
