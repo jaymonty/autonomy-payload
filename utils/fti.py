@@ -150,13 +150,16 @@ class UAVListWidget(QListWidget):
     OFFLINE_TIME = 5.0
     DELETE_TIME = 30.0
 
-    def __init__(self, sock, parent=None):
+    def __init__(self, sock, filter_states=[], parent=None):
         QListWidget.__init__(self, parent)
 
         # Set up a timer for handling network data
         self.timer = QTimer(self)
         self.connect(self.timer, SIGNAL("timeout()"), self.handleTimer)
         self.timer.start(100)
+
+        # Filter out aircraft in certain states
+        self.filter_states = filter_states
 
         # Add a dummy aircraft to "select none"
         dummy = UAVListWidgetItem()
@@ -320,10 +323,7 @@ class UAVListWidget(QListWidget):
         for light in self.LIGHT_STA_OK + self.LIGHT_CFG_OK:
             if light not in self.lights:
                 continue
-            if getattr(msg, 'ok_'+light):
-                self.lights[light].good()
-            else:
-                self.lights[light].bad()
+            self.lights[light].setbool(getattr(msg, 'ok_'+light))
 
         # Update remaining (computed) lights
         # relative alt must be +/- 10 m
@@ -394,6 +394,7 @@ class UAVListWidget(QListWidget):
             item = self.itemByIdent(msg.msg_src)
             if item is None and isinstance(msg, messages.FlightStatus):
                 item = UAVListWidgetItem()
+                item.setHidden(True)
                 self.addItem(item)
             if item is None:
                 continue
@@ -410,16 +411,18 @@ class UAVListWidget(QListWidget):
 
         # Cull those we haven't seen in a while
         cur_time = time.time()
-        takeable = []
         for i in range(self.count()):
             if not self.item(i).getID():
+                # Ignore the "none" item
                 continue
-            if self.item(i).getTime() < (cur_time - self.DELETE_TIME):
-                takeable.append(i)
+            if self.item(i).getState() in self.filter_states:
+                self.item(i).setHidden(True)
+            elif self.item(i).getTime() < (cur_time - self.DELETE_TIME):
+                self.item(i).setHidden(True)
             elif self.item(i).getTime() < (cur_time - self.OFFLINE_TIME):
                 self.item(i).setState(UAVListWidgetItem.STATE_OFFLINE)
-        for i in takeable:
-            self.takeItem(i)
+            else:
+                self.item(i).setHidden(False)
 
         # schedule refresh and raise event
         self.update()
@@ -477,19 +480,41 @@ class UAVListWidget(QListWidget):
         if item is None:
             return
 
-        # Toggle the (software) arming of the throttle
-        ad = messages.CalPress()
-        ad.msg_dst = int(item.getID())
-        ad.msg_secs = 0
-        ad.msg_nsecs = 0
-        self._sendMessage(ad)
+        self._okBox("Please cover the pitot tube.")
+
+        # Calibrate the airspeed sensor
+        cl = messages.Calibrate()
+        cl.msg_dst = int(item.getID())
+        cl.msg_secs = 0
+        cl.msg_nsecs = 0
+        cl.index = 1
+        self._sendMessage(cl)
+
+        self._okBox("Please wait for the 'as' light to become green.")
+
+    def handleCalgyros(self):
+        item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT])
+        if item is None:
+            return
+
+        self._okBox("Please keep the aircraft still.")
+
+        # Calibrate the gyros
+        cl = messages.Calibrate()
+        cl.msg_dst = int(item.getID())
+        cl.msg_secs = 0
+        cl.msg_nsecs = 0
+        cl.index = 2
+        self._sendMessage(cl)
+
+        self._okBox("Please wait for the 'ahrs' light to become green.")
 
     def handleServos(self):
         item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT])
         if item is None:
             return
 
-        # Toggle the (software) arming of the throttle
+        # Demo the servos
         dm = messages.Demo()
         dm.msg_dst = int(item.getID())
         dm.msg_secs = 0
@@ -513,7 +538,7 @@ class UAVListWidget(QListWidget):
         if not self._confirmBox("WARNING: Run motor for aircraft %d?" % item.getID()):
             return
 
-        # Toggle the (software) arming of the throttle
+        # Demo the motor (must be armed)
         dm = messages.Demo()
         dm.msg_dst = int(item.getID())
         dm.msg_secs = 0
@@ -527,7 +552,7 @@ class UAVListWidget(QListWidget):
         if item is None:
             return
 
-        # Toggle the (software) arming of the throttle
+        # Arm the motor
         ad = messages.Arm()
         ad.msg_dst = int(item.getID())
         ad.msg_secs = 0
@@ -541,13 +566,29 @@ class UAVListWidget(QListWidget):
         if item is None:
             return
 
-        # Toggle the (software) arming of the throttle
+        # Disarm motor
         ad = messages.Arm()
         ad.msg_dst = int(item.getID())
         ad.msg_secs = 0
         ad.msg_nsecs = 0
         ad.enable = False         # Boolean
         self._sendMessage(ad)
+
+    def handleAPReboot(self):
+        item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT])
+        if item is None:
+            return
+
+        if not self._confirmBox("Reboot autopilot for aircraft %d?" % item.getID()):
+            return
+
+        # Reboot the autopilot
+        rb = messages.AutopilotReboot()
+        rb.msg_dst = int(item.getID())
+        rb.msg_secs = 0
+        rb.msg_nsecs = 0
+
+        self._sendMessage(rb)
 
     def handleFlightReady(self):
         item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT,
@@ -694,14 +735,20 @@ if __name__ == '__main__':
     # Can constrain which widgets we see based on roles
     show_ft = not opts.op_mode
     show_op = not opts.ft_mode
-    mode_string = ""
+    if show_ft and show_op:
+        print "WARNING: With great power comes great responsibility!"
+        mode_string = " -- OMNI MODE"
+        ignore = []
     if not show_ft and not show_op:
         print "Please only specify at most one role flag (-f or -o)"
         sys.exit(1)
     if opts.ft_mode:
         mode_string = " -- Flight Tech mode"
+        ignore = [UAVListWidgetItem.STATE_FLYING]
     if opts.op_mode:
         mode_string = " -- Operator mode"
+        ignore = [UAVListWidgetItem.STATE_WAITING_AP,
+                  UAVListWidgetItem.STATE_PREFLIGHT]
 
     # NOTE: This is a hack to work with SITL
     my_ip = None
@@ -737,7 +784,7 @@ if __name__ == '__main__':
     lblStat = QLabel("No Aircraft Selected")
 
     # Listbox of UAVs
-    lst = UAVListWidget(sock, win)
+    lst = UAVListWidget(sock, ignore, win)
 
     # Status and IMU lights rows
     laySta = lst.buildStatusLights()
@@ -781,11 +828,6 @@ if __name__ == '__main__':
     layout.addLayout(hlayout)
 
     if show_ft:
-        # MAVProxy button
-        btMAVProxy = QPushButton("Open MAVProxy + PreFlight")
-        btMAVProxy.clicked.connect(lst.handleMAVProxy)
-        layout.addWidget(btMAVProxy)
-
         # Mechanical preflight buttons
         mlayout = QHBoxLayout()
         btCalpress = QPushButton("Cal Pressure")
@@ -802,6 +844,7 @@ if __name__ == '__main__':
     # Arm and disarm throttle buttons
     alayout = QHBoxLayout()
     btArm = QPushButton("ARM Throttle")
+    btArm.setStyleSheet("background-color: indianred")
     btArm.clicked.connect(lst.handleArm)
     alayout.addWidget(btArm)
     btDisArm = QPushButton("Disarm Throttle")
@@ -810,6 +853,22 @@ if __name__ == '__main__':
     layout.addLayout(alayout)
 
     if show_ft:
+        # Troubleshooting buttons (USE WITH CAUTION)
+        tlayout = QHBoxLayout()
+        btMAVProxy = QPushButton("Run MAVProxy")
+        btMAVProxy.setStyleSheet("background-color: darkgray")
+        btMAVProxy.clicked.connect(lst.handleMAVProxy)
+        tlayout.addWidget(btMAVProxy)
+        btCalgyros = QPushButton("Cal Gyros")
+        btCalgyros.setStyleSheet("background-color: darkgray")
+        btCalgyros.clicked.connect(lst.handleCalgyros)
+        tlayout.addWidget(btCalgyros)
+        btAPReboot = QPushButton("Reboot AP")
+        btAPReboot.setStyleSheet("background-color: darkgray")
+        btAPReboot.clicked.connect(lst.handleAPReboot)
+        tlayout.addWidget(btAPReboot)
+        layout.addLayout(tlayout)
+
         # Flight-ready button
         btToggle = QPushButton("Toggle Flight Ready")
         btToggle.clicked.connect(lst.handleFlightReady)
