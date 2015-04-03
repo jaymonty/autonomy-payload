@@ -12,6 +12,7 @@
 # Standard Python imports
 import os
 import subprocess
+from threading import RLock
 import time
 
 # General ROS imports
@@ -86,6 +87,9 @@ class Task(object):
 class TaskRunner(object):
 
     def __init__(self):
+        # Lock to prevent multiple tasks from running at once
+        self.lock = RLock()
+
         # List of Task instances
         self.tasks = []
 
@@ -112,18 +116,19 @@ class TaskRunner(object):
 
     # Perform an event (string name of method) for a given task (Task())
     def _do_event(self, event):
-        rospy.loginfo("Task Runner: Starting Event '%s'" % event)
-        for task in self.tasks:
-            start = time.time()
-            try:
-                result = getattr(task, event)()
-                if result is None:
-                    # No action was taken, nothing to log
-                    continue
-                self._log(event, task, start, bool(result))
-            except Exception as ex:
-                self._log(event, task, start, False, str(ex.args[0]))
-        rospy.loginfo("Task Runner: Completed Event '%s'" % event)
+        with self.lock:
+            rospy.loginfo("Task Runner: Starting Event '%s'" % event)
+            for task in self.tasks:
+                start = time.time()
+                try:
+                    result = getattr(task, event)()
+                    if result is None:
+                        # No action was taken, nothing to log
+                        continue
+                    self._log(event, task, start, bool(result))
+                except Exception as ex:
+                    self._log(event, task, start, False, str(ex.args[0]))
+            rospy.loginfo("Task Runner: Completed Event '%s'" % event)
 
     # NOTE: Most events are performed by the callback that detects them
 
@@ -229,6 +234,30 @@ class TxPowerTask(Task):
     def on_not_ready(self):
         return self._set(10)
 
+# Fetch "blessed" configs
+class FetchConfigTask(Task):
+
+    def __init__(self):
+        Task.__init__(self, "Fetch Configs")
+        self._folder = "~/blessed/"
+
+    def on_status(self):
+        subprocess.call("ls %s || mkdir %s" % (self._folder, self._folder),
+                        shell=True)
+        for f in ['fence', 'param', 'rally', 'wp']:
+            subprocess.call("rm %s%s" % (self._folder, f), shell=True)
+            while True:
+                try:
+                    cmd = "wget -q -O %s%s http://192.168.2.1/%s" % \
+                          (self._folder, f, f)
+                    res = subprocess.call(cmd, shell=True)
+                    if res == 0: break
+                    rospy.logwarn("Error fetching %s; retrying ..." % f)
+                except Exception as ex:
+                    rospy.logwarn("Exception fetching %s: %s" % \
+                                  (f, str(ex.args[0])))
+        return True
+
 # Intermediate class for setting lists of things from a file
 # Initialization arguments:
 #  - name      friendly string name as used by Task
@@ -242,7 +271,7 @@ class _SetlistTask(Task):
         self._srv_name = srv_name
         self._srv_type = srv_type
         self._item_attr = item_attr
-        self._fname = "%sblessed.%s" % (os.path.expanduser("~/"), ext)
+        self._fname = "%s/blessed/%s" % (os.path.expanduser("~"), ext)
 
     # Method to parse lines into service req point sub-objects
     # DEFINE IN EACH SUBTYPE
@@ -292,7 +321,7 @@ class ParamTask(_SetlistTask):
                               "autopilot/fpr_param_setlist",
                               autopilot_srv.ParamSetList,
                               "param",
-                              "parm")
+                              "param")
 
     def _parse(self, *args):
         p = autopilot_msg.ParamPair()
@@ -312,7 +341,7 @@ class FenceTask(_SetlistTask):
                               "autopilot/fpr_fence_setall",
                               autopilot_srv.FenceSetAll,
                               "points",
-                              "fen")
+                              "fence")
 
     def _parse(self, *args):
         p = autopilot_msg.Fencepoint()
@@ -332,7 +361,7 @@ class RallyTask(_SetlistTask):
                               "autopilot/fpr_rally_setall",
                               autopilot_srv.RallySetAll,
                               "points",
-                              "ral")
+                              "rally")
 
     def _parse(self, *args):
         p = autopilot_msg.Rallypoint()
@@ -395,6 +424,7 @@ if __name__ == '__main__':
     runner.add_task(TxPowerTask())
 
     if rospy.has_param('verify_enable') and rospy.get_param('verify_enable'):
+        runner.add_task(FetchConfigTask())  # NOTE: will keep trying
         runner.add_task(RallyTask())
         runner.add_task(WPTask())
         runner.add_task(FenceTask())
