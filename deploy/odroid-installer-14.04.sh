@@ -314,7 +314,7 @@ cat > init.tmp <<EOF
 
 # Startup script for autonomy-payload
 
-PIDFILE=~USER/autonomy-payload.pid
+PIDFILE=~odroid/autonomy-payload.pid
 
 case \$1 in
   start)
@@ -322,7 +322,7 @@ case \$1 in
       echo "Service already running!"
       exit 0
     fi
-    su -l -c "source /opt/ros/${ROS_DISTRO}/setup.bash; source ~/acs_ros_ws/devel/setup.bash; roslaunch --pid=\$PIDFILE ap_master master.launch id:=${AIRCRAFT_ID} name:=${AIRCRAFT_NAME} &" \$USER
+    su -l -c "source /opt/ros/${ROS_DISTRO}/setup.bash; source ~/acs_ros_ws/devel/setup.bash; roslaunch --pid=\$PIDFILE ap_master master.launch id:=${AIRCRAFT_ID} name:=${AIRCRAFT_NAME} &" odroid
     ;;
   stop)
     start-stop-daemon --stop --pidfile \$PIDFILE
