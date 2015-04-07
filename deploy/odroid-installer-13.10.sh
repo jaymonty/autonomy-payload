@@ -74,19 +74,6 @@ sudo update-locale LANG=C LANGUAGE=C LC_ALL=C LC_MESSAGES=POSIX
 # Disable automatic apt tasks
 sudo rm /etc/cron.daily/apt
 
-# Add ROS repo
-ls /etc/apt/sources.list.d/ros-latest.list &> /dev/null
-if [ $? != 0 ]; then
-  sudo sh -c 'wget http://packages.namniart.com/repos/namniart.key -O - | apt-key add -'
-  check_fail "ROS apt-key"
-  sudo sh -c 'echo "deb http://packages.namniart.com/repos/ros raring main" > /etc/apt/sources.list.d/ros-latest.list'
-  check_fail "ROS apt source"
-fi
-
-# Regrettably, we need to disable Git's SSL cert check
-git config --global http.sslVerify false
-check_fail "git_config"
-
 # Remove any old wireless device entries from udev
 # (this will make our wifi device 'wlan0')
 sudo sh -c "echo -n > /etc/udev/rules.d/70-persistent-net.rules"
@@ -145,6 +132,15 @@ fi
 function install_base_software
 {
 
+# Add ROS repo
+ls /etc/apt/sources.list.d/ros-latest.list &> /dev/null
+if [ $? != 0 ]; then
+  sudo sh -c 'wget http://packages.namniart.com/repos/namniart.key -O - | apt-key add -'
+  check_fail "ROS apt-key"
+  sudo sh -c 'echo "deb http://packages.namniart.com/repos/ros raring main" > /etc/apt/sources.list.d/ros-latest.list'
+  check_fail "ROS apt source"
+fi
+
 # Update package lists
 sudo apt-get update
 check_fail "apt-get update"
@@ -167,6 +163,10 @@ python-setuptools \
 screen \
 batctl
 check_fail "apt-get install"
+
+# Regrettably, we need to disable Git's SSL cert check
+git config --global http.sslVerify false
+check_fail "git_config"
 
 # Set up ROS
 # (some of these might fail after the first successful run, don't worry about error checking)
@@ -401,7 +401,7 @@ install_payload_software
 
 # Make sure ~/odroid-installer.sh is softlinked to repo version
 rm ~/odroid-installer.sh &> /dev/null
-ln -s ~/acs_ros_ws/src/autonomy-payload/deploy/odroid-installer.sh ~/
+ln -s ~/acs_ros_ws/src/autonomy-payload/deploy/odroid-installer-13.10.sh ~/odroid-installer.sh
 if [ $? != 0 ]; then
   echo "WARNING: could not softlink install script into home!"
 fi
