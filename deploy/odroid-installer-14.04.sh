@@ -69,7 +69,7 @@ for s in ntp pppd-dns rsync saned x11-common; do
   sudo service $s stop
   sudo update-rc.d -f $s remove
 done
-for s in bluetooth cups-browsed lightdm modemmanager network-manager whoopsie; do
+for s in bluetooth cups cups-browsed lightdm modemmanager network-manager whoopsie; do
   sudo sh -c "echo manual > /etc/init/${s}.override"
 done
 
@@ -99,8 +99,6 @@ iface wlan0 inet static
     address 192.168.2.$AIRCRAFT_ID
     netmask 255.255.255.0
     gateway 192.168.2.1
-    dns_nameservers 172.20.20.11
-#    dns_nameservers 8.8.8.8
     wireless-mode ad-hoc
     wireless-essid zephyr
     wireless-channel 6
@@ -112,6 +110,9 @@ sudo mv interfaces.tmp /etc/network/interfaces
 check_fail "mv (interfaces config)"
 sudo chown root:root /etc/network/interfaces
 check_fail "chown (interfaces config)"
+# Replace /etc/resolv.conf
+sudo sh -c "rm /etc/resolv.conf && echo \"nameserver 172.20.20.11\nnameserver 8.8.8.8\" > /etc/resolv.conf"
+check_fail "resolv conf"
 
 # Stand up interface as-is for this boot
 WLAN_DEV=`sudo ifconfig -a | grep wlan | awk '{print $1}'`
@@ -169,8 +170,10 @@ sudo apt-get --assume-yes install \
 git \
 ros-${ROS_DISTRO}-ros-base \
 ros-${ROS_DISTRO}-sensor-msgs \
+ros-${ROS_DISTRO}-tf \
 iperf \
 python-netifaces \
+python-serial \
 python-setuptools \
 screen
 check_fail "apt-get install"
@@ -318,10 +321,7 @@ PIDFILE=~odroid/autonomy-payload.pid
 
 case \$1 in
   start)
-    if [ -e \$PIDFILE ]; then
-      echo "Service already running!"
-      exit 0
-    fi
+    echo "*** STARTING AUTONOMY PAYLOAD ***"
     su -l -c "source /opt/ros/${ROS_DISTRO}/setup.bash; source ~/acs_ros_ws/devel/setup.bash; roslaunch --pid=\$PIDFILE ap_master master.launch id:=${AIRCRAFT_ID} name:=${AIRCRAFT_NAME} &" odroid
     ;;
   stop)
