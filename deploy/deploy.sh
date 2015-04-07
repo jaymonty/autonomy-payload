@@ -5,10 +5,12 @@
 # the factory.
 
 TARGET=$1
+VERSION=$2
 TARGET_ROOT=${TARGET}2
 MOUNTPOINT=/media/odroid
 HOMEDIR=$MOUNTPOINT/home/odroid
-SCRIPT=odroid-installer.sh
+SCRIPT=odroid-installer-${VERSION}.sh
+NEWSCRIPT=odroid-installer.sh
 
 function check_fail
 {
@@ -23,13 +25,13 @@ if [ `whoami` != "root" ]; then
   exit 1
 fi
 
-if [ ! -e $SCRIPT ]; then
-  echo "You must run $0 from a folder containing $SCRIPT."
+if [ -z $TARGET ] || [ -z $VERSION ]; then
+  echo "usage: $0 <target-device> <version>"
   exit 1
 fi
 
-if [ -z $TARGET ]; then
-  echo "usage: $0 <target-device>"
+if [ ! -e $SCRIPT ]; then
+  echo "You must run $0 from a folder containing $SCRIPT."
   exit 1
 fi
 
@@ -67,9 +69,11 @@ check_fail "Couldn't expand the filesystem."
 mount $TARGET_ROOT $MOUNTPOINT
 check_fail "Couldn't mount the filesystem."
 
-cp $SCRIPT $HOMEDIR
+cp $SCRIPT $HOMEDIR/$NEWSCRIPT
 check_fail "Couldn't copy installer to home directory."
-chmod +x $HOMEDIR/$SCRIPT
+chown 1001:1001 $HOMEDIR/$NEWSCRIPT
+check_fail "Couldn't set ownership on installer script."
+chmod +x $HOMEDIR/$NEWSCRIPT
 check_fail "Couldn't set permissions on installer script."
 
 umount $MOUNTPOINT
