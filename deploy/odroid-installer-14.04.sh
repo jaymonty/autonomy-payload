@@ -124,12 +124,6 @@ sudo ifconfig $WLAN_DEV inet 192.168.2.$AIRCRAFT_ID/24 up
 check_fail "ifconfig up (wlan config)"
 sudo route add default gw 192.168.2.1
 check_fail "route (wlan config)"
-# NOTE: adjust the below as necessary
-grep 172.20.20.11 /etc/resolv.conf
-if [ $? != 0 ]; then
-  sudo sh -c 'echo "nameserver 172.20.20.11" >> /etc/resolv.conf'
-  check_fail "dns (wlan config)"
-fi
 
 }
 
