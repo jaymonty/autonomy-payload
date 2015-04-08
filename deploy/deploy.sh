@@ -67,7 +67,12 @@ w
 EOF
 check_fail "Couldn't resize the partition."
 
-e2fsck -f -y $TARGET_ROOT
+echo "Running e2fsck ... please wait ..."
+e2fsck -f -y $TARGET_ROOT &> /dev/null
+if [ $? != 0 -a $? != 1 -a $? != 2 ]; then
+  echo "Irrecoverable fsck errors ($?); please run manually"
+  exit 1
+fi
 resize2fs $TARGET_ROOT
 check_fail "Couldn't expand the filesystem."
 
