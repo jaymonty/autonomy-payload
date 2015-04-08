@@ -7,6 +7,7 @@
 #------------------------------------------------------------------------------
 
 ROS_DISTRO="indigo"
+APT_OPTS="-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confask"
 
 #------------------------------------------------------------------------------
 # Helper functions
@@ -150,17 +151,17 @@ check_fail "apt-get update"
 sudo apt-get --assume-yes remove flash-kernel
 
 # Upgrade existing packages
-sudo apt-get --assume-yes upgrade
+sudo apt-get --assume-yes $APT_OPTS upgrade
 if [ $? != 0 ]; then
   # There's a known bug with some base images
-  sudo apt-get --reinstall install python-debian
-  sudo apt-get --reinstall install python-chardet
-  sudo apt-get --assume-yes upgrade
+  sudo apt-get --reinstall $APT_OPTS install python-debian
+  sudo apt-get --reinstall $APT_OPTS install python-chardet
+  sudo apt-get --assume-yes $APT_OPTS upgrade
 fi
 check_fail "apt-get upgrade"
 
 # Install ROS and other useful packages
-sudo apt-get --assume-yes install \
+sudo apt-get --assume-yes $APT_OPTS install \
 git \
 ros-${ROS_DISTRO}-ros-base \
 ros-${ROS_DISTRO}-sensor-msgs \
