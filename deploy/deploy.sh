@@ -6,6 +6,7 @@
 
 TARGET=$1
 VERSION=$2
+TARGET_BOOT=${TARGET}1
 TARGET_ROOT=${TARGET}2
 MOUNTPOINT=/media/odroid
 HOMEDIR=$MOUNTPOINT/home/odroid
@@ -43,6 +44,10 @@ if [ $? == 0 ]; then
   echo "Something is already mounted at $MOUNTPOINT; please unmount it first."
   exit 1
 fi
+
+# Attempt to make sure card is not mounted
+umount $TARGET_BOOT &> /dev/null
+umount $TARGET_ROOT &> /dev/null
 
 echo "Preparing media for installation ..."
 
