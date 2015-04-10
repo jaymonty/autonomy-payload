@@ -184,14 +184,15 @@ class RosbagTask(Task):
     def __init__(self):
         Task.__init__(self, "Rosbag")
         self._folder = "~/bags/"
+        self._excl = "\"(.*)(swarm_tracker/swarm_uav_states|network/recv_pose)\""
         self._prefix = "%s%u" % (self._folder, self._acid)
+        self._cmd = "rosbag record -a -x " + self._excl + " -o " + self._prefix
         self._proc = None
 
     def on_status(self):
         subprocess.call("ls %s || mkdir %s" % (self._folder, self._folder),
                         shell=True)
-        self._proc = subprocess.Popen("rosbag record -a -o " + self._prefix,
-                                     shell=True)
+        self._proc = subprocess.Popen(self._cmd, shell=True)
         return bool(self._proc.poll() is None)
 
     def on_shutdown(self):
