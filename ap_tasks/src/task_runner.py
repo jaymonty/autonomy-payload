@@ -241,16 +241,18 @@ class FetchConfigTask(Task):
     def __init__(self):
         Task.__init__(self, "Fetch Configs")
         self._folder = "~/blessed/"
+        self._id_str = "%03u" % int(self._acid)
 
     def on_status(self):
         subprocess.call("ls %s || mkdir %s" % (self._folder, self._folder),
                         shell=True)
         for f in ['fence', 'param', 'rally', 'wp']:
             subprocess.call("rm %s%s" % (self._folder, f), shell=True)
+        for f in ['fence', 'param', 'rally', 'wp']:
             while True:
                 try:
-                    cmd = "wget -q -O %s%s http://192.168.2.1/%s" % \
-                          (self._folder, f, f)
+                    cmd = "wget -q -O %s%s http://192.168.2.1/%s/%s" % \
+                          (self._folder, f, self._id_str, f)
                     res = subprocess.call(cmd, shell=True)
                     if res == 0: break
                     rospy.logwarn("Error fetching %s; retrying ..." % f)
