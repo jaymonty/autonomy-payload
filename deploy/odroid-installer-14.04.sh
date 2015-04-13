@@ -116,15 +116,18 @@ sudo sh -c "rm /etc/resolv.conf && echo \"nameserver 172.20.20.11\nnameserver 8.
 check_fail "resolv conf"
 
 # Stand up interface as-is for this boot
-WLAN_DEV=`sudo ifconfig -a | grep wlan | awk '{print $1}'`
-sudo ifconfig $WLAN_DEV down
-check_fail "ifconfig down (wlan config)"
-sudo iwconfig $WLAN_DEV mode ad-hoc essid zephyr channel 6 ap 00:11:22:33:44:55 txpower 10
-check_fail "iwconfig (wlan config)"
-sudo ifconfig $WLAN_DEV inet 192.168.2.$AIRCRAFT_ID/24 up
-check_fail "ifconfig up (wlan config)"
+if [ -z $INSTALL_DEV ]; then
+  INSTALL_DEV=`sudo ifconfig -a | grep wlan | awk '{print $1}'`
+fi
+sudo ifconfig $INSTALL_DEV down
+check_fail "ifconfig down"
+sudo iwconfig $INSTALL_DEV mode ad-hoc essid zephyr channel 6 ap 00:11:22:33:44:55 txpower 10
+# iface might not be wireless, let this fail
+#check_fail "iwconfig"
+sudo ifconfig $INSTALL_DEV inet 192.168.2.$AIRCRAFT_ID/24 up
+check_fail "ifconfig up"
 sudo route add default gw 192.168.2.1
-check_fail "route (wlan config)"
+check_fail "route add"
 
 }
 
@@ -209,7 +212,7 @@ if [ $? != 0 ]; then
   check_fail "mavlink git checkout dev"
 else
   cd mavlink/pymavlink/
-  git fetch origin  # update local copy of remote repo
+  git fetch $GIT_REMOTE # update local copy of remote repo
   check_fail "mavlink git fetch"
   git checkout .  # discard any local changes
   check_fail "mavlink git checkout ."
@@ -217,7 +220,7 @@ else
   check_fail "mavlink git clean"
   git checkout dev  # have the right branch checked out
   check_fail "mavlink git checkout dev"
-  git reset --hard origin/dev  # bring in updates
+  git reset --hard $GIT_REMOTE/dev  # bring in updates
   check_fail "mavlink git reset"
 fi
 
@@ -258,7 +261,7 @@ if [ $? != 0 ]; then
   check_fail "payload git clone"
 else
   cd autonomy-payload
-  git fetch origin  # update local copy of remote repo
+  git fetch $GIT_REMOTE # update local copy of remote repo
   check_fail "payload git fetch"
   git checkout .  # discard any local changes
   check_fail "payload git checkout ."
@@ -266,7 +269,7 @@ else
   check_fail "payload git clean"
   git checkout master  # have the right branch checked out
   check_fail "payload git checkout master"
-  git reset --hard origin/master  # bring in updates
+  git reset --hard $GIT_REMOTE/master  # bring in updates
   check_fail "payload git reset"
 fi
 
@@ -278,7 +281,7 @@ if [ $? != 0 ]; then
   check_fail "mavbridge git clone"
 else
   cd autopilot_bridge
-  git fetch origin  # update local copy of remote repo
+  git fetch $GIT_REMOTE # update local copy of remote repo
   check_fail "mavbridge git fetch"
   git checkout .  # discard any local changes
   check_fail "mavbridge git checkout ."
@@ -286,7 +289,7 @@ else
   check_fail "mavbridge git clean"
   git checkout master  # have the right branch checked out
   check_fail "mavbridge git checkout master"
-  git reset --hard origin/master  # bring in updates
+  git reset --hard $GIT_REMOTE/master  # bring in updates
   check_fail "mavbridge git reset"
 fi
 
@@ -345,10 +348,26 @@ check_fail "init.d update"
 
 INSTALL_INIT=true
 INSTALL_BASE=true
+INSTALL_DEV=
+GIT_REMOTE="origin"
 
 # Parse any arguments
-while getopts ":uq" opt; do
+while getopts ":d:r:uq" opt; do
   case $opt in
+    d)
+      if [ -z $OPTARG ]; then
+        echo "Please specify a device"
+        exit 1
+      fi
+      INSTALL_DEV=$OPTARG
+      ;;
+    r)
+      if [ -z $OPTARG ]; then
+        echo "Please specify a remote"
+        exit 1
+      fi
+      GIT_REMOTE=$OPTARG
+      ;;
     u)
       INSTALL_INIT=false
       ;;
@@ -358,9 +377,11 @@ while getopts ":uq" opt; do
       ;;
     \?)
       echo ""
-      echo "usage: $0 [-u] [-q]"
-      echo "  -u   Update only (skip initial config)"
-      echo "  -q   Quick update only (skip initial config AND base software install)"
+      echo "usage: $0 [options]"
+      echo "  -d DEVICE   Network device to configure for installation"
+      echo "  -r REMOTE   Git remote to use for fetching"
+      echo "  -u          Update only (skip initial config)"
+      echo "  -q          Quick update only (ALSO skip base software install)"
       echo ""
       exit 0
       ;;
