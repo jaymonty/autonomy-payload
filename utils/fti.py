@@ -94,6 +94,10 @@ class UAVListWidgetItem(QListWidgetItem):
         if len(self._aspd) < 10: return None
         return float(sum(self._aspd)) / float(len(self._aspd))
 
+    def getMaxAspd(self):
+        if self._msg_s is None: return None
+        return float(max(self._aspd))
+
     # Set the state (color)
     def setState(self, state):
         self._state = state
@@ -262,10 +266,10 @@ class UAVListWidget(QListWidget):
             self.setStyleSheet("QLabel { color : black; }")
 
         def bad(self):
-            self.setStyleSheet("QLabel { color : red; }")
+            self.setStyleSheet("QLabel { color : red; font: bold; }")
 
         def ok(self):
-            self.setStyleSheet("QLabel { color : orange; }")
+            self.setStyleSheet("QLabel { color : orange; font: bold; }")
 
         def good(self):
             self.setStyleSheet("QLabel { color : green; }")
@@ -326,13 +330,26 @@ class UAVListWidget(QListWidget):
             self.lights[light].setbool(getattr(msg, 'ok_'+light))
 
         # Update remaining (computed) lights
-        # relative alt must be +/- 10 m
+
+        # Relative alt must be +/- 10 m
         self.lights['ralt'].setbool(-10000.0 < msg.alt_rel < 10000.0)
-        # average airspeed (over 10 samples) must have *some*
-        # deviation, but not too much
-        aspd = item.getAvgAspd()
-        self.lights['aspd'].setbool(aspd and 0.0 < aspd < 4.0)
-        # battery voltage should be > 12.4 V at takeoff
+
+        # Average airspeed (over 10 samples) must have *some* deviation,
+        # but not too much
+        as_avg = item.getAvgAspd()
+        # Max airspeed used so we can check positive pressure on the ground
+        as_max = item.getMaxAspd()
+        if item.getState() == UAVListWidgetItem.STATE_FLYING:
+            # If flying, ignore pressure
+            self.lights['aspd'].good()
+        elif as_max and as_max > 20.0:
+            # Allow for positive pressure check
+            self.lights['aspd'].ok()
+        else:
+            # Allow for zeroize + slight noise check
+            self.lights['aspd'].setbool(as_avg and 0.0 < as_avg < 4.0)
+
+        # Battery voltage should be > 12.4 V at takeoff
         # using "ok" color to distinguish from actual problem
         vcc = msg.batt_vcc
         self.lights['batt'].setbool(vcc > 12400, vcc > 11000)
@@ -476,7 +493,8 @@ class UAVListWidget(QListWidget):
             self.mav_popen = None
 
     def handleCalpress(self):
-        item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT])
+        item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT,
+                                     UAVListWidgetItem.STATE_READY])
         if item is None:
             return
 
@@ -490,10 +508,11 @@ class UAVListWidget(QListWidget):
         cl.index = 1
         self._sendMessage(cl)
 
-        self._okBox("Please wait for the 'as' light to become green.")
+        self._okBox("Please wait for the 'as' and 'aspd' lights to become green.")
 
     def handleCalgyros(self):
-        item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT])
+        item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT,
+                                     UAVListWidgetItem.STATE_READY])
         if item is None:
             return
 
@@ -575,7 +594,8 @@ class UAVListWidget(QListWidget):
         self._sendMessage(ad)
 
     def handleAPReboot(self):
-        item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT])
+        item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT,
+                                     UAVListWidgetItem.STATE_READY])
         if item is None:
             return
 
@@ -782,6 +802,8 @@ if __name__ == '__main__':
     # NOTE: The way updates are done is a bit hackish,
     #  relies on a signal being emitted by the UAVListWidget
     lblStat = QLabel("No Aircraft Selected")
+    lblStat.setStyleSheet("QLabel { color : black; }")
+    lblStat.setAutoFillBackground(True)
 
     # Listbox of UAVs
     lst = UAVListWidget(sock, ignore, win)
@@ -793,11 +815,17 @@ if __name__ == '__main__':
         layImu = lst.buildImuLights()
 
     # Connect list-click to status text and lights
+    pltOrig = lblStat.palette()
     def do_update_stat():
-        if lst.currentItem() is None:
+        item = lst.currentItem()
+        if item is None:
             lblStat.setText("No Aircraft Selected")
+            lblStat.setPalette(pltOrig)
         else:
-            lblStat.setText(str(lst.currentItem()))
+            lblStat.setText(str(item))
+            plt = lblStat.palette()
+            plt.setBrush(QPalette.Background, item.getState().color)
+            lblStat.setPalette(plt)
         lst.updateStatusLights()
         lst.updatePoseLights()
     lst.setSortingEnabled(True)
@@ -903,6 +931,22 @@ if __name__ == '__main__':
         btLandAbort.clicked.connect(lst.handleLandAbort)
         llayout.addWidget(btLandAbort)
         layout.addLayout(llayout)
+
+        # Troubleshooting buttons (USE WITH CAUTION)
+        tlayout = QHBoxLayout()
+        btCalpress = QPushButton("Cal Pressure")
+        btCalpress.setStyleSheet("background-color: darkgray")
+        btCalpress.clicked.connect(lst.handleCalpress)
+        tlayout.addWidget(btCalpress)
+        btCalgyros = QPushButton("Cal Gyros")
+        btCalgyros.setStyleSheet("background-color: darkgray")
+        btCalgyros.clicked.connect(lst.handleCalgyros)
+        tlayout.addWidget(btCalgyros)
+        btAPReboot = QPushButton("Reboot AP")
+        btAPReboot.setStyleSheet("background-color: darkgray")
+        btAPReboot.clicked.connect(lst.handleAPReboot)
+        tlayout.addWidget(btAPReboot)
+        layout.addLayout(tlayout)
 
     # Shutdown button
     btShutdown = QPushButton("Shut Down Payload")
