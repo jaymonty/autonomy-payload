@@ -166,9 +166,9 @@ class UAVListWidget(QListWidget):
         self.filter_states = filter_states
 
         # Add a dummy aircraft to "select none"
-        dummy = UAVListWidgetItem()
-        dummy.setText(" <<None>>")
-        self.addItem(dummy)
+        self.dummy = UAVListWidgetItem()
+        self.dummy.setText(" <<None>>")
+        self.addItem(self.dummy)
 
         # Add state for MAVProxy connections
         self.mav_popen = None
@@ -434,8 +434,10 @@ class UAVListWidget(QListWidget):
                 continue
             if self.item(i).getState() in self.filter_states:
                 self.item(i).setHidden(True)
+                self.setCurrentItem(self.dummy)
             elif self.item(i).getTime() < (cur_time - self.DELETE_TIME):
                 self.item(i).setHidden(True)
+                self.setCurrentItem(self.dummy)
             elif self.item(i).getTime() < (cur_time - self.OFFLINE_TIME):
                 self.item(i).setState(UAVListWidgetItem.STATE_OFFLINE)
             else:
