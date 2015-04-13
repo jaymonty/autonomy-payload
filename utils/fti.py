@@ -686,21 +686,29 @@ class UAVListWidget(QListWidget):
 
         self._sendMessage(rtl)
 
-    def handleLand(self):
+    def handleLand(self, approach):
         item = self._checkItemState([UAVListWidgetItem.STATE_FLYING])
         if item is None:
             return
 
-        if not self._confirmBox("Land aircraft %d?" % item.getID()):
+        if not self._confirmBox("Land aircraft %d on approach %s?" % \
+                                (item.getID(), approach)):
             return
 
         # Trigger Land
-        ld = messages.Land()
-        ld.msg_dst = int(item.getID())
-        ld.msg_secs = 0
-        ld.msg_nsecs = 0
+        wpa = messages.WaypointGoto()
+        wpa.msg_dst = int(item.getID())
+        wpa.msg_secs = 0
+        wpa.msg_nsecs = 0
+        if approach == "NEAR":
+            wpa.index = 12
+        elif approach == "FAR":
+            wpa.index = 18
+        else:
+            print "Invalid landing approach"
+            return
 
-        self._sendMessage(ld)
+        self._sendMessage(wpa)
 
     def handleLandAbort(self):
         item = self._checkItemState([UAVListWidgetItem.STATE_FLYING])
@@ -708,13 +716,13 @@ class UAVListWidget(QListWidget):
             return
 
         # Trigger Land Abort
-        la = messages.LandAbort()
-        la.msg_dst = int(item.getID())
-        la.msg_secs = 0
-        la.msg_nsecs = 0
-        la.alt = 60.0          # climbout until la.alt is reached, then goto RTL
+        wpa = messages.WaypointGoto()
+        wpa.msg_dst = int(item.getID())
+        wpa.msg_secs = 0
+        wpa.msg_nsecs = 0
+        wpa.index = 24
 
-        self._sendMessage(la)
+        self._sendMessage(wpa)
 
     def handleShutdown(self):
         item = self._checkItemState([UAVListWidgetItem.STATE_OFFLINE,
@@ -926,9 +934,14 @@ if __name__ == '__main__':
 
         # Landing buttons
         llayout = QHBoxLayout()
-        btLand = QPushButton("Land")
-        btLand.clicked.connect(lst.handleLand)
-        llayout.addWidget(btLand)
+        la_str = "NEAR"
+        btLandA = QPushButton("Land " + la_str)
+        btLandA.clicked.connect(lambda : lst.handleLand(la_str))
+        llayout.addWidget(btLandA)
+        lb_str = "FAR"
+        btLandB = QPushButton("Land " + lb_str)
+        btLandA.clicked.connect(lambda : lst.handleLand(lb_str))
+        llayout.addWidget(btLandB)
         btLandAbort = QPushButton("Land Abort")
         btLandAbort.clicked.connect(lst.handleLandAbort)
         llayout.addWidget(btLandAbort)
