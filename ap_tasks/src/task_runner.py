@@ -249,6 +249,7 @@ class FetchConfigTask(Task):
         for f in ['fence', 'param', 'rally', 'wp']:
             subprocess.call("rm %s%s" % (self._folder, f), shell=True)
         for f in ['fence', 'param', 'rally', 'wp']:
+            rospy.loginfo("Fetching %s from server ..." % f)
             while True:
                 try:
                     cmd = "wget -q -O %s%s http://192.168.2.1/%s/%s" % \
