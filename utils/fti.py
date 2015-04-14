@@ -426,7 +426,7 @@ class UAVListWidget(QListWidget):
                 if item is self.currentItem():
                     self.updatePoseLights()
 
-        # Cull those we haven't seen in a while
+        # Hide those we haven't seen in a while or that we've filtered
         cur_time = time.time()
         for i in range(self.count()):
             if not self.item(i).getID():
@@ -434,14 +434,16 @@ class UAVListWidget(QListWidget):
                 continue
             if self.item(i).getState() in self.filter_states:
                 self.item(i).setHidden(True)
-                self.setCurrentItem(self.dummy)
             elif self.item(i).getTime() < (cur_time - self.DELETE_TIME):
                 self.item(i).setHidden(True)
-                self.setCurrentItem(self.dummy)
             elif self.item(i).getTime() < (cur_time - self.OFFLINE_TIME):
                 self.item(i).setState(UAVListWidgetItem.STATE_OFFLINE)
             else:
                 self.item(i).setHidden(False)
+
+        # If selected item becomes hidden, de-select it
+        if self.currentItem() and self.currentItem().isHidden():
+            self.setCurrentItem(self.dummy)
 
         # schedule refresh and raise event
         self.update()
@@ -706,10 +708,10 @@ class UAVListWidget(QListWidget):
         wpa.msg_dst = int(item.getID())
         wpa.msg_secs = 0
         wpa.msg_nsecs = 0
-        if approach == "NEAR":
-            wpa.index = 12
-        elif approach == "FAR":
-            wpa.index = 18
+        if approach == "A":
+            wpa.index = 12     # TODO: Move index selection to payload
+        elif approach == "B":
+            wpa.index = 18     # TODO: Move index selection to payload
         else:
             print "Invalid landing approach"
             return
@@ -726,7 +728,7 @@ class UAVListWidget(QListWidget):
         wpa.msg_dst = int(item.getID())
         wpa.msg_secs = 0
         wpa.msg_nsecs = 0
-        wpa.index = 24
+        wpa.index = 24     # TODO: Move index selection to payload
 
         self._sendMessage(wpa)
 
@@ -944,11 +946,11 @@ if __name__ == '__main__':
 
         # Landing buttons
         llayout = QHBoxLayout()
-        la_str = "NEAR"
+        la_str = "A"
         btLandA = QPushButton("Land " + la_str)
         btLandA.clicked.connect(lambda : lst.handleLand(la_str))
         llayout.addWidget(btLandA)
-        lb_str = "FAR"
+        lb_str = "B"
         btLandB = QPushButton("Land " + lb_str)
         btLandA.clicked.connect(lambda : lst.handleLand(lb_str))
         llayout.addWidget(btLandB)
