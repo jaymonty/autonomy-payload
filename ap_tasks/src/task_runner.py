@@ -260,9 +260,13 @@ class FetchConfigTask(Task):
 
         # Delete files that MUST be refreshed
         for f in ['fence', 'param', 'rally', 'wp']:
-            os.remove(self._folder + f)
+            try:
+                os.remove(self._folder + f)
+            except:
+                pass
 
         # Fetch any needed files
+        result = True
         for f in ['fence', 'param', 'rally', 'wp',
                   'rally.template', 'wp.template']:
             # Check if file already exists (if not deleted above)
@@ -274,18 +278,21 @@ class FetchConfigTask(Task):
 
             # If not, fetch it
             rospy.loginfo("Fetching %s from server ..." % f)
-            while not rospy.is_shutdown():
+            for i in range(3):
+                if rospy.is_shutdown(): return False
                 try:
                     cmd = "wget -q -O %s%s http://192.168.2.1/%s/%s" % \
                           (self._folder, f, self._id_str, f)
                     res = subprocess.call(cmd, shell=True)
                     if res == 0: break
-                    rospy.logwarn("Error fetching %s; retrying ..." % f)
-                    time.sleep(5)
+                    time.sleep(3)
                 except Exception as ex:
                     rospy.logwarn("Exception fetching %s: %s" % \
                                   (f, str(ex.args[0])))
-        return True
+            if res != 0:
+                rospy.logwarn("Failed to fetch " + f)
+                result = False
+        return result
 
 # Verify "blessed" configs
 class VerifyConfigTask(Task):
@@ -309,11 +316,20 @@ class VerifyConfigTask(Task):
         result = True
         for f in ['rally', 'wp', 'fence', 'param']:
             rospy.set_param("ok_" + f, False)
+
+            # If file doesn't exist, skip it
+            try:
+                s = os.stat(self._folder + f)
+                if s.st_size == 0: raise Exception('')
+            except:
+                rospy.logwarn("Skipping verify of missing file " + f)
+                continue
+
             for i in range(3):
                 if rospy.is_shutdown(): return False
                 res = self._try_verify(f)
                 if res: break
-                time.sleep(5)
+                time.sleep(1)
             if res:
                 rospy.set_param("ok_" + f, True)
             else:
