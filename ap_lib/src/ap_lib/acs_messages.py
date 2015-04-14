@@ -360,7 +360,7 @@ class Heartbeat(Message):
 
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.counter = int(fields[0]) 
+        self.counter = int(fields[0])
 
 class Arm(Message):
     msg_type = 0x81
@@ -396,7 +396,7 @@ class Mode(Message):
 
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.mode = int(fields[0]) 
+        self.mode = int(fields[0])
 
 class Land(Message):
     msg_type = 0x83
@@ -428,7 +428,7 @@ class LandAbort(Message):
 
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.alt = int(fields[0]) 
+        self.alt = int(fields[0])
 
 class GuidedGoto(Message):
     msg_type = 0x85
@@ -494,7 +494,7 @@ class SlaveSetup(Message):
 
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.enable = bool(fields[0]) 
+        self.enable = bool(fields[0])
         self.channel = str(fields[1])
 
 class FlightReady(Message):
@@ -531,7 +531,7 @@ class SetSubswarm(Message):
 
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.subswarm = int(fields[0]) 
+        self.subswarm = int(fields[0])
 
 # Might want to depricate this eventually (direct controller setup and
 # invocation via network message bypasses the swarm_manager node and
@@ -552,7 +552,7 @@ class SetController(Message):
 
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.controller = int(fields[0]) 
+        self.controller = int(fields[0])
 
 # Might want to depricate this eventually (direct controller setup and
 # invocation via network message bypasses the swarm_manager node and
@@ -642,7 +642,7 @@ class Calibrate(Message):
 
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.index = int(fields[0]) 
+        self.index = int(fields[0])
 
 class SwarmBehavior(Message):
     msg_type = 0x8E
@@ -662,7 +662,7 @@ class SwarmBehavior(Message):
 
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.swarm_behavior = int(fields[0]) 
+        self.swarm_behavior = int(fields[0])
 
 class SwarmState(Message):
     msg_type = 0x8F
@@ -679,7 +679,7 @@ class SwarmState(Message):
 
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.swarm_state = int(fields[0]) 
+        self.swarm_state = int(fields[0])
 
 class Demo(Message):
     msg_type = 0x90
@@ -697,7 +697,7 @@ class Demo(Message):
 
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.demo = int(fields[0]) 
+        self.demo = int(fields[0])
 
 class MissionConfig(Message):
     msg_type = 0x91
@@ -715,7 +715,7 @@ class MissionConfig(Message):
 
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.std_alt = int(fields[0]) 
+        self.std_alt = int(fields[0])
 
 class AutopilotReboot(Message):
     msg_type = 0xFD
