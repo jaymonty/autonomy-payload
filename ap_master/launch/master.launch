@@ -65,6 +65,10 @@
     <remap from="network/set_swarm_behavior" to="swarm_manager/set_swarm_behavior" />
     <remap from="network/swarm_behavior" to="swarm_manager/swarm_behavior" />
     <remap from="network/set_swarm_state" to="swarm_manager/set_swarm_state" />
+    <remap from="network/load_param" to="autopilot/load_param" />
+    <remap from="network/load_fence" to="autopilot/load_fence" />
+    <remap from="network/load_rally" to="autopilot/load_rally" />
+    <remap from="network/load_wp" to="autopilot/load_wp" />
   </node>
 
   <node name="swarm_tracker" pkg="ap_perception" type="swarm_tracker_node.py" output="screen" args="" >
