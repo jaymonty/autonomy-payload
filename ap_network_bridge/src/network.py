@@ -552,6 +552,53 @@ def net_demo(message, bridge):
     bridge.doInThread(main, error)
 net_demo.active = False
 
+def net_mission_config(message, bridge):
+    def main():
+        # Reset OK flags so users know work is in progress
+        for cfg in ['rally', 'wp']:
+            rospy.set_param('ok_' + cfg, False)
+
+        # Extract/validate values
+        replacements = {}
+        replacements['STDALT'] = message.std_alt
+
+        for cfg in ['rally', 'wp']:
+            # Set up locations
+            base_file = os.path.expanduser("~/blessed/%s.template" % cfg)
+            temp_file = base_file + ".tmp"
+
+            # Modify blessed file into temp location
+            with open(base_file, 'r') as inf, open(temp_file, 'w') as outf:
+                for line in inf:
+                    if not line or not isinstance(line, str):
+                        continue
+                    for pattern, value in replacements.iteritems():
+                        line = line.replace(str(pattern), str(value))
+                    outf.write(line)
+
+            # Call load service
+            res = bridge.callService('load_' + cfg,
+                                     pilot_srv.FileLoad,
+                                     name=temp_file)
+
+            # Update OK flag
+            rospy.set_param('ok_' + cfg, res.ok)
+
+            # Clean up temp file
+            os.remove(temp_file)
+
+        # Reset active flag
+        net_mission_config.active = False
+
+    def error():
+        net_mission_config.active = False
+
+    if net_mission_config.active:
+        raise Exception("configuration currently in progress")
+    net_mission_config.active = True
+    bridge.doInThread(main, error)
+net_mission_config.active = False
+
 # Highest-numbered are administrative/debug messages
 
 def net_ap_reboot(message, bridge):
@@ -625,6 +672,7 @@ if __name__ == '__main__':
         bridge.addNetHandler(messages.WPSequencerSetup, net_sequencer_set) #depricate?
         bridge.addNetHandler(messages.Calibrate, net_calibrate)
         bridge.addNetHandler(messages.Demo, net_demo)
+        bridge.addNetHandler(messages.MissionConfig, net_mission_config)
         bridge.addNetHandler(messages.AutopilotReboot, net_ap_reboot)
         bridge.addNetHandler(messages.PayloadHeartbeat, net_health_state)
         bridge.addNetHandler(messages.PayloadShutdown, net_shutdown)
