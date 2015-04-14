@@ -97,6 +97,9 @@ class TaskRunner(object):
         self.last_status = autopilot_msg.Status()
         self.last_flightready = False
 
+        # Flags telling if one-time events have happened yet
+        self.done_on_status = False
+
         # ROS subscriptions (assumes rospy is initialized)
         self.sub_status = rospy.Subscriber("autopilot/status",
                                            autopilot_msg.Status,
@@ -134,9 +137,9 @@ class TaskRunner(object):
 
     # Handle incoming autopilot status messages
     def _cb_status(self, status):
-        if self.last_status.header.stamp.secs == 0 and \
-           status.header.stamp.secs > 0:
+        if not self.done_on_status and status.header.stamp.secs > 0:
             self._do_event('on_status')
+            self.done_on_status = True
 
         if not self.last_status.armed and status.armed:
             self._do_event('on_arm')
