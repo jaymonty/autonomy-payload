@@ -127,7 +127,7 @@ class TaskRunner(object):
                         continue
                     self._log(event, task, start, bool(result))
                 except Exception as ex:
-                    self._log(event, task, start, False, str(ex.args[0]))
+                    self._log(event, task, start, False, str(ex))
             rospy.loginfo("Task Runner: Completed Event '%s'" % event)
 
     # NOTE: Most events are performed by the callback that detects them
@@ -183,15 +183,20 @@ class RosbagTask(Task):
 
     def __init__(self):
         Task.__init__(self, "Rosbag")
-        self._folder = "~/bags/"
+        self._folder = os.path.expanduser("~/bags/")
         self._excl = "\"(.*)(swarm_tracker/swarm_uav_states|network/recv_pose)\""
         self._prefix = "%s%u" % (self._folder, self._acid)
         self._cmd = "rosbag record -a -x " + self._excl + " -o " + self._prefix
         self._proc = None
 
     def on_status(self):
-        subprocess.call("ls %s || mkdir %s" % (self._folder, self._folder),
-                        shell=True)
+        # Build the folder if it doesn't exist
+        try:
+            os.stat(self._folder)
+        except:
+            os.mkdir(self._folder)
+
+        # Launch the process
         self._proc = subprocess.Popen(self._cmd, shell=True)
         return bool(self._proc.poll() is None)
 
@@ -240,23 +245,40 @@ class FetchConfigTask(Task):
 
     def __init__(self):
         Task.__init__(self, "Fetch Configs")
-        self._folder = "~/blessed/"
+        self._folder = os.path.expanduser("~/blessed/")
         self._id_str = "%03u" % int(self._acid)
 
     def on_status(self):
-        subprocess.call("ls %s || mkdir %s" % (self._folder, self._folder),
-                        shell=True)
+        # Build the folder if it doesn't exist
+        try:
+            os.stat(self._folder)
+        except:
+            os.mkdir(self._folder)
+
+        # Delete files that MUST be refreshed
         for f in ['fence', 'param', 'rally', 'wp']:
-            subprocess.call("rm %s%s" % (self._folder, f), shell=True)
-        for f in ['fence', 'param', 'rally', 'wp']:
+            os.remove(self._folder + f)
+
+        # Fetch any needed files
+        for f in ['fence', 'param', 'rally', 'wp',
+                  'rally.template', 'wp.template']:
+            # Check if file already exists (if not deleted above)
+            try:
+                s = os.stat(self._folder + f)
+                if s.st_size > 0: continue
+            except:
+                pass
+
+            # If not, fetch it
             rospy.loginfo("Fetching %s from server ..." % f)
-            while True:
+            while not rospy.is_shutdown():
                 try:
                     cmd = "wget -q -O %s%s http://192.168.2.1/%s/%s" % \
                           (self._folder, f, self._id_str, f)
                     res = subprocess.call(cmd, shell=True)
                     if res == 0: break
                     rospy.logwarn("Error fetching %s; retrying ..." % f)
+                    time.sleep(5)
                 except Exception as ex:
                     rospy.logwarn("Exception fetching %s: %s" % \
                                   (f, str(ex.args[0])))
@@ -267,7 +289,7 @@ class VerifyConfigTask(Task):
 
     def __init__(self):
         Task.__init__(self, "Verify Configs")
-        self._folder = "%s/blessed/" % os.path.expanduser("~")
+        self._folder = os.path.expanduser("~/blessed/")
 
     def _try_verify(self, f):
         try:
@@ -285,6 +307,7 @@ class VerifyConfigTask(Task):
         for f in ['rally', 'wp', 'fence', 'param']:
             rospy.set_param("ok_" + f, False)
             for i in range(3):
+                if rospy.is_shutdown(): return False
                 res = self._try_verify(f)
                 if res: break
                 time.sleep(5)
@@ -305,7 +328,10 @@ if __name__ == '__main__':
     # Instantiate TaskRunner and Task instances
     runner = TaskRunner()
     runner.add_task(SetIDTask())
-    runner.add_task(TxPowerTask())
+
+    if rospy.has_param('network_device') and \
+       'wlan' in rospy.get_param('network_device'):
+        runner.add_task(TxPowerTask())
 
     if rospy.has_param('verify_enable') and rospy.get_param('verify_enable'):
         runner.add_task(FetchConfigTask())  # NOTE: will keep trying
