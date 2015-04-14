@@ -54,12 +54,13 @@ class UAVListWidgetItem(QListWidgetItem):
     def __str__(self):
         if self._state is None or self._msg_s is None:
             return "UNKNOWN"
-        return "%s : %s (%d / %s / %2.3fv)" % \
+        return "%s : %s (%d / %s / %2.3fv / %2.1fm)" % \
                (self._msg_s.name,
                 self._state.text,
                 self._msg_s.msg_src,
                 self._msg_s.msg_src_ip,
-                self._msg_s.batt_vcc / 1000.0)
+                self._msg_s.batt_vcc / 1000.0,
+                self._msg_s.alt_rel / 1000.0)
 
     # Make explicit the ordering for sorted lists
     def __lt__(self, other):
@@ -134,10 +135,11 @@ class UAVListWidgetItem(QListWidgetItem):
         self.setState(state)
 
         # Update UI
-        status_text = "%s (%d / %2.3fv)" % \
+        status_text = "%s (%d / %2.3fv / %2.1fm)" % \
                       (msg.name,
                        msg.msg_src,
-                       msg.batt_vcc / 1000.0)
+                       msg.batt_vcc / 1000.0,
+                       msg.alt_rel / 1000.0)
         if msg.armed:
             status_text += " <ARM>"
         if msg.mode == 4:
@@ -332,7 +334,11 @@ class UAVListWidget(QListWidget):
         # Update remaining (computed) lights
 
         # Relative alt must be +/- 10 m
-        self.lights['ralt'].setbool(-10000.0 < msg.alt_rel < 10000.0)
+        if item.getState() == UAVListWidgetItem.STATE_FLYING:
+            # Ignore if flying
+            self.lights['ralt'].good()
+        else:
+            self.lights['ralt'].setbool(-10000.0 < msg.alt_rel < 10000.0)
 
         # Average airspeed (over 10 samples) must have *some* deviation,
         # but not too much
@@ -352,7 +358,10 @@ class UAVListWidget(QListWidget):
         # Battery voltage should be > 12.4 V at takeoff
         # using "ok" color to distinguish from actual problem
         vcc = msg.batt_vcc
-        self.lights['batt'].setbool(vcc > 12400, vcc > 11000)
+        if item.getState() == UAVListWidgetItem.STATE_FLYING:
+            self.lights['batt'].setbool(vcc > 11000)
+        else:
+            self.lights['batt'].setbool(vcc > 12400, vcc > 11000)
 
     def updatePoseLights(self):
         THRESH = 30.0  # Minimum angle in degrees
@@ -643,7 +652,7 @@ class UAVListWidget(QListWidget):
         if not self._confirmBox("Confirm aircraft %d?" % item.getID()):
             return
 
-        # Also send (FOR FX20) to the staging (ingress) waypoint
+        # Send to the staging (ingress) waypoint
         wg = messages.WaypointGoto()
         wg.msg_dst = int(item.getID())
         wg.msg_secs = 0
@@ -651,7 +660,31 @@ class UAVListWidget(QListWidget):
         wg.index = 3
         self._sendMessage(wg)
 
-    def handleAUTO(self):
+    def handleConfig(self, alt):
+        item = self._checkItemState([UAVListWidgetItem.STATE_READY])
+        if item is None:
+            return
+
+        try:
+            mc_alt = int(alt)
+            if mc_alt <= 50:
+                raise Exception("")
+        except:
+            print "You must supply a valid altitude!"
+            return
+
+        if not self._confirmBox("Send config to aircraft %d?" % item.getID()):
+            return
+
+        # Send desired mission config
+        mc = messages.MissionConfig()
+        mc.msg_dst = int(item.getID())
+        mc.msg_secs = 0
+        mc.msg_nsecs = 0
+        mc.std_alt = mc_alt
+        self._sendMessage(mc)
+
+    def handleAUTO(self, index):
         item = self._checkItemState([UAVListWidgetItem.STATE_READY,
                                      UAVListWidgetItem.STATE_FLYING])
         if item is None:
@@ -659,7 +692,7 @@ class UAVListWidget(QListWidget):
 
         # Get and set desired WP #
         try:
-            wp_des = int(lnWP.text())
+            wp_des = int(index)
         except:
             print "You must supply a valid waypoint!"
             return
@@ -811,10 +844,17 @@ if __name__ == '__main__':
     # Build up the window itself
     app = QApplication([])
     win = QWidget()
-    win.resize(400, 470 + 120 * int(show_ft and show_op))
+    win.resize(500, 550 + 100 * int(show_ft and show_op))
     win.setWindowTitle("FTI" + mode_string)
     layout = QVBoxLayout()
     win.setLayout(layout)
+
+    # Define some helper functions
+    def addLine():
+        l = QFrame()
+        l.setFrameShape(QFrame.HLine)
+        l.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(l)
 
     # Status of currently-selected UAV
     # NOTE: The way updates are done is a bit hackish,
@@ -828,8 +868,8 @@ if __name__ == '__main__':
 
     # Status and IMU lights rows
     laySta = lst.buildStatusLights()
+    layCfg = lst.buildConfigLights()
     if show_ft:
-        layCfg = lst.buildConfigLights()
         layImu = lst.buildImuLights()
 
     # Connect list-click to status text and lights
@@ -853,8 +893,8 @@ if __name__ == '__main__':
     # Add labels and listbox in preferred order
     layout.addWidget(lblStat)
     layout.addLayout(laySta)
+    layout.addLayout(layCfg)
     if show_ft:
-        layout.addLayout(layCfg)
         layout.addLayout(layImu)
     layout.addWidget(lst)
 
@@ -872,6 +912,23 @@ if __name__ == '__main__':
         lbl.setAutoFillBackground(True)
         hlayout.addWidget(lbl)
     layout.addLayout(hlayout)
+
+    if show_op:
+        # Mission config
+        clayout = QHBoxLayout()
+        lbl = QLabel("Altitude above runway (m):")
+        clayout.addWidget(lbl)
+        lnAlt = QLineEdit()
+        lnAlt.setFixedWidth(50)
+        lnAlt.setText("100")
+        clayout.addWidget(lnAlt)
+        btConfig = QPushButton("Send Config")
+        btConfig.clicked.connect(lambda : lst.handleConfig(lnAlt.text()))
+        clayout.addWidget(btConfig)
+        layout.addLayout(clayout)
+
+        # Line break after config stuff
+        addLine()
 
     if show_ft:
         # Mechanical preflight buttons
@@ -903,22 +960,6 @@ if __name__ == '__main__':
     layout.addLayout(alayout)
 
     if show_ft:
-        # Troubleshooting buttons (USE WITH CAUTION)
-        tlayout = QHBoxLayout()
-        btMAVProxy = QPushButton("Run MAVProxy")
-        btMAVProxy.setStyleSheet("background-color: darkgray")
-        btMAVProxy.clicked.connect(lst.handleMAVProxy)
-        tlayout.addWidget(btMAVProxy)
-        btCalgyros = QPushButton("Cal Gyros")
-        btCalgyros.setStyleSheet("background-color: darkgray")
-        btCalgyros.clicked.connect(lst.handleCalgyros)
-        tlayout.addWidget(btCalgyros)
-        btAPReboot = QPushButton("Reboot AP")
-        btAPReboot.setStyleSheet("background-color: darkgray")
-        btAPReboot.clicked.connect(lst.handleAPReboot)
-        tlayout.addWidget(btAPReboot)
-        layout.addLayout(tlayout)
-
         # Flight-ready button
         btToggle = QPushButton("Toggle Flight Ready")
         btToggle.clicked.connect(lst.handleFlightReady)
@@ -928,12 +969,12 @@ if __name__ == '__main__':
         # Mode buttons
         mlayout = QHBoxLayout()
         btAUTO = QPushButton("AUTO")
-        btAUTO.clicked.connect(lst.handleAUTO)
         mlayout.addWidget(btAUTO)
         lnWP=QLineEdit()
         lnWP.setFixedWidth(50)
         lnWP.setText("1")
         mlayout.addWidget(lnWP)
+        btAUTO.clicked.connect(lambda : lst.handleAUTO(lnWP.text()))
         btRTL = QPushButton("RTL")
         btRTL.clicked.connect(lst.handleRTL)
         mlayout.addWidget(btRTL)
@@ -959,21 +1000,31 @@ if __name__ == '__main__':
         llayout.addWidget(btLandAbort)
         layout.addLayout(llayout)
 
-        # Troubleshooting buttons (USE WITH CAUTION)
-        tlayout = QHBoxLayout()
+    # Line break before troubleshooting and misc buttons
+    addLine()
+
+    # Troubleshooting buttons (USE WITH CAUTION)
+    tlayout = QHBoxLayout()
+    if show_ft:
+        btMAVProxy = QPushButton("Run MAVProxy")
+        btMAVProxy.setStyleSheet("background-color: darkgray")
+        btMAVProxy.clicked.connect(lst.handleMAVProxy)
+        tlayout.addWidget(btMAVProxy)
+    elif show_op:
         btCalpress = QPushButton("Cal Pressure")
         btCalpress.setStyleSheet("background-color: darkgray")
         btCalpress.clicked.connect(lst.handleCalpress)
         tlayout.addWidget(btCalpress)
-        btCalgyros = QPushButton("Cal Gyros")
-        btCalgyros.setStyleSheet("background-color: darkgray")
-        btCalgyros.clicked.connect(lst.handleCalgyros)
-        tlayout.addWidget(btCalgyros)
-        btAPReboot = QPushButton("Reboot AP")
-        btAPReboot.setStyleSheet("background-color: darkgray")
-        btAPReboot.clicked.connect(lst.handleAPReboot)
-        tlayout.addWidget(btAPReboot)
-        layout.addLayout(tlayout)
+
+    btCalgyros = QPushButton("Cal Gyros")
+    btCalgyros.setStyleSheet("background-color: darkgray")
+    btCalgyros.clicked.connect(lst.handleCalgyros)
+    tlayout.addWidget(btCalgyros)
+    btAPReboot = QPushButton("Reboot AP")
+    btAPReboot.setStyleSheet("background-color: darkgray")
+    btAPReboot.clicked.connect(lst.handleAPReboot)
+    tlayout.addWidget(btAPReboot)
+    layout.addLayout(tlayout)
 
     # Shutdown button
     btShutdown = QPushButton("Shut Down Payload")
