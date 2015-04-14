@@ -262,158 +262,38 @@ class FetchConfigTask(Task):
                                   (f, str(ex.args[0])))
         return True
 
-# Intermediate class for setting lists of things from a file
-# Initialization arguments:
-#  - name      friendly string name as used by Task
-#  - srv_name  name of setter service
-#  - srv_type  type of setter service
-#  - ext       extension of filename (assumes filename format)
-class _SetlistTask(Task):
+# Verify "blessed" configs
+class VerifyConfigTask(Task):
 
-    def __init__(self, name, srv_name, srv_type, item_attr, ext):
-        Task.__init__(self, name)
-        self._srv_name = srv_name
-        self._srv_type = srv_type
-        self._item_attr = item_attr
-        self._fname = "%s/blessed/%s" % (os.path.expanduser("~"), ext)
+    def __init__(self):
+        Task.__init__(self, "Verify Configs")
+        self._folder = "%s/blessed/" % os.path.expanduser("~")
 
-    # Method to parse lines into service req point sub-objects
-    # DEFINE IN EACH SUBTYPE
-    def _parse(self, *args):
-        return None
-
-    # Method to call if/once task succeeds
-    # Probably should set a ROS param or publish a message
-    def _success(self):
-        pass
+    def _try_verify(self, f):
+        try:
+            s_name = "autopilot/load_" + f
+            f_name = self._folder + f
+            self._wait(s_name)
+            srv = rospy.ServiceProxy(s_name, autopilot_srv.FileLoad)
+            res = srv(f_name)
+            return res.ok
+        except Exception as ex:
+            rospy.logwarn("Error verifying %s: %s" % (f, str(ex.args[0])))
 
     def on_status(self):
-        self._wait(self._srv_name)
-        srv = rospy.ServiceProxy(self._srv_name, self._srv_type)
-        with open(self._fname, 'r') as f:
-            # Create a request object (NOTE: hackish, relies on service impl)
-            req = self._srv_type._request_class()
-            # Gets the list attribute of that object
-            items = getattr(req, self._item_attr)
-            # Add items to request object
-            for line in f:
-                line = line.rstrip("\n")
-                # Ignore comments and blanks
-                if not line or line.startswith('#'): continue
-                # NOTE: if file is ill-formatted, fail altogether
-                try:
-                    item = self._parse(*line.split())
-                    # Allow parsers to ignore some lines
-                    if item is None: continue
-                    items.append(item)
-                except:
-                    raise Exception("Format error: " + str(line))
-            # Attempt a few times to set the items
-            # NOTE: trust the service call's response to check if it worked
+        result = True
+        for f in ['rally', 'wp', 'fence', 'param']:
+            rospy.set_param("ok_" + f, False)
             for i in range(3):
-                res = srv(req)
-                if not res.ok: continue
-                self._success()
-                return True
-            return False
-
-class ParamTask(_SetlistTask):
-
-    def __init__(self):
-        _SetlistTask.__init__(self,
-                              "AP Param",
-                              "autopilot/fpr_param_setlist",
-                              autopilot_srv.ParamSetList,
-                              "param",
-                              "param")
-
-    def _parse(self, *args):
-        p = autopilot_msg.ParamPair()
-        p.name = str(args[0]).upper()
-        p.value = float(args[1])
-        return p
-
-    def _success(self):
-        rospy.set_param("ok_param", True)
-
-# Set fence points based on file
-class FenceTask(_SetlistTask):
-
-    def __init__(self):
-        _SetlistTask.__init__(self,
-                              "AP Fence",
-                              "autopilot/fpr_fence_setall",
-                              autopilot_srv.FenceSetAll,
-                              "points",
-                              "fence")
-
-    def _parse(self, *args):
-        p = autopilot_msg.Fencepoint()
-        p.lat = float(args[0])
-        p.lon = float(args[1])
-        return p
-
-    def _success(self):
-        rospy.set_param("ok_fence", True)
-
-# Set rally points based on file
-class RallyTask(_SetlistTask):
-
-    def __init__(self):
-        _SetlistTask.__init__(self,
-                              "AP Rally",
-                              "autopilot/fpr_rally_setall",
-                              autopilot_srv.RallySetAll,
-                              "points",
-                              "rally")
-
-    def _parse(self, *args):
-        p = autopilot_msg.Rallypoint()
-        p.lat = float(args[1]) * 1e7
-        p.lon = float(args[2]) * 1e7
-        p.alt = float(args[3])
-        p.break_alt = float(args[4])
-        p.land_dir = float(args[5]) * 1e2
-        p.flags = int(args[6])
-        return p
-
-    def _success(self):
-        rospy.set_param("ok_rally", True)
-
-# Set waypoints based on file
-# NOTE: Assumes a "v1.10" formatted waypoint file
-class WPTask(_SetlistTask):
-
-    def __init__(self):
-        _SetlistTask.__init__(self,
-                              "AP WP",
-                              "autopilot/wp_setall",
-                              autopilot_srv.WPSetAll,
-                              "points",
-                              "wp")
-
-    def _parse(self, *args):
-        if args[0] == 'QGC':
-            if args[2] != '110':
-                raise Exception("")
-            return None
-        p = autopilot_msg.Waypoint()
-        p.seq = int(args[0])
-        p.frame = int(args[2])
-        p.command = int(args[3])
-        p.current = bool(int(args[1]))
-        p.autocontinue = bool(int(args[11]))
-        p.param1 = float(args[4])
-        p.param2 = float(args[5])
-        p.param3 = float(args[6])
-        p.param4 = float(args[7])
-        p.x = float(args[8])
-        p.y = float(args[9])
-        p.z = float(args[10])
-        return p
-
-    def _success(self):
-        rospy.set_param("ok_wp", True)
+                res = self._try_verify(f)
+                if res: break
+                time.sleep(5)
+            if res:
+                rospy.set_param("ok_" + f, True)
+            else:
+                rospy.logwarn("Failed to verify " + f)
+                result = False
+        return result
 
 #-----------------------------------------------------------------------
 # Start-up
@@ -429,10 +309,7 @@ if __name__ == '__main__':
 
     if rospy.has_param('verify_enable') and rospy.get_param('verify_enable'):
         runner.add_task(FetchConfigTask())  # NOTE: will keep trying
-        runner.add_task(RallyTask())
-        runner.add_task(WPTask())
-        runner.add_task(FenceTask())
-        runner.add_task(ParamTask())
+        runner.add_task(VerifyConfigTask())
 
     if rospy.has_param('rosbag_enable') and rospy.get_param('rosbag_enable'):
         runner.add_task(RosbagTask())
