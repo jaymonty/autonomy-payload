@@ -531,6 +531,9 @@ class UAVListWidget(QListWidget):
         self._okBox("Please wait for the 'ahrs' light to become green.")
 
     def handleServos(self):
+        print "I can't do this yet!"
+        return
+
         item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT])
         if item is None:
             return
@@ -549,6 +552,9 @@ class UAVListWidget(QListWidget):
         #self._okBox("Please wait ...")
 
     def handleMotor(self):
+        print "I can't do this yet!"
+        return
+
         item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT])
         if item is None:
             return
@@ -872,9 +878,13 @@ if __name__ == '__main__':
         btCalpress.clicked.connect(lst.handleCalpress)
         mlayout.addWidget(btCalpress)
         btServos = QPushButton("Demo Servos")
+        btServos.setStyleSheet("color: gray")
+        btServos.setFlat(True)
         btServos.clicked.connect(lst.handleServos)
         mlayout.addWidget(btServos)
         btMotor = QPushButton("Run Motor")
+        btMotor.setStyleSheet("color: gray")
+        btMotor.setFlat(True)
         btMotor.clicked.connect(lst.handleMotor)
         mlayout.addWidget(btMotor)
         layout.addLayout(mlayout)
