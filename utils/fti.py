@@ -993,7 +993,7 @@ if __name__ == '__main__':
         llayout.addWidget(btLandA)
         lb_str = "B"
         btLandB = QPushButton("Land " + lb_str)
-        btLandA.clicked.connect(lambda : lst.handleLand(lb_str))
+        btLandB.clicked.connect(lambda : lst.handleLand(lb_str))
         llayout.addWidget(btLandB)
         btLandAbort = QPushButton("Land Abort")
         btLandAbort.clicked.connect(lst.handleLandAbort)
