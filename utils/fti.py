@@ -91,12 +91,11 @@ class UAVListWidgetItem(QListWidgetItem):
         return self._msg_p
 
     def getAvgAspd(self):
-        if self._msg_s is None: return None
-        if len(self._aspd) < 10: return None
+        if self._msg_s is None: return 0
         return float(sum(self._aspd)) / float(len(self._aspd))
 
     def getMaxAspd(self):
-        if self._msg_s is None: return None
+        if self._msg_s is None: return 0
         return float(max(self._aspd))
 
     # Set the state (color)
@@ -261,41 +260,70 @@ class UAVListWidget(QListWidget):
 
     class _QLight(QLabel):
 
-        def __init__(self, name):
+        def __init__(self, name, tip=''):
             QLabel.__init__(self, name)
+            self._name = name
+            self._tip = tip
+            if tip: self.setToolTip(tip)
 
         def unknown(self):
             self.setStyleSheet("QLabel { color : black; }")
+            self.setToolTip(self._tip)
 
-        def bad(self):
+        def bad(self, text='', tip=''):
             self.setStyleSheet("QLabel { color : red; font: bold; }")
+            self.setText(self._name + text)
+            if tip: self.setToolTip(tip)
+            else: self.setToolTip(self._tip)
 
-        def ok(self):
+        def ok(self, text='', tip=''):
             self.setStyleSheet("QLabel { color : orange; font: bold; }")
+            self.setText(self._name + text)
+            if tip: self.setToolTip(tip)
+            else: self.setToolTip(self._tip)
 
         def good(self):
             self.setStyleSheet("QLabel { color : green; }")
+            self.setText(self._name)
+            self.setToolTip(self._tip)
 
-        def setbool(self, b_good, b_ok=False):
+        def setbool(self, b_good, b_ok=False,
+                    oktext='', oktip='',
+                    badtext='', badtip=''):
             if b_good: self.good()
-            elif b_ok: self.ok()
-            else: self.bad()
+            elif b_ok: self.ok(text=oktext, tip=oktip)
+            else: self.bad(text=badtext, tip=badtip)
 
     def _buildLights(self, light_list):
         layout = QHBoxLayout()
         for l in light_list:
-            lbl = self._QLight(l)
-            self.lights[l] = lbl
+            lbl = self._QLight(name = l[0], tip = l[1])
+            self.lights[l[0]] = lbl
             layout.addWidget(lbl)
         return layout
 
-    LIGHT_STA_OK = ['ahrs', 'as', 'gps', 'ins', 'mag', 'pwr']
-    LIGHT_STA_CP = ['aspd', 'batt', 'ralt']
+    LIGHT_STA_OK = [('ahrs', ''),
+                    ('as', ''),
+                    ('gps', ''),
+                    ('ins', ''),
+                    ('mag', ''),
+                    ('pwr', '')]
+    LIGHT_STA_CP = [('aspd', ''),
+                    ('batt', ''),
+                    ('ralt', '')]
     LIGHT_STA = sorted(LIGHT_STA_OK + LIGHT_STA_CP)
-    LIGHT_CFG_OK = ['ral', 'wp', 'fen', 'prm']
-    LIGHT_CFG_CP = ['fw', 'sw', 'repo']
+    LIGHT_CFG_OK = [('ral', ''),
+                    ('wp', ''),
+                    ('fen', ''),
+                    ('prm', '')]
+    LIGHT_CFG_CP = [('fw', ''),
+                    ('sw', ''),
+                    ('repo', '')]
     LIGHT_CFG = LIGHT_CFG_CP + LIGHT_CFG_OK
-    LIGHT_IMU = ['UP', 'DOWN', 'LEFT', 'RIGHT']
+    LIGHT_IMU = [('UP', ''),
+                 ('DOWN', ''),
+                 ('LEFT', ''),
+                 ('RIGHT', '')]
 
     def buildStatusLights(self):
         self.lights_sta = True
@@ -326,10 +354,23 @@ class UAVListWidget(QListWidget):
 
         # Update all lights based on OK flags
         msg = item.getLastStatus()
-        for light in self.LIGHT_STA_OK + self.LIGHT_CFG_OK:
+        for l in self.LIGHT_STA_OK + self.LIGHT_CFG_OK:
+            light = l[0]
+            badtip = ''
             if light not in self.lights:
                 continue
-            self.lights[light].setbool(getattr(msg, 'ok_'+light))
+
+            # Set custom tooltips for some lights
+            if light == 'as':
+                badtip = 'try cal pressure'
+            elif light in [c[0] for c in self.LIGHT_CFG_OK]:
+                badtip = 'not verified (yet)'
+            else:
+                badtip = 'bad sensor health'
+
+            # Update the light
+            self.lights[light].setbool(getattr(msg, 'ok_'+light),
+                                       badtip=badtip)
 
         # Update remaining (computed) lights
 
@@ -338,7 +379,9 @@ class UAVListWidget(QListWidget):
             # Ignore if flying
             self.lights['ralt'].good()
         else:
-            self.lights['ralt'].setbool(-10000.0 < msg.alt_rel < 10000.0)
+            # Make sure within calibration tolerances
+            self.lights['ralt'].setbool(-10000.0 < msg.alt_rel < 10000.0,
+                                        badtip='Out of tolerance (> +/-10 m)')
 
         # Average airspeed (over 10 samples) must have *some* deviation,
         # but not too much
@@ -346,22 +389,36 @@ class UAVListWidget(QListWidget):
         # Max airspeed used so we can check positive pressure on the ground
         as_max = item.getMaxAspd()
         if item.getState() == UAVListWidgetItem.STATE_FLYING:
-            # If flying, ignore pressure
-            self.lights['aspd'].good()
-        elif as_max and as_max > 20.0:
-            # Allow for positive pressure check
-            self.lights['aspd'].ok()
+            # If flying, make sure above stall speed
+            self.lights['aspd'].setbool(12.0 < as_avg, badtext='/S',
+                                        badtip='Stall warning (< 12 m/s)')
+        elif item.getState() == UAVListWidgetItem.STATE_READY:
+            # If ready, only check for flatline
+            self.lights['aspd'].setbool(0.0 < as_avg, badtext='/F',
+                                        badtip='Flatline (0 m/s)')
+        elif as_max > 20.0:
+            # On ground, spike (hopefully) means checking positive pressure
+            self.lights['aspd'].ok(text='/P',
+                                   tip='Positive pressure check (> 20 m/s)')
+        elif as_avg == 0.0:
+            # On ground, flatline is bad
+            self.lights['aspd'].bad(text='/F',
+                                    tip='Flatline (0 m/s)')
         else:
-            # Allow for zeroize + slight noise check
-            self.lights['aspd'].setbool(as_avg and 0.0 < as_avg < 4.0)
+            # On ground, should have minimal, nonzero noise
+            self.lights['aspd'].setbool(0.0 < as_avg < 5.0, badtext='/T',
+                                        badtip='Out of tolerance (> 5 m/s)')
 
         # Battery voltage should be > 12.4 V at takeoff
         # using "ok" color to distinguish from actual problem
         vcc = msg.batt_vcc
         if item.getState() == UAVListWidgetItem.STATE_FLYING:
-            self.lights['batt'].setbool(vcc > 11000)
+            self.lights['batt'].setbool(vcc > 11000,
+                                        badtip='Low battery (< 11.0 V)')
         else:
-            self.lights['batt'].setbool(vcc > 12400, vcc > 11000)
+            self.lights['batt'].setbool(vcc > 12000, vcc > 11000,
+                                        oktip='Low for takeoff (< 12.0 V)',
+                                        badtip='Low battery (< 11.0 V)')
 
     def updatePoseLights(self):
         THRESH = 30.0  # Minimum angle in degrees
