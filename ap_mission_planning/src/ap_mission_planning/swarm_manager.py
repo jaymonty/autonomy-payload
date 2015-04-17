@@ -39,6 +39,8 @@ import autopilot_bridge.srv as apmsrv
 #   _swarm_keys: list of all aircraft IDs (keys) in the swarm dictionary
 #   _subswarm_keys: list of subswarm aircraft IDs (keys) in the swarm dictionary
 #   _waypoint_types: dictionary mapping waypoint IDs to waypoint type
+#   _waypoint_alts: dictionary mapping waypoint IDs to altitudes (MSL)
+#   _crnt_wpt_alt: most recently ordered waypoint altitude (MSL)
 #   _update_subswarm_publisher: ROS publisher to assign vehicle to a subswarm
 #   _swarm_state_publisher: ROS publisher to publish the current swarming state
 #   _swarm_behavior_publisher: ROS publisher to publish the active swarm behavior
@@ -75,7 +77,6 @@ class SwarmManager(nodeable.Nodeable):
     TAKEOFF_WP = 1       # Airborne
     SWARM_STANDBY_WP = 4 # Available for tasking
     SWARM_EGRESS_WP = 5  # Leaving swarm for recovery
-#    LANDING_WP = 6       # Waypoint used for the landing point
     RACETRACK_WP = 7     # First racetrack waypoint
 
     # Enumeration for available swarm behavior
@@ -114,30 +115,6 @@ class SwarmManager(nodeable.Nodeable):
                       ON_DECK: 'On Deck',
                       POST_FLIGHT: 'Post Flight' }
 
-    # Hard-coded preset altitudes for fixed-follow swarming
-    UAV_ALTS = {   4:375,
-                   6:400,
-                  11:425,
-                   9:450,
-                  12:475,
-                   7:500,
-                  10:525,
-                  13:550,
-                  14:575,
-                  15:600,
-                   5:625,
-                 101:385,
-                 102:410,
-                 103:435,
-                 104:460,
-                 105:485,
-                 106:510,
-                 107:535,
-                 108:560,
-                 109:585,
-                 110:610,
-                 111:635 }
-
     FIXED_FOLLOW_DIST = 25.0  # Follower distance for "fixed follow" control
     TIMING_DELAY = 2.0        # Delay time to allow things to "take"
     LAUNCH_ALT = 20000.0      # AGL (m * 1000) altitude used to detect "launch"
@@ -160,6 +137,8 @@ class SwarmManager(nodeable.Nodeable):
         self._swarm_behaviors = dict()
         self._swarm_uav_states = dict()
         self._waypoint_types = dict()
+        self._waypoint_alts = dict()
+        self._crnt_wpt_alt = 0.0
         self._swarm_keys = []
         self._subswarm_keys = []
         self._follow_publisher = None
@@ -320,11 +299,14 @@ class SwarmManager(nodeable.Nodeable):
         success = False
         try:
             # ID the lead (highest) aircraft in the subswarm
-            high_ac_id, high_ac_alt = 0, 0.0
+            high_ac_id = self._ownID
+            high_ac_alt = self._crnt_wpt_alt
             for acft in self._subswarm_keys:
-                if SwarmManager.UAV_ALTS[acft] > high_ac_alt:
+                swarm_record = self._swarm_uav_states[acft]
+                if acft != self._ownID and \
+                   swarm_record.state.pose.pose.position.alt > high_ac_alt:
                     high_ac_id = acft
-                    high_ac_alt = SwarmManager.UAV_ALTS[acft]
+                    high_ac_alt = swarm_record.state.pose.pose.position.alt
 
             # If leader acft, set NO_PAYLOAD_CTRL and send to the racetrack
             if high_ac_id == self._ownID:  # This AC is leader
@@ -342,7 +324,7 @@ class SwarmManager(nodeable.Nodeable):
                 form_msg.order.range = SwarmManager.FIXED_FOLLOW_DIST
                 form_msg.order.angle = math.pi
                 form_msg.order.alt_mode = follower.BASE_ALT_MODE
-                form_msg.order.control_alt = SwarmManager.UAV_ALTS[self._ownID]
+                form_msg.order.control_alt = self._crnt_wpt_alt
                 self._follow_publisher.publish(form_msg)
                 time.sleep(SwarmManager.TIMING_DELAY) # give the form set message a second to take
                 success = self._ctlr_select_srv_proxy(controller.FOLLOW_CTRLR).result
@@ -485,11 +467,20 @@ class SwarmManager(nodeable.Nodeable):
                 self._set_swarm_state(SwarmManager.SWARM_READY)
 
         try:
-            # Capture the type of waypoint that is current if required
+            # Capture the type and altitude of waypoint that is current if required
             if not statusMsg.mis_cur in self._waypoint_types:
                 wpt = self._wp_getrange_srv_proxy(statusMsg.mis_cur, \
                                                   statusMsg.mis_cur).points[0]
                 self._waypoint_types[statusMsg.mis_cur] = wpt.command
+                own_ac = self._swarm_uav_states[self._ownID]
+                msl_offset = own_ac.state.pose.pose.position.alt -\
+                             own_ac.state.pose.pose.position.rel_alt
+                self._waypoint_alts[statusMsg.mis_cur] = wpt.z + msl_offset
+                self.log_dbug("Processed new waypoint id " + str(statusMsg.mis_cur) + \
+                              ", type " + str(self._waypoint_types[statusMsg.mis_cur]) + \
+                              ", altitude " + str(self._waypoint_alts[statusMsg.mis_cur]))
+
+            self._crnt_wpt_alt = self._waypoint_alts[statusMsg.mis_cur]
 
             if (self._swarm_state == SwarmManager.LANDING):
                 if (statusMsg.as_read <= 5.0):
@@ -498,12 +489,14 @@ class SwarmManager(nodeable.Nodeable):
             # Can transition to LANDING at any time after launch
             # NOTE:  This check is hardcoded as a fixed waypoint ID for now.  Will
             #        need to change to remove dependence on mission file organization
-            elif (self._waypoint_types[statusMsg.mis_cur] == SwarmManager.WP_TYPE_LAND):
+            elif (self._waypoint_types[statusMsg.mis_cur] == SwarmManager.WP_TYPE_LAND) and\
+                 (self._swarm_state != SwarmManager.ON_DECK):
                 self._set_swarm_state(SwarmManager.LANDING)
                 self._set_subswarm(0)
 
         except Exception as ex:
-            self.log_warn('Exception in test for "landing" states: ' + str(ex))
+            self.log_warn('Exception while getting  data for waypoint # ' +\
+                          str(statusMsg.mis_cur) + ': ' + str(ex))
 
 
 #-----------------------------------------------------------------------
