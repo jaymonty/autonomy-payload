@@ -33,11 +33,12 @@ class UAVListWidgetItem(QListWidgetItem):
 
     # UAV state
     STATE_NONE = UAVState('INVALID', QBrush(QColor('white')))
-    STATE_OFFLINE = UAVState('OFFLINE', QBrush(QColor('red')))
-    STATE_WAITING_AP = UAVState('WAITING AP', QBrush(QColor('cyan').darker(150)))
+    STATE_OFFLINE = UAVState('OFFLINE', QBrush(QColor('darkgray')))
+    STATE_WAITING_AP = UAVState('WAITING AP', QBrush(QColor('darkturquoise')))
     STATE_PREFLIGHT = UAVState('PREFLIGHT', QBrush(QColor('yellow')))
     STATE_READY= UAVState('READY', QBrush(QColor.fromRgb(0,200,0)))
-    STATE_FLYING = UAVState('FLYING', QBrush(QColor.fromRgb(160,160,160)))
+    STATE_FLYING = UAVState('FLYING', QBrush(QColor('white')))
+    STATE_PROBLEM = UAVState('PROBLEM', QBrush(QColor('red')))
 
     def __init__(self, *args, **kwargs):
         QListWidgetItem.__init__(self, *args, **kwargs)
@@ -51,14 +52,17 @@ class UAVListWidgetItem(QListWidgetItem):
 
         self.setFont(self.FONT)
 
+    # This is used for the top status line
     def __str__(self):
         if self._state is None or self._msg_s is None:
-            return "UNKNOWN"
-        return "%s : %s (%d / %s / %2.3fv / %2.1fm)" % \
-               (self._msg_s.name,
-                self._state.text,
-                self._msg_s.msg_src,
-                self._msg_s.msg_src_ip,
+            return "UNKNOWN AIRCRAFT STATUS"
+        ap_mode = self.getModeString()
+        if ap_mode == "AUTO":
+            ap_mode += " / WP %d" % self._msg_s.mis_cur
+        return "%d : %s (%s / %2.3fv / %2.1fm)" % \
+               (self._msg_s.msg_src,
+                self._msg_s.name,
+                ap_mode,
                 self._msg_s.batt_vcc / 1000.0,
                 self._msg_s.alt_rel / 1000.0)
 
@@ -77,6 +81,11 @@ class UAVListWidgetItem(QListWidgetItem):
         if self._msg_s:
             return self._msg_s.msg_src_ip
         return None
+
+    def getReady(self):
+        if self._msg_s:
+            return self._msg_s.ready
+        return False
 
     def getTime(self):
         return self._time
@@ -97,6 +106,12 @@ class UAVListWidgetItem(QListWidgetItem):
     def getMaxAspd(self):
         if self._msg_s is None: return 0
         return float(max(self._aspd))
+
+    def getModeString(self):
+        MODES = ['RTL', 'MANUAL', 'FBWA', 'GUIDED', 'AUTO', 'FBWB', 'CIRCLE']
+        if self._msg_s is None: return 'UNKNOWN'
+        if self._msg_s.mode >= len(MODES): return 'UNKNOWN'
+        return MODES[self._msg_s.mode]
 
     # Set the state (color)
     def setState(self, state):
@@ -121,9 +136,20 @@ class UAVListWidgetItem(QListWidgetItem):
         self._aspd.append(msg.airspeed)
 
         # Determine color coding / "state"
-        if msg.armed and msg.alt_rel > 20000:
-            # Armed ^ (Alt > 20m AGL) -> Active/Flying
-            state = self.STATE_FLYING
+        if msg.ready and msg.alt_rel > 10000:
+            # Ready && (Alt > 10m AGL) -> Active/Flying
+            # NOTE: ok conditions should be integrated elsewhere
+            # NOTE: no airspeed integrated yet (tricky for takeoff)
+            all_ok = msg.armed and msg.ok_ahrs and msg.ok_as and \
+                     msg.ok_gps and msg.ok_ins and msg.ok_mag and \
+                     msg.ok_pwr and msg.ready and \
+                     (msg.mode == 4) and \
+                     (msg.batt_vcc > 10800)
+                     # TODO: Add airspeed watch (for stall)
+            if all_ok:
+                state = self.STATE_FLYING
+            else:
+                state = self.STATE_PROBLEM
         elif msg.batt_vcc == 0.0 and msg.mode == 15:
             # No voltage ^ Unknown mode -> No autopilot data yet
             state = self.STATE_WAITING_AP
@@ -133,16 +159,10 @@ class UAVListWidgetItem(QListWidgetItem):
             state = self.STATE_PREFLIGHT
         self.setState(state)
 
-        # Update UI
-        status_text = "%s (%d / %2.3fv / %2.1fm)" % \
-                      (msg.name,
-                       msg.msg_src,
-                       msg.batt_vcc / 1000.0,
-                       msg.alt_rel / 1000.0)
+        # Update text for item
+        status_text = self.__str__()
         if msg.armed:
-            status_text += " <ARM>"
-        if msg.mode == 4:
-            status_text += " <AUTO>"
+            status_text += " <ARMED>"
         self.setText(status_text)
 
 # This creates a list box populated by listening to ACS messages
@@ -308,7 +328,8 @@ class UAVListWidget(QListWidget):
                     ('ins', ''),
                     ('mag', ''),
                     ('pwr', '')]
-    LIGHT_STA_CP = [('aspd', ''),
+    LIGHT_STA_CP = [('arm', ''),
+                    ('aspd', ''),
                     ('batt', ''),
                     ('ralt', '')]
     LIGHT_STA = sorted(LIGHT_STA_OK + LIGHT_STA_CP)
@@ -374,8 +395,21 @@ class UAVListWidget(QListWidget):
 
         # Update remaining (computed) lights
 
+        # Arming status
+        if item.getState() in [UAVListWidgetItem.STATE_FLYING,
+                               UAVListWidgetItem.STATE_PROBLEM]:
+            # If flying, being disarmed is BAD
+            self.lights['arm'].setbool(msg.armed)
+        elif item.getReady():
+            # If flight ready, we *want* to be armed (but no error if not)
+            self.lights['arm'].setbool(msg.armed, True)
+        else:
+            # Otherwise, we want to warn tech while armed
+            self.lights['arm'].setbool(not msg.armed, True)
+
         # Relative alt must be +/- 10 m
-        if item.getState() == UAVListWidgetItem.STATE_FLYING:
+        if item.getState() in [UAVListWidgetItem.STATE_FLYING,
+                               UAVListWidgetItem.STATE_PROBLEM]:
             # Ignore if flying
             self.lights['ralt'].good()
         else:
@@ -388,8 +422,10 @@ class UAVListWidget(QListWidget):
         as_avg = item.getAvgAspd()
         # Max airspeed used so we can check positive pressure on the ground
         as_max = item.getMaxAspd()
-        if item.getState() == UAVListWidgetItem.STATE_FLYING:
+        if item.getState() in [UAVListWidgetItem.STATE_FLYING,
+                               UAVListWidgetItem.STATE_PROBLEM]:
             # If flying, make sure above stall speed
+            # TODO: This condition "flickers" on takeoff, find better logic
             self.lights['aspd'].setbool(12.0 < as_avg, badtext='/S',
                                         badtip='Stall warning (< 12 m/s)')
         elif item.getState() == UAVListWidgetItem.STATE_READY:
@@ -412,13 +448,14 @@ class UAVListWidget(QListWidget):
         # Battery voltage should be > 12.4 V at takeoff
         # using "ok" color to distinguish from actual problem
         vcc = msg.batt_vcc
-        if item.getState() == UAVListWidgetItem.STATE_FLYING:
-            self.lights['batt'].setbool(vcc > 11000,
-                                        badtip='Low battery (< 11.0 V)')
+        if item.getState() in [UAVListWidgetItem.STATE_FLYING,
+                               UAVListWidgetItem.STATE_PROBLEM]:
+            self.lights['batt'].setbool(vcc > 10800,
+                                        badtip='Low battery (< 10.8 V)')
         else:
-            self.lights['batt'].setbool(vcc > 12000, vcc > 11000,
+            self.lights['batt'].setbool(vcc > 12000, vcc > 10800,
                                         oktip='Low for takeoff (< 12.0 V)',
-                                        badtip='Low battery (< 11.0 V)')
+                                        badtip='Low battery (< 10.8 V)')
 
     def updatePoseLights(self):
         THRESH = 30.0  # Minimum angle in degrees
@@ -501,9 +538,16 @@ class UAVListWidget(QListWidget):
             if self.item(i).getState() in self.filter_states:
                 self.item(i).setHidden(True)
             elif self.item(i).getTime() < (cur_time - self.DELETE_TIME):
-                self.item(i).setHidden(True)
+                # Flying (problem) aircraft shouldn't disappear
+                if self.item(i).getState() != UAVListWidgetItem.STATE_PROBLEM:
+                    self.item(i).setHidden(True)
             elif self.item(i).getTime() < (cur_time - self.OFFLINE_TIME):
-                self.item(i).setState(UAVListWidgetItem.STATE_OFFLINE)
+                # If flying, this is a problem. Otherwise, it's ok
+                if self.item(i).getState() in [UAVListWidgetItem.STATE_FLYING,
+                                               UAVListWidgetItem.STATE_PROBLEM]:
+                    self.item(i).setState(UAVListWidgetItem.STATE_PROBLEM)
+                else:
+                    self.item(i).setState(UAVListWidgetItem.STATE_OFFLINE)
             else:
                 self.item(i).setHidden(False)
 
@@ -520,7 +564,8 @@ class UAVListWidget(QListWidget):
     def handleMAVProxy(self):
         item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT,
                                      UAVListWidgetItem.STATE_READY,
-                                     UAVListWidgetItem.STATE_FLYING])
+                                     UAVListWidgetItem.STATE_FLYING,
+                                     UAVListWidgetItem.STATE_PROBLEM])
         if item is None:
             return
 
@@ -700,23 +745,6 @@ class UAVListWidget(QListWidget):
         fr.ready = (item.getState() == UAVListWidgetItem.STATE_PREFLIGHT)
         self._sendMessage(fr)
 
-    def handleSwarmReady(self):
-        item = self._checkItemState([UAVListWidgetItem.STATE_READY,  # For dev
-                                     UAVListWidgetItem.STATE_FLYING])
-        if item is None:
-            return
-
-        if not self._confirmBox("Confirm aircraft %d?" % item.getID()):
-            return
-
-        # Send to the staging (ingress) waypoint
-        wg = messages.WaypointGoto()
-        wg.msg_dst = int(item.getID())
-        wg.msg_secs = 0
-        wg.msg_nsecs = 0
-        wg.index = 3
-        self._sendMessage(wg)
-
     def handleConfig(self, alt):
         item = self._checkItemState([UAVListWidgetItem.STATE_READY])
         if item is None:
@@ -741,9 +769,26 @@ class UAVListWidget(QListWidget):
         mc.std_alt = mc_alt
         self._sendMessage(mc)
 
-    def handleAUTO(self, index):
+    def handleAUTO(self):
         item = self._checkItemState([UAVListWidgetItem.STATE_READY,
-                                     UAVListWidgetItem.STATE_FLYING])
+                                     UAVListWidgetItem.STATE_FLYING,
+                                     UAVListWidgetItem.STATE_PROBLEM])
+        if item is None:
+            return
+
+        # Trigger AUTO
+        au = messages.Mode()
+        au.msg_dst = int(item.getID())
+        au.msg_secs = 0
+        au.msg_nsecs = 0
+        au.mode = 4           # AUTO mode number
+
+        self._sendMessage(au)
+
+    def handleWP(self, index):
+        item = self._checkItemState([UAVListWidgetItem.STATE_READY,
+                                     UAVListWidgetItem.STATE_FLYING,
+                                     UAVListWidgetItem.STATE_PROBLEM])
         if item is None:
             return
 
@@ -761,17 +806,9 @@ class UAVListWidget(QListWidget):
         wpa.index = wp_des
         self._sendMessage(wpa)
 
-        # Trigger AUTO
-        au = messages.Mode()
-        au.msg_dst = int(item.getID())
-        au.msg_secs = 0
-        au.msg_nsecs = 0
-        au.mode = 4           # AUTO mode number
-
-        self._sendMessage(au)
-
     def handleRTL(self):
-        item = self._checkItemState([UAVListWidgetItem.STATE_FLYING])
+        item = self._checkItemState([UAVListWidgetItem.STATE_FLYING,
+                                     UAVListWidgetItem.STATE_PROBLEM])
         if item is None:
             return
 
@@ -785,7 +822,8 @@ class UAVListWidget(QListWidget):
         self._sendMessage(rtl)
 
     def handleLand(self, approach):
-        item = self._checkItemState([UAVListWidgetItem.STATE_FLYING])
+        item = self._checkItemState([UAVListWidgetItem.STATE_FLYING,
+                                     UAVListWidgetItem.STATE_PROBLEM])
         if item is None:
             return
 
@@ -808,8 +846,12 @@ class UAVListWidget(QListWidget):
 
         self._sendMessage(wpa)
 
+        # Make sure aircraft is in AUTO as well
+        self.handleAUTO()
+
     def handleLandAbort(self):
-        item = self._checkItemState([UAVListWidgetItem.STATE_FLYING])
+        item = self._checkItemState([UAVListWidgetItem.STATE_FLYING,
+                                     UAVListWidgetItem.STATE_PROBLEM])
         if item is None:
             return
 
@@ -845,6 +887,8 @@ class UAVListWidget(QListWidget):
 if __name__ == '__main__':
     # Grok args
     parser = OptionParser("flight_tech.py [options]")
+    parser.add_option("-i", "--id", dest="id", type="int",
+                      help="ID to use for sending commands", default=255)
     parser.add_option("-d", "--device", dest="device",
                       help="Network device to listen on", default='')
     parser.add_option("-p", "--port", dest="port", type="int",
@@ -855,6 +899,7 @@ if __name__ == '__main__':
     parser.add_option("-o", "--operator", dest="op_mode",
                       action="store_true", default=False,
                       help="UAV Operator mode")
+    # NOTE: This is an old SITL hack; can probably remove
     parser.add_option("--lo-reverse", dest="lo_reverse",
                       action="store_true", default=False,
                       help="If using lo, reverse the addresses")
@@ -872,24 +917,27 @@ if __name__ == '__main__':
         sys.exit(1)
     if opts.ft_mode:
         mode_string = " -- Flight Tech mode"
-        ignore = [UAVListWidgetItem.STATE_FLYING]
+        ignore = [UAVListWidgetItem.STATE_FLYING,
+                  UAVListWidgetItem.STATE_PROBLEM]
     if opts.op_mode:
         mode_string = " -- Operator mode"
-        ignore = [UAVListWidgetItem.STATE_WAITING_AP,
+        ignore = [UAVListWidgetItem.STATE_OFFLINE,
+                  UAVListWidgetItem.STATE_WAITING_AP,
                   UAVListWidgetItem.STATE_PREFLIGHT]
 
-    # NOTE: This is a hack to work with SITL
+    # NOTE: This is an old hack for SITL, and can probably be removed unless
+    # we're planning to use the loopback interface again in the future.
     my_ip = None
     bcast_ip = None
     if opts.device == 'lo':
         my_ip = '127.0.1.1'
         bcast_ip = '127.0.0.1'
-        if opts.lo_reverse:
+        if opts.lo_reverse:     # NOTE: also safe to remove this logic
             (my_ip, bcast_ip) = (bcast_ip, my_ip)
 
     # Establish socket to aircraft
     try:
-        sock = Socket(0xff, opts.port, opts.device, my_ip, bcast_ip)
+        sock = Socket(opts.id, opts.port, opts.device, my_ip, bcast_ip)
         # NOTE: The next two lines are *definitely* not the most pythonic
         #  (shouldn't just grab class data members)
         my_ip = sock._ip
@@ -901,7 +949,7 @@ if __name__ == '__main__':
     # Build up the window itself
     app = QApplication([])
     win = QWidget()
-    win.resize(500, 550 + 100 * int(show_ft and show_op))
+    win.resize(480, 550 + 100 * int(show_ft and show_op))
     win.setWindowTitle("FTI" + mode_string)
     layout = QVBoxLayout()
     win.setLayout(layout)
@@ -917,7 +965,7 @@ if __name__ == '__main__':
     # NOTE: The way updates are done is a bit hackish,
     #  relies on a signal being emitted by the UAVListWidget
     lblStat = QLabel("No Aircraft Selected")
-    lblStat.setStyleSheet("QLabel { color : black; }")
+    lblStat.setStyleSheet("QLabel { color : black; font-size : 20px; }")
     lblStat.setAutoFillBackground(True)
 
     # Listbox of UAVs
@@ -936,11 +984,14 @@ if __name__ == '__main__':
         if item is None:
             lblStat.setText("No Aircraft Selected")
             lblStat.setPalette(pltOrig)
+            lblStat.setToolTip('')
         else:
             lblStat.setText(str(item))
             plt = lblStat.palette()
             plt.setBrush(QPalette.Background, item.getState().color)
             lblStat.setPalette(plt)
+            lblStat.setToolTip(item.getIP())
+        # Need to call these to refresh status lights when selection changes
         lst.updateStatusLights()
         lst.updatePoseLights()
     lst.setSortingEnabled(True)
@@ -961,11 +1012,13 @@ if __name__ == '__main__':
                 UAVListWidgetItem.STATE_WAITING_AP,
                 UAVListWidgetItem.STATE_PREFLIGHT,
                 UAVListWidgetItem.STATE_READY,
-                UAVListWidgetItem.STATE_FLYING ]:
+                UAVListWidgetItem.STATE_FLYING,
+                UAVListWidgetItem.STATE_PROBLEM]:
         lbl = QLabel(st.text)
         plt = lbl.palette()
         plt.setBrush(QPalette.Background, st.color)
         lbl.setPalette(plt)
+        lbl.setAlignment(Qt.AlignCenter)
         lbl.setAutoFillBackground(True)
         hlayout.addWidget(lbl)
     layout.addLayout(hlayout)
@@ -1026,21 +1079,20 @@ if __name__ == '__main__':
         # Mode buttons
         mlayout = QHBoxLayout()
         btAUTO = QPushButton("AUTO")
+        btAUTO.clicked.connect(lst.handleAUTO)
         mlayout.addWidget(btAUTO)
+        btWP = QPushButton("Send WP")
+        mlayout.addWidget(btWP)
         lnWP=QLineEdit()
         lnWP.setFixedWidth(50)
         lnWP.setText("1")
         mlayout.addWidget(lnWP)
-        btAUTO.clicked.connect(lambda : lst.handleAUTO(lnWP.text()))
+        btWP.clicked.connect(lambda : lst.handleWP(lnWP.text()))
         btRTL = QPushButton("RTL")
+        btRTL.setStyleSheet("background-color: indianred")
         btRTL.clicked.connect(lst.handleRTL)
         mlayout.addWidget(btRTL)
         layout.addLayout(mlayout)
-
-        # Swarm-ready button
-        btSwarmReady = QPushButton("Confirm Swarm Ready")
-        btSwarmReady.clicked.connect(lst.handleSwarmReady)
-        layout.addWidget(btSwarmReady)
 
         # Landing buttons
         llayout = QHBoxLayout()
