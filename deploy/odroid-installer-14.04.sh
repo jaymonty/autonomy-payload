@@ -9,7 +9,7 @@
 ROS_DISTRO="indigo"
 APT_OPTS="-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confask"
 
-#------------------------------------------------------------------------------
+###############################################################################
 # Helper functions
 
 # Function to check for command failure and print useful error messages
@@ -21,14 +21,14 @@ if [ $? != 0 ]; then
 fi
 }
 
-#------------------------------------------------------------------------------
+###############################################################################
 # Parition various pieces of the install
 # Note: we try to make each function idempotent, so it can safely be
 # run over and over again, and used as an upgrade script.
 
-#####
+############################################################
 # Perform initial configuration (generally only needed once)
-#####
+############################################################
 function install_initial
 {
 
@@ -131,9 +131,9 @@ check_fail "route add"
 
 }
 
-#####
+###############################
 # Do base software installation
-#####
+###############################
 function install_base_software
 {
 
@@ -195,9 +195,9 @@ sudo apt-get clean
 
 }
 
-#####
+#####################################
 # Install payload software from repos
-#####
+#####################################
 function install_payload_software
 {
 
@@ -303,9 +303,9 @@ check_fail "catkin_make"
 
 }
 
-#####
+###################################################
 # Function to set up auto-start of payload software
-#####
+###################################################
 function install_autostart
 {
 
@@ -343,7 +343,21 @@ check_fail "init.d update"
 
 }
 
-#------------------------------------------------------------------------------
+##############################################
+# Function to apply fixes we learn about later
+##############################################
+function do_remediations
+{
+
+# Set correct timezone
+sudo sh -c "echo 'US/Pacific' > /etc/timezone"
+check_fail "timezone echo"
+sudo dpkg-reconfigure -f noninteractive tzdata
+check_fail "timezone update"
+
+}
+
+###############################################################################
 # Main program flow
 
 INSTALL_INIT=true
@@ -449,16 +463,25 @@ if [ $INSTALL_INIT == true ]; then
   install_autostart
 fi
 
+# Perform any remediation steps (fixes discovered later on)
+do_remediations
+
 # Final message(s) to user
 echo ""
-echo "Congratulations, your system has been updated."
-echo "Please check that the correct branches of mavlink, autonomy-payload,"
-echo "and autopilot_bridge have been checked out."
-echo "Then, reboot to automatically start the payload software."
+echo "Congratulations, your system has been updated. Please check"
+echo "that the correct branches of mavlink, autonomy-payload, and"
+echo "and autopilot_bridge have been checked out. Then, reboot to"
+echo "automatically start the payload software."
 echo ""
 ls ~/bags/*bag* &> /dev/null
 if [ $? == 0 ]; then
   echo "WARNING: There are ROS bags in ~/bags/;"
+  echo "you may wish to clear these off before flight!"
+  echo ""
+fi
+ls ~/.ros/log/ &> /dev/null
+if [ $? == 0 ]; then
+  echo "WARNING: There are ROS logs in ~/.ros/log/;"
   echo "you may wish to clear these off before flight!"
   echo ""
 fi
