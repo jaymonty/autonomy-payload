@@ -717,6 +717,27 @@ class MissionConfig(Message):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.std_alt = int(fields[0])
 
+class WeatherData(Message):
+    msg_type = 0x92
+    msg_fmt = '>fff'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.baro = 0.0           # barametric pressure
+        self.wind_speed = 0.0     # miles per hour (need to convert)
+        self.wind_direction = 0.0 # direction from (degrees)
+
+    def _pack(self):
+        tupl = (float(self.baro), float(self.wind_speed), float(self.wind_direction))
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.baro = int(fields[0]) 
+        self.wind_speed = int(fields[1]) 
+        self.wind_direction = int(fields[2]) 
+
 class AutopilotReboot(Message):
     msg_type = 0xFD
 
