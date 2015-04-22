@@ -78,6 +78,11 @@ if __name__ == '__main__':
                  message.airspeed, message.alt_rel,
                  message.swarm_state,
                  message.ctl_mode, ready_string)
+
+        elif isinstance(message, messages.WeatherData):
+            print "\tBaro: %f Windspeed: %f  Direction: %f" %\
+                (float(message.baro), float(message.wind_speed), float(message.wind_direction))
+
         else:
             print "\t<I don't know how to decode this type>"
 
