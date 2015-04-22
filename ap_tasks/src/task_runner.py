@@ -259,7 +259,8 @@ class FetchConfigTask(Task):
             os.mkdir(self._folder)
 
         # Delete files that MUST be refreshed
-        for f in ['fence', 'param', 'rally', 'wp']:
+        for f in ['fence', 'param', 'rally', 'wp',
+                  'rally.template', 'wp.template']:
             try:
                 os.remove(self._folder + f)
             except:
@@ -281,7 +282,7 @@ class FetchConfigTask(Task):
             for i in range(3):
                 if rospy.is_shutdown(): return False
                 try:
-                    cmd = "wget -q -O %s%s http://192.168.2.1/%s/%s" % \
+                    cmd = "wget -q -T 20 -O %s%s http://192.168.2.1/%s/%s" % \
                           (self._folder, f, self._id_str, f)
                     res = subprocess.call(cmd, shell=True)
                     if res == 0: break
