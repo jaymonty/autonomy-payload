@@ -555,13 +555,25 @@ net_demo.active = False
 def net_mission_config(message, bridge):
     def main():
         # Reset OK flags so users know work is in progress
-        for cfg in ['rally', 'wp']:
+        for cfg in ['rally', 'wp', 'param']:
             rospy.set_param('ok_' + cfg, False)
 
         # Extract/validate values
         replacements = {}
         replacements['STDALT'] = message.std_alt
 
+        # Set parameters
+        plist = []
+        plist.append(pilot_msg.ParamPair('ALT_HOLD_RTL',
+                                         replacements['STDALT'] * 100.0))
+        plist.append(pilot_msg.ParamPair('FENCE_RETALT',
+                                         replacements['STDALT']))
+        res = bridge.callService('param_setlist',
+                                 pilot_srv.ParamSetList,
+                                 param=plist)
+        rospy.set_param('ok_param', res.ok)
+
+        # Build out templates and load them
         for cfg in ['rally', 'wp']:
             # Set up locations
             base_file = os.path.expanduser("~/blessed/%s.template" % cfg)
