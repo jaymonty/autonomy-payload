@@ -28,8 +28,7 @@
     <arg name="do_ctlr" default="$(arg ctlr)" />
     <arg name="do_bag" default="$(arg bag)" />
     <arg name="do_verify" default="$(arg verify)" />
-    <arg name="do_sitl" default="1" />
-    <arg name="sitl_dev" default="$(arg sitl)" />
+    <arg name="ap_dev" default="$(arg sitl)" />
     <arg name="net_dev" default="$(arg dev)" />
     <arg name="net_port" default="$(arg port)" />
   </include>

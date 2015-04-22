@@ -11,14 +11,11 @@
   <arg name="do_ctlr" default="1" />      <!-- Run the controller nodes -->
   <arg name="do_bag" default="1" />       <!-- Enable rosbagging -->
   <arg name="do_verify" default="1" />    <!-- Enable param/fence/rally/wp verification -->
-  <arg name="do_sitl" default="0" />      <!-- Run as a SITL payload -->
-  <arg name="sitl_dev" default="" />      <!-- Device string for SITL -->
+  <arg name="ap_dev" default="/dev/ttyUSB*" />  <!-- Device string -->
   <arg name="net_dev" default="wlan0" />  <!-- Network device -->
   <arg name="net_port" default="5554" />  <!-- Network port -->
 
   <!-- Derived (conditional) arguments -->
-  <arg name="apdev_arg" default="--device $(arg sitl_dev)" if="$(arg do_sitl)" />
-  <arg name="apdev_arg" default="" unless="$(arg do_sitl)" />
   <arg name="gps_arg" default="--gps-time-hack" if="$(arg gps)" />
   <arg name="gps_arg" default="" unless="$(arg gps)" />
 
@@ -33,7 +30,7 @@
 
   <!-- Core Nodes -->
 
-  <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--baudrate 1500000 --serial-relief 1024 -m acs -m file -m fpr -m slave -m wp $(arg apdev_arg) $(arg gps_arg)" />
+  <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--device $(arg ap_dev) --baudrate 1500000 --serial-relief 1024 -m acs -m file -m fpr -m slave -m wp $(arg gps_arg)" />
 
   <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" >
     <remap from="safety/heartbeat" to="autopilot/heartbeat_onboard" />
