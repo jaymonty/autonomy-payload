@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 usage()
 {
@@ -54,7 +54,10 @@ if [ $ROUTER_USE != 0 ]; then
 fi
 
 # Make sure SITL bridge device isn't running
-sudo ifconfig sitl_bridge down || true
+sudo ifconfig sitl_bridge | grep -q UP
+if [ $? == 0 ]; then
+  sudo ifconfig sitl_bridge down
+fi
 
 sudo ifconfig $1 down
 sudo iwconfig $1 mode ad-hoc essid zephyr channel 6 \
