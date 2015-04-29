@@ -12,8 +12,10 @@ from PySide.QtGui import *
 import ap_lib.acs_messages as messages
 from ap_lib.acs_socket import Socket
 
+import glob
 from math import asin, atan2, degrees
 from optparse import OptionParser
+import os
 import subprocess
 import sys
 import time
@@ -263,15 +265,14 @@ class UAVListWidget(QListWidget):
         if self.mav_channel is None or self.mav_id is None:
             return
 
-        ss = messages.SlaveSetup()
-        ss.msg_dst = int(self.mav_id)
-        ss.msg_secs = 0
-        ss.msg_nsecs = 0
-        ss.enable = False
-        ss.channel = self.mav_channel
-
-        # Send the message a few times (in lieu of reliability)
-        self._sendMessage(ss)
+        if 'udp:' in self.mav_channel:
+            ss = messages.SlaveSetup()
+            ss.msg_dst = int(self.mav_id)
+            ss.msg_secs = 0
+            ss.msg_nsecs = 0
+            ss.enable = False
+            ss.channel = self.mav_channel
+            self._sendMessage(ss)
 
         self.mav_id = None
         self.mav_channel = None
@@ -562,7 +563,8 @@ class UAVListWidget(QListWidget):
     ''' Task handlers '''
 
     def handleMAVProxy(self):
-        item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT,
+        item = self._checkItemState([UAVListWidgetItem.STATE_WAITING_AP,
+                                     UAVListWidgetItem.STATE_PREFLIGHT,
                                      UAVListWidgetItem.STATE_READY,
                                      UAVListWidgetItem.STATE_FLYING,
                                      UAVListWidgetItem.STATE_PROBLEM])
@@ -574,32 +576,82 @@ class UAVListWidget(QListWidget):
             print "Please close your other MAVProxy instance first"
             return
 
-        print "Starting MAVProxy session"
+        # See if we have a telem radio that we can configure
+        use_telem = True
+        radios = glob.glob("/dev/serial/by-id/usb-FTDI*")
+        if len(radios) < 1:
+            print "No telem radios found, using network ..."
+            use_telem = False
+        else:
+            try:
+                # NOTE: SUPER DUPER HACKISH!!!
+                # Possible that SiK tools aren't installed!
+                atc_path = "$ACS_ROOT/SiK/Firmware/tools/"
+                sys.path.append(os.path.expandvars(atc_path))
+                from atcommander import ATCommandSet
+            except Exception as ex:
+                print "ATCommandSet: " + str(ex)
+                use_telem = False
+        if use_telem:
+            print "Trying %s ..." % radios[0]
+            for attempt in range(3):
+                try:
+                    atc = ATCommandSet(radios[0])
+                    atc.leave_command_mode_force()
+                    atc.unstick()
+                    if not atc.enter_command_mode():
+                        raise Exception("Could not enter command mode")
+                    if not atc.set_param(ATCommandSet.PARAM_NETID,
+                                         item.getID()):
+                        raise Exception("Could not set Net ID")
+                    if not atc.write_params():
+                        raise Exception("Could not write EEPROM")
+                    if not atc.reboot():
+                        raise Exception("Could not reboot radio")
+                    atc.leave_command_mode()
+                    self.mav_channel = radios[0]
+                    break
+                except Exception as ex:
+                    print "ATCommandSet: " + str(ex)
+                    if attempt == 2:
+                        print "Configuration failed, using network ..."
+                        use_telem = False
+                    else:
+                        print "Configuration failed, retrying ..."
+                        time.sleep(1)
 
-        # Pick an aircraft-unique port
-        slave_port = 15554 + item.getID()
-        self.mav_id = item.getID()
-        self.mav_channel = "udp:%s:%u" % (self._sock._ip, slave_port)
+        # If using the network, set up slave channel
+        if not use_telem:
+            # Can't MAVProxy to a WAITING AP aircraft via network!
+            if item.getState() == UAVListWidgetItem.STATE_WAITING_AP:
+                print "Cannot MAVProxy by network to WAITING AP plane"
+                return
 
-        # Open a slave mavlink channel to the aircraft
-        # NOTE: This is done unreliably, so it might fail and we won't know :(
-        ss = messages.SlaveSetup()
-        ss.msg_dst = int(item.getID())
-        ss.msg_secs = 0
-        ss.msg_nsecs = 0
-        ss.enable = True
-        ss.channel = self.mav_channel
-        self._sendMessage(ss)
+            # Pick an aircraft-unique port
+            slave_port = 15554 + item.getID()
+            self.mav_id = item.getID()
+            self.mav_channel = "udp:%s:%u" % (self._sock._ip, slave_port)
 
-        # Wait a moment so the aircraft can (hopefully) set up the channel
-        time.sleep(1)
+            # Open a slave mavlink channel to the aircraft
+            # NOTE: This is done unreliably, so it might fail and we won't know
+            ss = messages.SlaveSetup()
+            ss.msg_dst = int(item.getID())
+            ss.msg_secs = 0
+            ss.msg_nsecs = 0
+            ss.enable = True
+            ss.channel = self.mav_channel
+            self._sendMessage(ss)
 
-        # Start up a MAVProxy instance and connect to slave channel
+            # Wait a moment so the aircraft can (hopefully) set up the channel
+            time.sleep(1)
+
+        # Start up MAVProxy instance
+        print "Starting MAVProxy session ..."
         try:
             self.mav_start_time = time.time()
             self.mav_popen = subprocess.Popen( \
-                "xterm -e mavproxy.py --master %s --load-module preflight" % \
-                    self.mav_channel,
+                "xterm -e mavproxy.py --master %s --baudrate 57600" % \
+                self.mav_channel,
                 shell=True,
                 cwd="/tmp")
         except Exception as ex:
@@ -882,6 +934,15 @@ class UAVListWidget(QListWidget):
         ps.msg_nsecs = 0
         self._sendMessage(ps)
 
+''' Helper functions '''
+
+# Add a horizontal separator
+def addLine(layout):
+    l = QFrame()
+    l.setFrameShape(QFrame.HLine)
+    l.setFrameShadow(QFrame.Sunken)
+    layout.addWidget(l)
+
 ''' Main code '''
 
 if __name__ == '__main__':
@@ -946,20 +1007,17 @@ if __name__ == '__main__':
         print "Couldn't start up socket on interface '%s'" % opts.device
         sys.exit(1)
 
-    # Build up the window itself
+    # Build up the main window
     app = QApplication([])
     win = QWidget()
-    win.resize(480, 550 + 100 * int(show_ft and show_op))
+    win.resize(800, 300)
     win.setWindowTitle("FTI" + mode_string)
-    layout = QVBoxLayout()
-    win.setLayout(layout)
-
-    # Define some helper functions
-    def addLine():
-        l = QFrame()
-        l.setFrameShape(QFrame.HLine)
-        l.setFrameShadow(QFrame.Sunken)
-        layout.addWidget(l)
+    lay_main = QHBoxLayout()
+    win.setLayout(lay_main)
+    lay_left = QVBoxLayout()   # Left side of window
+    lay_main.addLayout(lay_left)
+    lay_right = QVBoxLayout()  # Right side of window
+    lay_main.addLayout(lay_right)
 
     # Status of currently-selected UAV
     # NOTE: The way updates are done is a bit hackish,
@@ -998,15 +1056,8 @@ if __name__ == '__main__':
     lst.itemClicked.connect(do_update_stat)
     lst.itemSelectionChanged.connect(do_update_stat)
 
-    # Add labels and listbox in preferred order
-    layout.addWidget(lblStat)
-    layout.addLayout(laySta)
-    layout.addLayout(layCfg)
-    if show_ft:
-        layout.addLayout(layImu)
-    layout.addWidget(lst)
-
-    # Provide color-key for states
+    # Place listbox and color key
+    lay_left.addWidget(lst)
     hlayout = QHBoxLayout()
     for st in [ UAVListWidgetItem.STATE_OFFLINE,
                 UAVListWidgetItem.STATE_WAITING_AP,
@@ -1021,7 +1072,14 @@ if __name__ == '__main__':
         lbl.setAlignment(Qt.AlignCenter)
         lbl.setAutoFillBackground(True)
         hlayout.addWidget(lbl)
-    layout.addLayout(hlayout)
+    lay_left.addLayout(hlayout)
+
+    # Place status rows
+    lay_right.addWidget(lblStat)
+    lay_right.addLayout(laySta)
+    lay_right.addLayout(layCfg)
+    if show_ft:
+        lay_right.addLayout(layImu)
 
     if show_op:
         # Mission config
@@ -1035,10 +1093,10 @@ if __name__ == '__main__':
         btConfig = QPushButton("Send Config")
         btConfig.clicked.connect(lambda : lst.handleConfig(lnAlt.text()))
         clayout.addWidget(btConfig)
-        layout.addLayout(clayout)
+        lay_right.addLayout(clayout)
 
         # Line break after config stuff
-        addLine()
+        addLine(lay_right)
 
     if show_ft:
         # Mechanical preflight buttons
@@ -1056,7 +1114,7 @@ if __name__ == '__main__':
         btMotor.setFlat(True)
         btMotor.clicked.connect(lst.handleMotor)
         mlayout.addWidget(btMotor)
-        layout.addLayout(mlayout)
+        lay_right.addLayout(mlayout)
 
     # Arm and disarm throttle buttons
     alayout = QHBoxLayout()
@@ -1067,13 +1125,13 @@ if __name__ == '__main__':
     btDisArm = QPushButton("Disarm Throttle")
     btDisArm.clicked.connect(lst.handleDisArm)
     alayout.addWidget(btDisArm)
-    layout.addLayout(alayout)
+    lay_right.addLayout(alayout)
 
     if show_ft:
         # Flight-ready button
         btToggle = QPushButton("Toggle Flight Ready")
         btToggle.clicked.connect(lst.handleFlightReady)
-        layout.addWidget(btToggle)
+        lay_right.addWidget(btToggle)
 
     if show_op:
         # Mode buttons
@@ -1092,7 +1150,7 @@ if __name__ == '__main__':
         btRTL.setStyleSheet("background-color: indianred")
         btRTL.clicked.connect(lst.handleRTL)
         mlayout.addWidget(btRTL)
-        layout.addLayout(mlayout)
+        lay_right.addLayout(mlayout)
 
         # Landing buttons
         llayout = QHBoxLayout()
@@ -1107,10 +1165,10 @@ if __name__ == '__main__':
         btLandAbort = QPushButton("Land Abort")
         btLandAbort.clicked.connect(lst.handleLandAbort)
         llayout.addWidget(btLandAbort)
-        layout.addLayout(llayout)
+        lay_right.addLayout(llayout)
 
     # Line break before troubleshooting and misc buttons
-    addLine()
+    addLine(lay_right)
 
     # Troubleshooting buttons (USE WITH CAUTION)
     tlayout = QHBoxLayout()
@@ -1133,19 +1191,19 @@ if __name__ == '__main__':
     btAPReboot.setStyleSheet("background-color: darkgray")
     btAPReboot.clicked.connect(lst.handleAPReboot)
     tlayout.addWidget(btAPReboot)
-    layout.addLayout(tlayout)
+    lay_right.addLayout(tlayout)
 
     # Shutdown button
     btShutdown = QPushButton("Shut Down Payload")
     btShutdown.clicked.connect(lst.handleShutdown)
-    layout.addWidget(btShutdown)
+    lay_right.addWidget(btShutdown)
 
     # Exit button
     btExit = QPushButton("Exit")
     def do_exit():
         sys.exit(0)
     btExit.clicked.connect(do_exit)
-    layout.addWidget(btExit)
+    lay_right.addWidget(btExit)
 
     # Start the GUI do-loop
     win.show()
