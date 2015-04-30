@@ -112,6 +112,7 @@ class UAVListWidgetItem(QListWidgetItem):
     def getModeString(self):
         MODES = ['RTL', 'MANUAL', 'FBWA', 'GUIDED', 'AUTO', 'FBWB', 'CIRCLE']
         if self._msg_s is None: return 'UNKNOWN'
+        if self.getState() == self.STATE_OFFLINE: return 'OFFLINE'
         if self._msg_s.mode >= len(MODES): return 'UNKNOWN'
         return MODES[self._msg_s.mode]
 
@@ -122,6 +123,14 @@ class UAVListWidgetItem(QListWidgetItem):
             self.setBackground(self._state.color)
         else:
             self.setBackground(self.STATE_NONE.color)
+        self.updateText()
+
+    # Update text in item
+    def updateText(self):
+        status_text = self.__str__()
+        if self._msg_s and self._msg_s.armed:
+            status_text += " <ARMED>"
+        self.setText(status_text)
 
     def processPose(self, msg):
         self._msg_p = msg
@@ -162,10 +171,7 @@ class UAVListWidgetItem(QListWidgetItem):
         self.setState(state)
 
         # Update text for item
-        status_text = self.__str__()
-        if msg.armed:
-            status_text += " <ARMED>"
-        self.setText(status_text)
+        self.updateText()
 
 # This creates a list box populated by listening to ACS messages
 class UAVListWidget(QListWidget):
@@ -696,9 +702,6 @@ class UAVListWidget(QListWidget):
         self._okBox("Please wait for the 'ahrs' light to become green.")
 
     def handleServos(self):
-        print "I can't do this yet!"
-        return
-
         item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT])
         if item is None:
             return
@@ -717,9 +720,6 @@ class UAVListWidget(QListWidget):
         #self._okBox("Please wait ...")
 
     def handleMotor(self):
-        print "I can't do this yet!"
-        return
-
         item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT])
         if item is None:
             return
@@ -727,7 +727,8 @@ class UAVListWidget(QListWidget):
             self._okBox("Aircraft must be ARMED first")
             return
 
-        if not self._confirmBox("WARNING: Run motor for aircraft %d?" % item.getID()):
+        if not self._confirmBox("WARNING: Run motor for aircraft %d?" % \
+                                item.getID()):
             return
 
         # Demo the motor (must be armed)
@@ -1010,7 +1011,7 @@ if __name__ == '__main__':
     # Build up the main window
     app = QApplication([])
     win = QWidget()
-    win.resize(800, 300)
+    win.resize(1000, 670)
     win.setWindowTitle("FTI" + mode_string)
     lay_main = QHBoxLayout()
     win.setLayout(lay_main)
@@ -1018,6 +1019,11 @@ if __name__ == '__main__':
     lay_main.addLayout(lay_left)
     lay_right = QVBoxLayout()  # Right side of window
     lay_main.addLayout(lay_right)
+
+    # Enforce minimum sizes for two panels
+    # (Based on experimentation, these sizes seem to display all text)
+    lay_left.addStrut(550)
+    lay_right.addStrut(450)
 
     # Status of currently-selected UAV
     # NOTE: The way updates are done is a bit hackish,
@@ -1080,6 +1086,7 @@ if __name__ == '__main__':
     lay_right.addLayout(layCfg)
     if show_ft:
         lay_right.addLayout(layImu)
+    addLine(lay_right)
 
     if show_op:
         # Mission config
@@ -1105,13 +1112,9 @@ if __name__ == '__main__':
         btCalpress.clicked.connect(lst.handleCalpress)
         mlayout.addWidget(btCalpress)
         btServos = QPushButton("Demo Servos")
-        btServos.setStyleSheet("color: gray")
-        btServos.setFlat(True)
         btServos.clicked.connect(lst.handleServos)
         mlayout.addWidget(btServos)
         btMotor = QPushButton("Run Motor")
-        btMotor.setStyleSheet("color: gray")
-        btMotor.setFlat(True)
         btMotor.clicked.connect(lst.handleMotor)
         mlayout.addWidget(btMotor)
         lay_right.addLayout(mlayout)
@@ -1197,6 +1200,9 @@ if __name__ == '__main__':
     btShutdown = QPushButton("Shut Down Payload")
     btShutdown.clicked.connect(lst.handleShutdown)
     lay_right.addWidget(btShutdown)
+
+    # Allow blank space below buttons
+    lay_right.addStretch(1)
 
     # Exit button
     btExit = QPushButton("Exit")
