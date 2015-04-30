@@ -18,6 +18,7 @@ from optparse import OptionParser
 import os
 import subprocess
 import sys
+import threading
 import time
 
 ''' Classes '''
@@ -201,6 +202,7 @@ class UAVListWidget(QListWidget):
 
         # Add state for MAVProxy connections
         self.mav_popen = None
+        self.mav_popen_lock = threading.Lock()
         self.mav_id = None
         self.mav_channel = None
         self.mav_start_time = None
@@ -496,7 +498,7 @@ class UAVListWidget(QListWidget):
     def handleTimer(self):
 
         # If a subprocess is open, see if we can cull it
-        if self.mav_popen is not None:
+        if self.mav_popen not in [None, False]:
             p = self.mav_popen.poll()
             if p is not None:
                 self._destroySlaveChannel()
@@ -578,10 +580,22 @@ class UAVListWidget(QListWidget):
             return
 
         # Can only support one MAVProxy subprocess (for now)
-        if self.mav_popen is not None:
-            print "Please close your other MAVProxy instance first"
-            return
+        with self.mav_popen_lock:
+            if self.mav_popen is not None:
+                print "Please close your other MAVProxy instance first"
+                return
 
+            # Set to something other than None for now
+            self.mav_popen = False
+
+        # If we get here, start a thread to continue launching
+        self.mav_id = int(item.getID())
+        t = threading.Thread(target=self.doMAVProxy)
+        t.daemon = True
+        t.start()
+
+    # Continues the above handler in a separate thread
+    def doMAVProxy(self):
         # See if we have a telem radio that we can configure
         use_telem = True
         radios = glob.glob("/dev/serial/by-id/usb-FTDI*")
@@ -590,7 +604,7 @@ class UAVListWidget(QListWidget):
             use_telem = False
         else:
             try:
-                # NOTE: SUPER DUPER HACKISH!!!
+                # NOTE: SUPER DUPER HACKISH IMPORT!!!
                 # Possible that SiK tools aren't installed!
                 atc_path = "$ACS_ROOT/SiK/Firmware/tools/"
                 sys.path.append(os.path.expandvars(atc_path))
@@ -600,18 +614,22 @@ class UAVListWidget(QListWidget):
                 use_telem = False
         if use_telem:
             print "Trying %s ..." % radios[0]
-            for attempt in range(3):
+            for attempt in range(5):
                 try:
                     atc = ATCommandSet(radios[0])
                     atc.leave_command_mode_force()
                     atc.unstick()
+                    time.sleep(0.1)
                     if not atc.enter_command_mode():
                         raise Exception("Could not enter command mode")
+                    time.sleep(0.1)
                     if not atc.set_param(ATCommandSet.PARAM_NETID,
-                                         item.getID()):
+                                         self.mav_id):
                         raise Exception("Could not set Net ID")
+                    time.sleep(0.1)
                     if not atc.write_params():
                         raise Exception("Could not write EEPROM")
+                    time.sleep(0.1)
                     if not atc.reboot():
                         raise Exception("Could not reboot radio")
                     atc.leave_command_mode()
@@ -629,27 +647,28 @@ class UAVListWidget(QListWidget):
         # If using the network, set up slave channel
         if not use_telem:
             # Can't MAVProxy to a WAITING AP aircraft via network!
-            if item.getState() == UAVListWidgetItem.STATE_WAITING_AP:
+            if self.itemByIdent(self.mav_id).getState() == \
+               UAVListWidgetItem.STATE_WAITING_AP:
                 print "Cannot MAVProxy by network to WAITING AP plane"
+                self.mav_popen = None
                 return
 
             # Pick an aircraft-unique port
-            slave_port = 15554 + item.getID()
-            self.mav_id = item.getID()
+            slave_port = 15554 + self.mav_id
             self.mav_channel = "udp:%s:%u" % (self._sock._ip, slave_port)
 
             # Open a slave mavlink channel to the aircraft
             # NOTE: This is done unreliably, so it might fail and we won't know
             ss = messages.SlaveSetup()
-            ss.msg_dst = int(item.getID())
+            ss.msg_dst = self.mav_id
             ss.msg_secs = 0
             ss.msg_nsecs = 0
             ss.enable = True
             ss.channel = self.mav_channel
             self._sendMessage(ss)
 
-            # Wait a moment so the aircraft can (hopefully) set up the channel
-            time.sleep(1)
+        # Wait a moment for the radio/payload to catch up
+        time.sleep(0.5)
 
         # Start up MAVProxy instance
         print "Starting MAVProxy session ..."
