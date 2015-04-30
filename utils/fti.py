@@ -1193,6 +1193,12 @@ if __name__ == '__main__':
     addLine(lay_right)
 
     # Troubleshooting buttons (USE WITH CAUTION)
+    if show_op and not show_ft:
+        btMAVProxy = QPushButton("Run MAVProxy")
+        btMAVProxy.setStyleSheet("background-color: darkgray")
+        btMAVProxy.clicked.connect(lst.handleMAVProxy)
+        lay_right.addWidget(btMAVProxy)
+
     tlayout = QHBoxLayout()
     if show_ft:
         btMAVProxy = QPushButton("Run MAVProxy")
