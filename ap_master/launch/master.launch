@@ -72,6 +72,9 @@
   <node name="swarm_tracker" pkg="ap_perception" type="swarm_tracker_node.py" output="screen" args="" >
     <remap from="swarm_tracker/acs_pose" to="autopilot/acs_pose" />
     <remap from="swarm_tracker/recv_pose" to="network/recv_pose" />
+    <remap from="swarm_tracker/recv_swarm_ctl_state" to="network/recv_swarm_ctl_state" />
+    <remap from="swarm_tracker/swarm_state" to="swarm_manager/swarm_state" />
+    <remap from="swarm_tracker/swarm_behavior" to="swarm_manager/swarm_behavior" />
   </node>
 
   <node name="task_runner" pkg="ap_tasks" type="task_runner.py" output="screen" args="" />
