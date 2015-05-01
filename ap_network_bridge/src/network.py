@@ -176,6 +176,16 @@ def net_pose(message, bridge):
     # NOTE: adjust queue_size as necessary
     bridge.publish('recv_pose', msg, queue_size=50)
 
+def net_auto_status(message, bridge):
+    msg = ap_msg.SwarmControlState()
+    msg.vehicle_id = message.msg_src
+    msg.subswarm_id = message.msg_sub
+    msg.swarm_state = message.swarm_state
+    msg.swarm_behavior = message.swarm_behavior
+    msg.active_controller = message.ctl_mode
+    msg.autopilot_mode = message.mode
+    bridge.publish('recv_swarm_ctl_state', msg, queue_size = 50)
+
 def net_heartbeat(message, bridge):
     msg = pilot_msg.Heartbeat()
     msg.counter = message.counter
@@ -450,6 +460,7 @@ if __name__ == '__main__':
         bridge.addNetHandler(messages.AutopilotReboot, net_ap_reboot)
         bridge.addNetHandler(messages.PayloadHeartbeat, net_health_state)
         bridge.addNetHandler(messages.PayloadShutdown, net_shutdown)
+        bridge.addNetHandler(messages.FlightStatus, net_auto_status)
 
         # Run the loop (shouldn't stop until node is shut down)
         print "\nStarting network bridge loop...\n"
