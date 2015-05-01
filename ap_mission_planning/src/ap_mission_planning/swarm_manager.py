@@ -68,6 +68,7 @@ import autopilot_bridge.srv as apmsrv
 #   _process_set_swarm_behavior: implements the set_swarm_behavior service
 #   _set_swarm_state: method for updating the swarm state to a new value
 #   _set_subswarm: method for normal or forced subswarm_id set
+#   _get_subswarm_uavs: get a list of records of uavs in a particular subswarm
 #   _activate_swarm_standby: implements the swarm standby behavior
 #   _activate_egress: implements the egress behavior
 #   _activate_fixed_follow: implements the fixed-following behavior
@@ -82,6 +83,7 @@ class SwarmManager(nodeable.Nodeable):
     # Enumeration for available swarm behavior
     SWARM_STANDBY = 0  # No swarm behavior (set no payload control)
     FIXED_FOLLOW = 1   # Canned follow positions based on side #
+    SWARM_LAND = 98    # Swarm-coordinated (sequential) landing
     SWARM_EGRESS = 99  # Egress the swarm for recovery
 
     # Enumeration for swarming states
@@ -285,7 +287,7 @@ class SwarmManager(nodeable.Nodeable):
             time.sleep(SwarmManager.TIMING_DELAY) # give the controller switch time to take
             self._wp_goto_publisher.publish(stdmsg.UInt16(SwarmManager.SWARM_EGRESS_WP))
             self._set_swarm_state(SwarmManager.EGRESS)
-            self._set_subswarm(0)
+#            self._set_subswarm(0)
         return success
 
 
@@ -344,6 +346,17 @@ class SwarmManager(nodeable.Nodeable):
     def _swarm_sort(self, swarm_pairs):
         return sorted(swarm_pairs, key = lambda tup: tup[1])
 
+
+    # Goes through the list of swarm uav records and returns a list of those
+    # that are assigned to a particular subswarm
+    # @param subswarm_id: ID of the subswarm being requested
+    # @return a list of records for UAVs assigned to the requested subswarm
+    def _get_subswarm(self, subswarm_id):
+        result = set()
+        for uav in self._swarm_uav_states:
+            if self._swarm_uav_states[uav].subswarm_id == subswarm_id:
+                result.add(self._swarm_uav_states[uav])
+        return result
 
     #-----------------------------------------------------
     # ROS service implementation functions for this object
@@ -439,11 +452,25 @@ class SwarmManager(nodeable.Nodeable):
     # the new swarm assignment will be published to the update_swwarm topic
     # @param subswarmMsg: message containing new subswarm assignment
     def _process_subswarm_update(self, subswarmMsg):
-        if self._swarm_state == SwarmManager.SWARM_READY:
-            self._set_subswarm(subswarmMsg.data)
-        else:
+        # If vehicle in no-set-subswarm state, just return
+        if self._swarm_state != SwarmManager.SWARM_READY and \
+           self._swarm_state != SwarmManager.EGRESS:
             self.log_warn("Cannot assign to subswarm %d in swarm state %s" \
                           %(subswarmMsg.data, SwarmManager.STATE_STRINGS[self._swarm_state]))
+            return
+
+        # If vehicles in a different state than this one are already
+        # assigned to the requested subswarm, just return
+        subswarm_uavs = self._get_subswarm(subswarmMsg.data)
+        for uav in subswarm_uavs:
+            if uav.swarm_state != self._swarm_state and \
+               subswarmMsg.data != 0:
+                self.log_warn("Subswarm %d already in use by incompatible state aircraft" \
+                              %subswarmMsg.data)
+                return
+
+        # If we get here, it's OK to make the switch
+        self._set_subswarm(subswarmMsg.data)
 
 
     # Process autopilot status messages.  Messages are tested primarily to
