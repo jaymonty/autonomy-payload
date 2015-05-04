@@ -392,9 +392,9 @@ class UAVListWidget(QListWidget):
 
             # Set custom tooltips for some lights
             if light == 'as':
-                badtip = 'try cal pressure'
+                badtip = 'bad airspeed (try recalibrating)'
             elif light in [c[0] for c in self.LIGHT_CFG_OK]:
-                badtip = 'not verified (yet)'
+                badtip = 'verification not completed'
             else:
                 badtip = 'bad sensor health'
 
@@ -408,13 +408,16 @@ class UAVListWidget(QListWidget):
         if item.getState() in [UAVListWidgetItem.STATE_FLYING,
                                UAVListWidgetItem.STATE_PROBLEM]:
             # If flying, being disarmed is BAD
-            self.lights['arm'].setbool(msg.armed)
+            self.lights['arm'].setbool(msg.armed,
+                                       badtip='Disarmed in flight')
         elif item.getReady():
             # If flight ready, we *want* to be armed (but no error if not)
-            self.lights['arm'].setbool(msg.armed, True)
+            self.lights['arm'].setbool(msg.armed, True,
+                                       oktip='Warning: arm before launching')
         else:
             # Otherwise, we want to warn tech while armed
-            self.lights['arm'].setbool(not msg.armed, True)
+            self.lights['arm'].setbool(not msg.armed, True,
+                                       oktip='Warning: armed during preflight')
 
         # Relative alt must be +/- 10 m
         if item.getState() in [UAVListWidgetItem.STATE_FLYING,
