@@ -54,8 +54,9 @@ if [ $ROUTER_USE != 0 ]; then
 fi
 
 # Make sure SITL bridge device isn't running
-sudo ifconfig sitl_bridge | grep -q UP
+/sbin/ip link | grep sitl_bridge | grep -q ',UP,'
 if [ $? == 0 ]; then
+  echo "Disabling sitl_bridge interface ..."
   sudo ifconfig sitl_bridge down
 fi
 
