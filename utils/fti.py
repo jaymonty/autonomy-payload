@@ -820,7 +820,7 @@ class UAVListWidget(QListWidget):
         fr.ready = (item.getState() == UAVListWidgetItem.STATE_PREFLIGHT)
         self._sendMessage(fr)
 
-    def handleConfig(self, alt):
+    def handleConfig(self, stack, alt):
         item = self._checkItemState([UAVListWidgetItem.STATE_READY])
         if item is None:
             return
@@ -828,6 +828,9 @@ class UAVListWidget(QListWidget):
         try:
             mc_alt = int(alt)
             if mc_alt <= 50:
+                raise Exception("")
+            mc_stack = int(stack)
+            if mc_stack <= 0:
                 raise Exception("")
         except:
             print "You must supply a valid altitude!"
@@ -842,6 +845,7 @@ class UAVListWidget(QListWidget):
         mc.msg_secs = 0
         mc.msg_nsecs = 0
         mc.std_alt = mc_alt
+        mc.stack_num = mc_stack
         self._sendMessage(mc)
 
     def handleAUTO(self):
@@ -1110,22 +1114,55 @@ if __name__ == '__main__':
         lay_right.addLayout(layImu)
     addLine(lay_right)
 
+    # Mission config
     if show_op:
-        # Mission config
+        lbl = QLabel("MISSION CONFIGURATION")
+        lbl.setAlignment(Qt.AlignCenter)
+        lay_right.addWidget(lbl)
+        # Set up layouts
         clayout = QHBoxLayout()
+        clay_left = QVBoxLayout()
+        clay_left.addStrut(270)
+        clay_right = QVBoxLayout()
+        # Stack number
+        clay_left_row = QHBoxLayout()
+        lbl = QLabel("Stack number:")
+        clay_left_row.addWidget(lbl)
+        lnStack = QLineEdit()
+        lnStack.setFixedWidth(50)
+        lnStack.setAlignment(Qt.AlignRight)
+        lnStack.setText("1")
+        clay_left_row.addWidget(lnStack)
+        clay_left.addLayout(clay_left_row)
+        # Standard altitude
+        clay_left_row = QHBoxLayout()
         lbl = QLabel("Altitude above runway (m):")
-        clayout.addWidget(lbl)
+        clay_left_row.addWidget(lbl)
         lnAlt = QLineEdit()
         lnAlt.setFixedWidth(50)
+        lnAlt.setAlignment(Qt.AlignRight)
         lnAlt.setText("100")
-        clayout.addWidget(lnAlt)
+        clay_left_row.addWidget(lnAlt)
+        clay_left.addLayout(clay_left_row)
+        # Populate left side
+        clayout.addLayout(clay_left)
+        # Send button
         btConfig = QPushButton("Send Config")
-        btConfig.clicked.connect(lambda : lst.handleConfig(lnAlt.text()))
-        clayout.addWidget(btConfig)
+        btConfig.clicked.connect(lambda : lst.handleConfig(lnStack.text(),
+                                                           lnAlt.text()))
+        clay_right.addWidget(btConfig)
+        # Populate right side
+        clayout.addStretch(1)
+        clayout.addLayout(clay_right)
+        # Add to main layout
         lay_right.addLayout(clayout)
 
         # Line break after config stuff
         addLine(lay_right)
+
+    lbl = QLabel("PRIMARY FUNCTIONS")
+    lbl.setAlignment(Qt.AlignCenter)
+    lay_right.addWidget(lbl)
 
     if show_ft:
         # Mechanical preflight buttons
@@ -1194,6 +1231,10 @@ if __name__ == '__main__':
 
     # Line break before troubleshooting and misc buttons
     addLine(lay_right)
+
+    lbl = QLabel("UTILITY FUNCTIONS")
+    lbl.setAlignment(Qt.AlignCenter)
+    lay_right.addWidget(lbl)
 
     # Troubleshooting buttons (USE WITH CAUTION)
     if show_op and not show_ft:
