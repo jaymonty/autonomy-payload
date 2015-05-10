@@ -330,9 +330,17 @@ def net_mission_config(message, bridge):
         for cfg in ['rally', 'wp', 'param']:
             rospy.set_param('ok_' + cfg, False)
 
-        # Extract/validate values
+        # Replace names with values
+        # NOTE: This is a direct string replacement of KEY with VALUE.
         replacements = {}
         replacements['STDALT'] = message.std_alt
+
+        # Select from among options
+        # NOTE: This looks for lines starting with 'KEY_', keeping those that
+        # start with 'KEY_VALUE ' (but eliminating that string) and deleting
+        # other matching lines.
+        selections = {}
+        selections['STACK'] = message.stack_num
 
         # Set parameters
         plist = []
@@ -356,8 +364,27 @@ def net_mission_config(message, bridge):
                 for line in inf:
                     if not line or not isinstance(line, str):
                         continue
+
+                    # Line selection
+                    # NOTE: Can only have one selection pattern per line
+                    select = ''
+                    for pattern, value in selections.iteritems():
+                        if not line.startswith(pattern):
+                            continue
+                        select = "%s_%s " % (pattern, str(value))
+                        break
+                    if select:
+                        # If wrong selection, omit the line
+                        if not line.startswith(select):
+                            continue
+                        # If right selection, strip the string and use it
+                        line = line.replace(select, '')
+
+                    # String replacement
+                    # NOTE: May be multiple replacements per line
                     for pattern, value in replacements.iteritems():
                         line = line.replace(str(pattern), str(value))
+
                     outf.write(line)
 
             # Call load service
