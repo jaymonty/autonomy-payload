@@ -701,21 +701,23 @@ class Demo(Message):
 
 class MissionConfig(Message):
     msg_type = 0x91
-    msg_fmt = '>H2x'
+    msg_fmt = '>HBx'
 
     def __init__(self):
         Message.__init__(self)
 
         self.std_alt = None     # Standard (RELATIVE) altitude (m)
-        # 2 padding bytes
+        self.stack_num = None   # Index of stack (of pancakes) to be in
+        # 1 padding byte
 
     def _pack(self):
-        tupl = (int(self.std_alt),)
+        tupl = (int(self.std_alt), int(self.stack_num))
         return struct.pack(type(self).msg_fmt, *tupl)
 
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.std_alt = int(fields[0])
+        self.stack_num = int(fields[1])
 
 class WeatherData(Message):
     msg_type = 0x92
