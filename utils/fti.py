@@ -612,40 +612,50 @@ class UAVListWidget(QListWidget):
                 atc_path = "$ACS_ROOT/SiK/Firmware/tools/"
                 sys.path.append(os.path.expandvars(atc_path))
                 from atcommander import ATCommandSet
+                print "Trying %s ..." % radios[0]
+                atc = ATCommandSet(radios[0])
             except Exception as ex:
                 print "ATCommandSet: " + str(ex)
                 use_telem = False
+
+        # If we have a radio and have atcommander.py, try configuration
         if use_telem:
-            print "Trying %s ..." % radios[0]
-            for attempt in range(5):
+            # Enumerate commands by function call
+            commands = [lambda: atc.leave_command_mode_force(),
+                        lambda: atc.unstick(),
+                        lambda: atc.enter_command_mode(),
+                        lambda: atc.set_param(ATCommandSet.PARAM_NETID,
+                                              self.mav_id),
+                        lambda: atc.write_params(),
+                        lambda: atc.reboot(),
+                        lambda: atc.leave_command_mode()]
+
+            # Iterate through commands, trying a bounded number of times overall
+            retries_left = 10
+            command = commands.pop(0)
+            while retries_left > 0:
                 try:
-                    atc = ATCommandSet(radios[0])
-                    atc.leave_command_mode_force()
-                    atc.unstick()
+                    # Always give a little time for the radio to settle
                     time.sleep(0.1)
-                    if not atc.enter_command_mode():
-                        raise Exception("Could not enter command mode")
-                    time.sleep(0.1)
-                    if not atc.set_param(ATCommandSet.PARAM_NETID,
-                                         self.mav_id):
-                        raise Exception("Could not set Net ID")
-                    time.sleep(0.1)
-                    if not atc.write_params():
-                        raise Exception("Could not write EEPROM")
-                    time.sleep(0.1)
-                    if not atc.reboot():
-                        raise Exception("Could not reboot radio")
-                    atc.leave_command_mode()
-                    self.mav_channel = radios[0]
-                    break
+                    res = command()
+                    if res == False:
+                        # Some commands return True/False, others return None
+                        # Only False is bad
+                        raise Exception("command failed")
+                    if len(commands) == 0:
+                        # If no commands left, we're done
+                        break
+                    command = commands.pop(0)
                 except Exception as ex:
-                    print "ATCommandSet: " + str(ex)
-                    if attempt == 2:
-                        print "Configuration failed, using network ..."
-                        use_telem = False
-                    else:
-                        print "Configuration failed, retrying ..."
-                        time.sleep(1)
+                    print "Config exception: " + str(ex) + ", retrying ..."
+                    retries_left -= 1
+
+            # Handle success or failure
+            if retries_left > 0:
+                self.mav_channel = radios[0]
+            else:
+                print "Falling back to network ..."
+                use_telem = False
 
         # If using the network, set up slave channel
         if not use_telem:
