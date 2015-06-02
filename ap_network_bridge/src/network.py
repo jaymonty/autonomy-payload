@@ -460,7 +460,8 @@ if __name__ == '__main__':
                              ap_msg.ControllerGroupStateStamped,
                              sub_controller_status)
         bridge.addSubHandler('update_flight_status',
-                             pilot_msg.Status, sub_flight_status)
+                             pilot_msg.Status, sub_flight_status,
+                             log_success=False)
         bridge.addSubHandler('send_pose', pilot_msg.Geodometry, sub_pose)
         bridge.addSubHandler('swarm_state', std_msgs.msg.UInt8, sub_swarm_state)
         bridge.addNetHandler(messages.Pose, net_pose,
@@ -487,7 +488,8 @@ if __name__ == '__main__':
         bridge.addNetHandler(messages.AutopilotReboot, net_ap_reboot)
         bridge.addNetHandler(messages.PayloadHeartbeat, net_health_state)
         bridge.addNetHandler(messages.PayloadShutdown, net_shutdown)
-        bridge.addNetHandler(messages.FlightStatus, net_auto_status)
+        bridge.addNetHandler(messages.FlightStatus, net_auto_status,
+                             log_success=False)
 
         # Run the loop (shouldn't stop until node is shut down)
         print "\nStarting network bridge loop...\n"
