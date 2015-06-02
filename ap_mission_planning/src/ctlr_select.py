@@ -20,10 +20,9 @@ import ap_msgs.msg as payload_msgs
 import ap_srvs.srv as payload_srvs
 import autopilot_bridge.msg as mavbridge_msgs
 import autopilot_bridge.srv as mavbridge_srv 
-from ap_lib import controller
 from ap_lib import nodeable
+from ap_lib import ap_enumerations as enums
 
-INFINITE_LOITER_CMD = 17    # Autopilot command ID for infinite loiter wypts
 MODE_SWITCH_LOCKOUT_T = 3.0 # Post-mode-switch time to ignore active errors
 
 #-----------------------------------------------------------------------
@@ -43,9 +42,11 @@ class ControllerType(object):
     # Initializer creates a "minimally" initialized ControllerType object
     # @param c_id:  ID (int enumeration) for the controller
     # @param c_name:  name for the controller
-    def __init__(self, c_id, c_name):
+    # @param req_loiter_wp: True if an infinite loiter wp is always used
+    def __init__(self, c_id, c_name, req_loiter_wp):
         self.id = c_id
         self.name = c_name
+        self.requires_loiter_wp = req_loiter_wp
 
         self._run_srv = rospy.ServiceProxy('%s/%s_run' %(c_name, c_name), \
                                            payload_srvs.SetBoolean)
@@ -208,12 +209,12 @@ class ControllerSelector(nodeable.Nodeable):
     #------------------------
 
     # Add a new controller type by ID and name
-    def add_controller(self, c_id, c_name):
+    def add_controller(self, c_id, c_name, require_loiter_wp=True):
         if c_id in self._controllers:
             raise Exception("Attempted to redefine controller %u (%s) as %s" % \
                             (c_id, self.controllers[c_id].name, c_name))
         try:
-            self._controllers[c_id] = ControllerType(c_id, c_name)
+            self._controllers[c_id] = ControllerType(c_id, c_name, require_loiter_wp)
         except Exception as ex:
             raise Exception("Failed to define controller %u (%s)" % \
                             (c_id, c_name))
@@ -239,8 +240,8 @@ class ControllerSelector(nodeable.Nodeable):
             stale_time = rospy.Time.now() - rospy.Duration(3)
             
             # Is this reset to NO_PAYLOAD_CONTROL
-            if mode == controller.NO_PAYLOAD_CTRL:
-                if self._current_mode != controller.NO_PAYLOAD_CTRL:
+            if mode == enums.NO_PAYLOAD_CTRL:
+                if self._current_mode != enums.NO_PAYLOAD_CTRL:
                     self._deactivate_all_controllers(True)
                 return self._current_mode
 
@@ -276,7 +277,7 @@ class ControllerSelector(nodeable.Nodeable):
 
             # If we're not already in payload control, make sure we've got an
             # up-to-date list of infinite loiter waypoints fromn the autopilot
-            if self._current_mode == controller.NO_PAYLOAD_CTRL:
+            if self._current_mode == enums.NO_PAYLOAD_CTRL:
                 self._retrieve_last_ap_waypoint()
 #                self._set_safety_wp()
 
@@ -391,7 +392,8 @@ class ControllerSelector(nodeable.Nodeable):
                     self.log_warn("autopilot mode (%d) not compatible with waypoint control" \
                                   %self._ap_status.mode)
                     self._deactivate_all_controllers(False) # don't send to safety waypoint
-                elif self._ap_status.mis_cur != self._loiter_wp_id:
+                elif self._ap_status.mis_cur != self._loiter_wp_id and \
+                     self._controllers[self._current_mode].requires_loiter_wp:
                     self.log_warn("autopilot waypoint number (%d) not correct" \
                                   %self._ap_status.mis_cur)
                     self._deactivate_all_controllers(False) # don't send to safety waypoint
@@ -410,7 +412,7 @@ class ControllerSelector(nodeable.Nodeable):
     def _deactivate_all_controllers(self, sendToSafetyPt):
         for c in self._controllers:
             self._controllers[c].set_active(False)
-        self._current_mode = controller.NO_PAYLOAD_CTRL
+        self._current_mode = enums.NO_PAYLOAD_CTRL
         self._set_safety_wp()
         if self._loiter_wp_id != None and sendToSafetyPt:
             self._pub_safety_wp.publish(self._safety_wp)
@@ -430,7 +432,7 @@ class ControllerSelector(nodeable.Nodeable):
             # Identify all of the available infinite loiter waypoints
             self._loiter_wps = []
             for wp in self._wp_list:
-                if wp.command == INFINITE_LOITER_CMD:
+                if wp.command == enums.WP_TYPE_LOITER:
                     self._loiter_wps.append(wp.seq)
 
         except Exception as ex:
@@ -451,7 +453,7 @@ class ControllerSelector(nodeable.Nodeable):
             self._wp_list = self._wp_getlast().points
             self._loiter_wps = []
             if len(self._wp_list) > 0 and \
-               self._wp_list[0].command == INFINITE_LOITER_CMD:
+               self._wp_list[0].command == enums.WP_TYPE_LOITER:
                 self._loiter_wps.append(self._wp_list[0].seq)
 
         except Exception as ex:
@@ -471,7 +473,7 @@ class ControllerSelector(nodeable.Nodeable):
             raise Exception("No waypoints retrieved from autopilot")
 
         loiter_pt = self._wp_list[-1]
-        if loiter_pt.command == INFINITE_LOITER_CMD:
+        if loiter_pt.command == enums.WP_TYPE_LOITER:
             self._loiter_wp_id = loiter_pt.seq
         else:
             self._loiter_wp_id = None
@@ -495,8 +497,9 @@ class ControllerSelector(nodeable.Nodeable):
 if __name__ == '__main__':
     # Initialize state machine
     ctlrsel = ControllerSelector(ControllerSelector.ros_nodename)
-    ctlrsel.add_controller(controller.WP_SEQUENCE_CTRLR, "wp_sequencer")
-    ctlrsel.add_controller(controller.FOLLOW_CTRLR, "follower")
+    ctlrsel.add_controller(enums.WP_SEQUENCE_CTRLR, "wp_sequencer")
+    ctlrsel.add_controller(enums.FOLLOW_CTRLR, "follower")
+    ctlrsel.add_controller(enums.LANDING_SEQUENCE_CTRLR, "swarm_landing_sequencer", False)
 
     # Start loop
     # TODO: Is this fast enough?

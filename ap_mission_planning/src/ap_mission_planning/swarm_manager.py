@@ -19,6 +19,7 @@ import ap_msgs.msg as apmsg
 import ap_srvs.srv as apsrv
 import ap_lib.nodeable as nodeable
 import ap_lib.controller as controller
+import ap_lib.ap_enumerations as enums
 import ap_path_planning.follow_controller as follower
 import autopilot_bridge.msg as apmsgs
 import autopilot_bridge.srv as apmsrv
@@ -50,6 +51,7 @@ import autopilot_bridge.srv as apmsrv
 #   _wp_goto_publisher: ROS publisher to direct the vehicle to a waypoint #
 #   _ctlr_select_srv_proxy: ROS proxy for the ctlr_selector set mode service
 #   _wp_getrange_srv_proxy: ROS proxy for the wp_getrange service
+#   _init_landing_sequencer_srv_proxy: ROS proxy for the init_landing_sequencer service
 #
 # Inherited from Nodeable:
 #   nodeName:  Name of the node to start or node in which the object is
@@ -76,48 +78,6 @@ import autopilot_bridge.srv as apmsrv
 #   _activate_fixed_follow: implements the fixed-following behavior
 class SwarmManager(nodeable.Nodeable):
 
-    # Fixed (per convention) state-specific waypoints
-    TAKEOFF_WP = 1       # Airborne
-    SWARM_STANDBY_WP = 4 # Available for tasking
-    SWARM_EGRESS_WP = 5  # Leaving swarm for recovery
-    RACETRACK_WP = 7     # First racetrack waypoint
-
-    # Enumeration for available swarm behavior
-    SWARM_STANDBY = 0         # No swarm behavior (set no payload control)
-    FIXED_FOLLOW = 1          # Canned follow positions based on side #
-    SWARM_EGRESS = 99         # Egress the swarm for recovery
-
-    # Enumeration for swarming states
-    # Swarm Operator has control when IN_SWARM (subswarm active)
-    # All other states under control of ground station or flight crew
-    PRE_FLIGHT = 0   # Powered on, going through pre-fllight checks
-    FLIGHT_READY = 1 # Awaiting launch
-    INGRESS = 2      # Airborne, waiting for handoff to swarm operator
-    SWARM_READY = 3  # Available for swarm behavior (standby loiter)
-    SWARM_ACTIVE = 4 # Executing an active swarm behavior
-    EGRESS = 5       # Transit to recovery staging (still required?)
-    LANDING = 6      # Flight crew has control for landing
-    ON_DECK = 7      # Aircraft has landed
-    POST_FLIGHT = 8  # Post landing checks (will probably not be seen)
-
-    # Enumeration for types of waypoints that we might need to test for
-    wp_TYPE_NORMAL = 16
-    WP_TYPE_LOITER = 17
-    WP_TYPE_TURNS = 18
-    WP_TYPE_LAND = 21
-    WP_TYPE_TAKEOFF = 22
-
-    # For user interface use or debugging
-    STATE_STRINGS = { PRE_FLIGHT: 'Preflight', \
-                      FLIGHT_READY: 'Flight Ready', \
-                      INGRESS: 'Ingress', \
-                      SWARM_READY: 'Swarm Ready', \
-                      SWARM_ACTIVE: 'Swarm Active', \
-                      EGRESS: 'Egress', \
-                      LANDING: 'Landing', \
-                      ON_DECK: 'On Deck',
-                      POST_FLIGHT: 'Post Flight' }
-
     FIXED_FOLLOW_DIST = 25.0  # Follower distance for "fixed follow" control
     TIMING_DELAY = 2.0        # Delay time to allow things to "take"
     LAUNCH_ALT = 20000.0      # AGL (m * 1000) altitude used to detect "launch"
@@ -135,8 +95,8 @@ class SwarmManager(nodeable.Nodeable):
         nodeable.Nodeable.__init__(self, nodename)
         self._ownID = rospy.get_param("aircraft_id")
         self._subswarm_id = 0
-        self._swarm_state = SwarmManager.PRE_FLIGHT
-        self._active_behavior = SwarmManager.SWARM_STANDBY
+        self._swarm_state = enums.PRE_FLIGHT
+        self._active_behavior = enums.SWARM_STANDBY
         self._behavior_activators = dict()
         self._egress_behavior_activators = dict()
         self._swarm_uav_states = dict()
@@ -152,7 +112,9 @@ class SwarmManager(nodeable.Nodeable):
                                apsrv.SetInteger)
         self._wp_getrange_srv_proxy = \
             rospy.ServiceProxy("autopilot/wp_getrange", apmsrv.WPGetRange)
-
+        self._init_landing_sequencer_srv_proxy = \
+            rospy.ServiceProxy("swarm_landing_sequencer/init_landing_sequencer", \
+            apsrv.SetInteger)
 #        self.DBUG_PRINT = True
 #        self.WARN_PRINT = True
 
@@ -198,8 +160,8 @@ class SwarmManager(nodeable.Nodeable):
             self.createPublisher("waypoint_goto", stdmsg.UInt16, 1, False)
 
         # Publish one message now to initialize the latched publishers with "0"
-        self._set_swarm_behavior(SwarmManager.SWARM_STANDBY)
-        self._set_swarm_state(SwarmManager.PRE_FLIGHT)
+        self._set_swarm_behavior(enums.SWARM_STANDBY)
+        self._set_swarm_state(enums.PRE_FLIGHT)
         self._set_subswarm(0)
 
 
@@ -214,14 +176,20 @@ class SwarmManager(nodeable.Nodeable):
                            self._process_set_swarm_state)
 
 
+    # Establishes the service proxy for the SwarmManager object.
+    # @params: list of required parameters (none at present)
+    def serviceProxySetup(self, params=[]):
+        pass  # TODO:  move proxies from constructor to here
+
+
     # Executes one iteration of the timed loop.  At present, with the exception
     # of testing for a transition from the PRE_FLIGHT to the FLIGHT_READY state
     # the method does not do anything (functionality can be added later asreq).
     def executeTimedLoop(self):
-        if ((self._swarm_state == SwarmManager.PRE_FLIGHT) and \
+        if ((self._swarm_state == enums.PRE_FLIGHT) and \
             (rospy.has_param("flight_ready")) and \
             (bool(rospy.get_param("flight_ready")))):
-                self._set_swarm_state(SwarmManager.FLIGHT_READY)
+                self._set_swarm_state(enums.FLIGHT_READY)
 
 
     #--------------------------
@@ -274,10 +242,10 @@ class SwarmManager(nodeable.Nodeable):
     # @param srvReq service request message (not used for this behavior)
     # @return Boolean value indicating behavior initiation success or failure
     def _activate_swarm_standby(self, srvReq=None):
-        success = self._ctlr_select_srv_proxy(controller.NO_PAYLOAD_CTRL).result
+        success = self._ctlr_select_srv_proxy(enums.NO_PAYLOAD_CTRL).result
         if success:
             time.sleep(SwarmManager.TIMING_DELAY) # give the controller switch time to take
-            self._wp_goto_publisher.publish(stdmsg.UInt16(SwarmManager.SWARM_STANDBY_WP))
+            self._wp_goto_publisher.publish(stdmsg.UInt16(enums.SWARM_STANDBY_WP))
         return success
 
 
@@ -288,11 +256,11 @@ class SwarmManager(nodeable.Nodeable):
     # @param srvReq service request message (not used for this behavior)
     # @return Boolean value indicating behavior initiation success or failure
     def _activate_egress(self, srvReq=None):
-        success = self._ctlr_select_srv_proxy(controller.NO_PAYLOAD_CTRL).result
+        success = self._ctlr_select_srv_proxy(enums.NO_PAYLOAD_CTRL).result
         if success:
             time.sleep(SwarmManager.TIMING_DELAY) # give the controller switch time to take
-            self._wp_goto_publisher.publish(stdmsg.UInt16(SwarmManager.SWARM_EGRESS_WP))
-            self._set_swarm_state(SwarmManager.EGRESS)
+            self._wp_goto_publisher.publish(stdmsg.UInt16(enums.SWARM_EGRESS_WP))
+            self._set_swarm_state(enums.EGRESS)
         return success
 
 
@@ -317,10 +285,10 @@ class SwarmManager(nodeable.Nodeable):
 
             # If leader acft, set NO_PAYLOAD_CTRL and send to the racetrack
             if high_ac_id == self._ownID:  # This AC is leader
-                success = self._ctlr_select_srv_proxy(controller.NO_PAYLOAD_CTRL).result
+                success = self._ctlr_select_srv_proxy(enums.NO_PAYLOAD_CTRL).result
                 if success:
                     time.sleep(SwarmManager.TIMING_DELAY) # give the controller switch time to take
-                    self._wp_goto_publisher.publish(stdmsg.UInt16(SwarmManager.RACETRACK_WP))
+                    self._wp_goto_publisher.publish(stdmsg.UInt16(enums.RACETRACK_WP))
 
             # If follower acft, set and initiate the follow controller
             else:
@@ -334,11 +302,31 @@ class SwarmManager(nodeable.Nodeable):
                 form_msg.order.control_alt = self._crnt_wpt_alt
                 self._follow_publisher.publish(form_msg)
                 time.sleep(SwarmManager.TIMING_DELAY) # give the form set message a second to take
-                success = self._ctlr_select_srv_proxy(controller.FOLLOW_CTRLR).result
+                success = self._ctlr_select_srv_proxy(enums.FOLLOW_CTRLR).result
 
         except Exception as ex:
             # Should never get here, but just in case
             self.log_warn("Set Control Mode: " + str(ex))           
+
+        return success
+
+
+    # Activates the swarm sequenced landing behavior.
+    # @param srvReq service request message (not used for this behavior)
+    # @return Boolean value indicating behavior initiation success or failure
+    def _activate_sequence_land(self, srvReq=None):
+        success = False
+        try:
+            # Initialize the controller
+            init = self._init_landing_sequencer_srv_proxy(1).result # '1' is a placeholder for now
+            if not init:
+                self.log_warn("Failed to initialize Swarm Landing Sequencer")
+                raise Exception("Failed to initialize Swarm Landing Sequencer")
+
+            success = self._ctlr_select_srv_proxy(enums.LANDING_SEQUENCE_CTRLR).result
+
+        except Exception as ex:
+            self.log_warn("Landing sequencer start exception" + str(ex))           
 
         return success
 
@@ -379,12 +367,12 @@ class SwarmManager(nodeable.Nodeable):
     # @return a boolean message response indicating success or failure
     def _process_set_swarm_state(self, stateSrv):
         success = False
-        if stateSrv.setting in SwarmManager.STATE_STRINGS and \
-           stateSrv.setting != SwarmManager.SWARM_ACTIVE:
+        if stateSrv.setting in enums.STATE_STRINGS and \
+           stateSrv.setting != enums.SWARM_ACTIVE:
             self._set_swarm_state(stateSrv.setting)
             success = True
             self.log_warn("swarm state force-reset to %s" \
-                          %SwarmManager.STATE_STRINGS[stateSrv.setting])
+                          %enums.STATE_STRINGS[stateSrv.setting])
         else:
             self.log_warn("attempt to force-reset to invalid swarm state:  %d" \
                           %stateSrv.setting)
@@ -400,35 +388,36 @@ class SwarmManager(nodeable.Nodeable):
         # Handle special cases first
 
         # EGRESS
-        if ((activateSrv.setting == SwarmManager.SWARM_EGRESS) and \
-            ((self._swarm_state == SwarmManager.INGRESS) or \
-             (self._swarm_state == SwarmManager.SWARM_READY) or \
-             (self._swarm_state == SwarmManager.SWARM_ACTIVE) or \
-             (self._swarm_state == SwarmManager.EGRESS))):
+        if ((activateSrv.setting == enums.SWARM_EGRESS) and \
+            ((self._swarm_state == enums.INGRESS) or \
+             (self._swarm_state == enums.SWARM_READY) or \
+             (self._swarm_state == enums.SWARM_ACTIVE) or \
+             (self._swarm_state == enums.EGRESS))):
             init_method = self._behavior_activators[activateSrv.setting]
             success = init_method(activateSrv)
 
         # Regular swarming behaviors (must be SWARM_READY or SWARM_ACTIVE)
         elif ((activateSrv.setting in self._behavior_activators) and \
-              ((self._swarm_state == SwarmManager.SWARM_READY) or \
-               (self._swarm_state == SwarmManager.SWARM_ACTIVE))):
+              ((self._swarm_state == enums.SWARM_READY) or \
+               (self._swarm_state == enums.SWARM_ACTIVE))):
             init_method = self._behavior_activators[activateSrv.setting]
             success = init_method(activateSrv)
 
         # Post-egress behaviors (must be EGRESS)
         elif ((activateSrv.setting in self._egress_behavior_activators) and \
-              (self._swarm_state == SwarmManager.EGRESS)):
+              (self._swarm_state == enums.EGRESS)):
             init_method = self._egress_behavior_activators[activateSrv.setting]
+            success = init_method(activateSrv)
 
         # Error cases (can't initiate the requested behavior)
         elif ((activateSrv.setting not in self._behavior_activators) and \
-              ((self._swarm_state == SwarmManager.SWARM_READY) or \
-               (self._swarm_state == SwarmManager.SWARM_ACTIVE))):
+              ((self._swarm_state == enums.SWARM_READY) or \
+               (self._swarm_state == enums.SWARM_ACTIVE))):
             self.log_warn("requested behavior (%d) not available for normal swarming"\
                           %activateSrv.setting)
 
         elif ((activateSrv.setting not in self._egress_behavior_activators) and \
-              (self._swarm_state == SwarmManager.EGRESS)):
+              (self._swarm_state == enums.EGRESS)):
             self.log_warn("requested behavior (%d) not available for post-egress swarming"\
                           %activateSrv.setting)
 
@@ -437,10 +426,10 @@ class SwarmManager(nodeable.Nodeable):
                           %(self._swarm_state, activateSrv.setting))
 
         if success:
-            if activateSrv.setting == SwarmManager.SWARM_STANDBY:
-                self._set_swarm_state(SwarmManager.SWARM_READY)
-            elif activateSrv.setting != SwarmManager.SWARM_EGRESS:
-                self._set_swarm_state(SwarmManager.SWARM_ACTIVE)
+            if activateSrv.setting == enums.SWARM_STANDBY:
+                self._set_swarm_state(enums.SWARM_READY)
+            elif activateSrv.setting != enums.SWARM_EGRESS:
+                self._set_swarm_state(enums.SWARM_ACTIVE)
             self.log_dbug("successful activation of swarm behavior %d" %activateSrv.setting)
         else:
             self.log_warn("failed to activate swarm behavior %d" %activateSrv.setting)
@@ -479,10 +468,10 @@ class SwarmManager(nodeable.Nodeable):
     # @param subswarmMsg: message containing new subswarm assignment
     def _process_subswarm_update(self, subswarmMsg):
         # If vehicle in no-set-subswarm state, just return
-        if self._swarm_state != SwarmManager.SWARM_READY and \
-           self._swarm_state != SwarmManager.EGRESS:
+        if self._swarm_state != enums.SWARM_READY and \
+           self._swarm_state != enums.EGRESS:
             self.log_warn("Cannot assign to subswarm %d in swarm state %s" \
-                          %(subswarmMsg.data, SwarmManager.STATE_STRINGS[self._swarm_state]))
+                          %(subswarmMsg.data, enums.STATE_STRINGS[self._swarm_state]))
             return
 
         # If vehicles in a different state than this one are already
@@ -508,16 +497,16 @@ class SwarmManager(nodeable.Nodeable):
     # @param statusMsg: Status message
     def _process_autopilot_status(self, statusMsg):
         # Transition to "INGRESS" based on altitude
-        if ((self._swarm_state == SwarmManager.PRE_FLIGHT) or \
-            (self._swarm_state == SwarmManager.FLIGHT_READY)):
+        if ((self._swarm_state == enums.PRE_FLIGHT) or \
+            (self._swarm_state == enums.FLIGHT_READY)):
             if statusMsg.alt_rel > SwarmManager.LAUNCH_ALT:
-                self._set_swarm_state(SwarmManager.INGRESS)
+                self._set_swarm_state(enums.INGRESS)
 
         # NOTE:  This check is hardcoded as a fixed waypoint ID for now.  Will
         #        need to change to remove dependence on mission file organization
-        elif (self._swarm_state == SwarmManager.INGRESS):
-            if (statusMsg.mis_cur >= SwarmManager.SWARM_STANDBY_WP):
-                self._set_swarm_state(SwarmManager.SWARM_READY)
+        elif (self._swarm_state == enums.INGRESS):
+            if (statusMsg.mis_cur >= enums.SWARM_STANDBY_WP):
+                self._set_swarm_state(enums.SWARM_READY)
 
         try:
             # Capture the type and altitude of waypoint that is current if required
@@ -535,16 +524,16 @@ class SwarmManager(nodeable.Nodeable):
 
             self._crnt_wpt_alt = self._waypoint_alts[statusMsg.mis_cur]
 
-            if (self._swarm_state == SwarmManager.LANDING):
+            if (self._swarm_state == enums.LANDING):
                 if (statusMsg.as_read <= 5.0):
-                    self._set_swarm_state(SwarmManager.ON_DECK)
+                    self._set_swarm_state(enums.ON_DECK)
 
             # Can transition to LANDING at any time after launch
             # NOTE:  This check is hardcoded as a fixed waypoint ID for now.  Will
             #        need to change to remove dependence on mission file organization
-            elif (self._waypoint_types[statusMsg.mis_cur] == SwarmManager.WP_TYPE_LAND) and\
-                 (self._swarm_state != SwarmManager.ON_DECK):
-                self._set_swarm_state(SwarmManager.LANDING)
+            elif (self._waypoint_types[statusMsg.mis_cur] == enums.WP_TYPE_LAND) and\
+                 (self._swarm_state != enums.ON_DECK):
+                self._set_swarm_state(enums.LANDING)
                 self._set_subswarm(0)
 
         except Exception as ex:
@@ -560,18 +549,20 @@ if __name__ == '__main__':
     swarm_manager = SwarmManager("swarm_manager")
 
     # Register normal swarm behavior activation methods
-    swarm_manager.register_swarm_behavior(SwarmManager.SWARM_STANDBY, \
+    swarm_manager.register_swarm_behavior(enums.SWARM_STANDBY, \
                                           swarm_manager._activate_swarm_standby)
-    swarm_manager.register_swarm_behavior(SwarmManager.FIXED_FOLLOW, \
+    swarm_manager.register_swarm_behavior(enums.FIXED_FOLLOW, \
                                           swarm_manager._activate_fixed_follow)
-    swarm_manager.register_swarm_behavior(SwarmManager.SWARM_EGRESS, \
+    swarm_manager.register_swarm_behavior(enums.SWARM_EGRESS, \
                                           swarm_manager._activate_egress)
 
     # Register post-egress swarm behavior activation methods
-    swarm_manager.register_swarm_behavior(SwarmManager.SWARM_STANDBY, \
+    swarm_manager.register_swarm_behavior(enums.SWARM_STANDBY, \
                                           swarm_manager._activate_egress, True)
-    swarm_manager.register_swarm_behavior(SwarmManager.SWARM_EGRESS, \
+    swarm_manager.register_swarm_behavior(enums.SWARM_EGRESS, \
                                           swarm_manager._activate_egress, True)
+    swarm_manager.register_swarm_behavior(enums.SWARM_SEQUENCE_LAND, \
+                                          swarm_manager._activate_sequence_land, True)
 
 
     swarm_manager.runAsNode(10.0, [], [], [])
