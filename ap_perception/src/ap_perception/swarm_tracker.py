@@ -227,12 +227,15 @@ class SwarmElement(object):
                 gps_newpos(self.state.pose.pose.position.lat, \
                            self.state.pose.pose.position.lon, \
                            direction, distance)
-            base_alt = self.state.pose.pose.position.alt - \
-                       self.state.pose.pose.position.rel_alt
-            self.drPose.pose.pose.position.alt = self.state.pose.pose.position.alt - \
-                                                 (self.state.twist.twist.linear.z * dt)
-            self.drPose.pose.pose.position.rel_alt = \
-                self.drPose.pose.pose.position.alt - base_alt
+#            base_alt = self.state.pose.pose.position.alt - \
+#                       self.state.pose.pose.position.rel_alt
+#            self.drPose.pose.pose.position.alt = self.state.pose.pose.position.alt - \
+#                                                 (self.state.twist.twist.linear.z * dt)
+#            self.drPose.pose.pose.position.rel_alt = \
+#                self.drPose.pose.pose.position.alt - base_alt
+            # Not DRing altitude to avoid "burble" effect causing larger errors
+            self.drPose.pose.pose.position.alt = self.state.pose.pose.position.alt
+            self.drPose.pose.pose.position.rel_alt = self.state.pose.pose.position.rel_alt
             self.drPose.pose.covariance = self.state.pose.covariance
 
 
