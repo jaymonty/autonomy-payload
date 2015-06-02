@@ -17,6 +17,7 @@ from argparse import ArgumentParser
 import std_msgs.msg as stdmsg
 
 import math
+import ap_lib.ap_enumerations as enums
 from ap_lib import gps_utils
 from ap_lib import nodeable
 from ap_lib.waypoint_controller import *
@@ -95,7 +96,7 @@ class FollowController(WaypointController):
     # @param nodename: name of the ROS node in which this object exists
     # @param ownAC: ID (int) of this aircraft
     def __init__(self, nodename, ownAC):
-        WaypointController.__init__(self, nodename, FOLLOW_CTRLR)
+        WaypointController.__init__(self, nodename, enums.FOLLOW_CTRLR)
         self.ownID = ownAC
         self.ownLat = None
         self.ownLon = None

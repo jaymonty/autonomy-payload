@@ -28,6 +28,7 @@ from ap_lib.nodeable import *
 from ap_lib.controller import *
 from ap_lib.waypoint_controller import *
 from ap_lib.gps_utils import *
+import ap_lib.ap_enumerations as enums
 import ap_msgs.msg as apmsg
 import autopilot_bridge.msg as apbrg
 
@@ -94,7 +95,7 @@ class WaypointSequencer(WaypointController):
     # @param captureDistance: distance from a waypoint considered good enough
     def __init__(self, nodeName=NODE_BASENAME, waypoints=[], \
                  captureDistance=CAPTURE_DISTANCE):
-        WaypointController.__init__(self, nodeName, WP_SEQUENCE_CTRLR)
+        WaypointController.__init__(self, nodeName, enums.WP_SEQUENCE_CTRLR)
         self.currentWP = apbrg.LLA()
         self.pose = None
         self.baseAlt = 0.0
