@@ -20,10 +20,6 @@ import ap_srvs.srv as apsrv
 CTRLR_BASENAME = 'controllers' # Default base name for controller topics
 MIN_REL_ALT = 50.0 # Minimum relative altitude that a controller can order
 
-# Global constants for "known" controller types (essentially an enumeration)
-NO_PAYLOAD_CTRL = 0
-WP_SEQUENCE_CTRLR = 1
-FOLLOW_CTRLR = 2
 
 # Abstract object for wrapping a control-order-issuing ACS ROS object 
 # that can be contained in an already established node or run as its
