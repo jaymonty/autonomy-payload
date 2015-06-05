@@ -343,20 +343,6 @@ check_fail "init.d update"
 
 }
 
-##############################################
-# Function to apply fixes we learn about later
-##############################################
-function do_remediations
-{
-
-# Set correct timezone
-sudo sh -c "echo 'US/Pacific' > /etc/timezone"
-check_fail "timezone echo"
-sudo dpkg-reconfigure -f noninteractive tzdata
-check_fail "timezone update"
-
-}
-
 ###############################################################################
 # Main program flow
 
@@ -464,7 +450,8 @@ if [ $INSTALL_INIT == true ]; then
 fi
 
 # Perform any remediation steps (fixes discovered later on)
-do_remediations
+# In a separate script so we always run the latest version
+. ~/acs_ros_ws/src/autonomy-payload/deploy/remediate-14.04.sh
 
 # Final message(s) to user
 echo ""
