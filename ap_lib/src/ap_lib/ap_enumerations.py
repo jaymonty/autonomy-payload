@@ -9,15 +9,15 @@ FOLLOW_CTRLR = 2
 LANDING_SEQUENCE_CTRLR = 3
 
 # Mapping between controller modes and strings for GUI use or debugging
-CTL_MODES = { 0: 'Autopilot', \
-              1: 'Wpt Sequencer', \
-              2: 'Follower',
-              3: 'Land Sequencer' }
+CTL_MODES = { NO_PAYLOAD_CTRL:        'Autopilot', \
+              WP_SEQUENCE_CTRLR:      'Wpt Sequencer', \
+              FOLLOW_CTRLR:           'Follower',
+              LANDING_SEQUENCE_CTRLR: 'Land Sequencer' }
 
-CTL_MODE_VALUES = { 'Autopilot': 0, \
-                    'Wpt Sequencer': 1, \
-                    'Follower': 2, \
-                    'Land Sequencer': 3 }
+CTL_MODE_VALUES = { 'Autopilot':      NO_PAYLOAD_CTRL, \
+                    'Wpt Sequencer':  WP_SEQUENCE_CTRLR, \
+                    'Follower':       FOLLOW_CTRLR, \
+                    'Land Sequencer': LANDING_SEQUENCE_CTRLR }
 
 # Fixed (per convention) state-specific waypoints
 TAKEOFF_WP = 1       # Airborne
@@ -33,15 +33,15 @@ SWARM_SEQUENCE_LAND = 98  # Land in order (low-to-high UAV)
 SWARM_EGRESS = 99         # Egress the swarm for recovery
 
 # Mapping between swarm behaviors and strings for GUI use or debugging
-SWARM_BHVRS = {  0: 'Standby', \
-                 1: 'Fixed Follow', \
-                98: 'Sequence Land', \
-                99: 'Egress' }
+SWARM_BHVRS = {  SWARM_STANDBY:       'Standby', \
+                 FIXED_FOLLOW:        'Fixed Follow', \
+                 SWARM_SEQUENCE_LAND: 'Sequence Land', \
+                 SWARM_EGRESS:        'Egress' }
 
-SWARM_BHVR_VALUES = { 'Standby': 0, \
-                      'Fixed Follow': 1, \
-                      'Sequence Land': 98, \
-                      'Egress': 99 }
+SWARM_BHVR_VALUES = { 'Standby':       SWARM_STANDBY, \
+                      'Fixed Follow':  FIXED_FOLLOW, \
+                      'Sequence Land': SWARM_SEQUENCE_LAND, \
+                      'Egress':        SWARM_EGRESS }
 
 # Enumeration for swarming states
 PRE_FLIGHT = 0    # Powered on, going through pre-fllight checks
@@ -56,35 +56,54 @@ POST_FLIGHT = 8   # Post landing checks (will probably not be seen)
 
 
 # Mapping between swarm states and strings for GUI use or debugging
-STATE_STRINGS = { PRE_FLIGHT: 'Preflight', \
+STATE_STRINGS = { PRE_FLIGHT:   'Preflight', \
                   FLIGHT_READY: 'Flight Ready', \
-                  INGRESS: 'Ingress', \
-                  SWARM_READY: 'Swarm Ready', \
+                  INGRESS:      'Ingress', \
+                  SWARM_READY:  'Swarm Ready', \
                   SWARM_ACTIVE: 'Swarm Active', \
-                  EGRESS: 'Egress', \
-                  LANDING: 'Landing', \
-                  ON_DECK: 'On Deck',
-                  POST_FLIGHT: 'Post Flight' }
+                  EGRESS:       'Egress', \
+                  LANDING:      'Landing', \
+                  ON_DECK:      'On Deck',
+                  POST_FLIGHT:  'Post Flight' }
 
-STATE_VALUES = { 'Preflight': 0, \
-                 'Flight Ready': 1, \
-                 'Ingress': 2, \
-                 'Swarm Ready': 3, \
-                 'Swarm Active': 4, \
-                 'Egress': 5, \
-                 'Landing': 6, \
-                 'On Deck': 7, \
-                 'Post Flight': 8 }
+STATE_VALUES = { 'Preflight':    PRE_FLIGHT, \
+                 'Flight Ready': FLIGHT_READY, \
+                 'Ingress':      INGRESS, \
+                 'Swarm Ready':  SWARM_READY, \
+                 'Swarm Active': SWARM_ACTIVE, \
+                 'Egress':       EGRESS, \
+                 'Landing':      LANDING, \
+                 'On Deck':      ON_DECK, \
+                 'Post Flight':  POST_FLIGHT }
+
+# Enumeration for autopilot modes
+RTL = 0
+MANUAL = 1
+FBWA = 2
+GUIDED = 3
+AUTO = 4
+FBWB = 5
+CIRCLE = 6
+UNMAPPED = 15
 
 # Mapping between autopilot modes and strings for GUI use or debugging
-MODE_STRINGS = { 0:  'RTL', \
-                 1:  'MANUAL', \
-                 2:  'FBWA', \
-                 3:  'GUIDED', \
-                 4:  'AUTO', \
-                 5:  'FBWB', \
-                 6:  'CIRCLE', \
-                 15: 'UNMAPPED' }
+MODE_STRINGS = { RTL:      'RTL', \
+                 MANUAL:   'MANUAL', \
+                 FBWA:     'FBWA', \
+                 GUIDED:   'GUIDED', \
+                 AUTO:     'AUTO', \
+                 FBWB:     'FBWB', \
+                 CIRCLE:   'CIRCLE', \
+                 UNMAPPED: 'UNMAPPED' }
+
+MODE_VALUES = { 'RTL':      RTL, \
+                'MANUAL':   MANUAL, \
+                'FBWA':     FBWA, \
+                'GUIDED':   GUIDED, \
+                'AUTO':     AUTO, \
+                'FBWB':     FBWB, \
+                'CIRCLE':   CIRCLE, \
+                'UNMAPPED': UNMAPPED }
 #UNMAPPED = ACRO, LOITER, INITIALIZING, TRAINING, STABILIZE, CRUISE
 
 # Enumeration for types of waypoints that we might need to test for
@@ -95,4 +114,5 @@ WP_TYPE_TIME = 19
 WP_TYPE_LAND = 21
 WP_TYPE_TAKEOFF = 22
 WP_TYPE_LOITER_TO_ALT = 31
+WP_TYPE_LAND_SEQUENCE = 189
 
