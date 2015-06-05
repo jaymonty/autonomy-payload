@@ -404,6 +404,13 @@ class UAVListWidget(QListWidget):
 
         # Update remaining (computed) lights
 
+        # WP light - make sure set to 1 on the ground (override above)
+        if item.getState() == UAVListWidgetItem.STATE_READY:
+            self.lights['wp'].setbool(msg.ok_wp and msg.mis_cur in [0, 1],
+                                      msg.ok_wp,
+                                      oktip='Set WP to 1 before takeoff',
+                                      badtip='verification not completed')
+
         # Arming status
         if item.getState() in [UAVListWidgetItem.STATE_FLYING,
                                UAVListWidgetItem.STATE_PROBLEM]:
@@ -549,10 +556,10 @@ class UAVListWidget(QListWidget):
                 continue
             if self.item(i).getState() in self.filter_states:
                 self.item(i).setHidden(True)
-            elif self.item(i).getTime() < (cur_time - self.DELETE_TIME):
-                # Flying (problem) aircraft shouldn't disappear
-                if self.item(i).getState() != UAVListWidgetItem.STATE_PROBLEM:
-                    self.item(i).setHidden(True)
+            elif self.item(i).getState() == UAVListWidgetItem.STATE_OFFLINE and \
+                 self.item(i).getTime() < (cur_time - self.DELETE_TIME):
+                # Only hide aircraft that are already "offline" (on the ground)
+                self.item(i).setHidden(True)
             elif self.item(i).getTime() < (cur_time - self.OFFLINE_TIME):
                 # If flying, this is a problem. Otherwise, it's ok
                 if self.item(i).getState() in [UAVListWidgetItem.STATE_FLYING,
