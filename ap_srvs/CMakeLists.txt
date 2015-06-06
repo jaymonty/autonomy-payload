@@ -15,6 +15,7 @@ add_service_files(
   FILES
   SetBoolean.srv
   SetInteger.srv
+  SetSwarmFormation.srv
 )
 
 ## Generate added messages and services with any dependencies listed here
