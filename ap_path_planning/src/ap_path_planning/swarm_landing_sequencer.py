@@ -21,9 +21,6 @@ import ap_lib.waypoint_controller as wp_controller
 import autopilot_bridge.srv as apbrgsrv
 import autopilot_bridge.msg as apbrgmsg
 
-LAND_A_WPT = 12  # Index of landing wp sequence "A" start
-LAND_B_WPT = 18  # Index of landing wp sequence "B" start
-
 LAND_WP_DIST = 200.0     # Distance from landing wp to start descent
 LAND_BASE_ALT = 100.0    # AGL alt order for "next" aircraft to land
 ALT_BLOCK_SIZE = 15.0    # Separation between altitude order
@@ -36,6 +33,7 @@ IN_TRANSIT = 2
 IN_STACK = 3
 LANDING = 4
 
+BASE_WP_LOITER_RAD = 50.0
 
 # Object that sequences and controls subswarm aircraft for landing.
 #
@@ -51,6 +49,7 @@ LANDING = 4
 #   _subswarm_keys: list of subswarm aircraft IDs (keys) in the swarm dictionary
 #   _ldg_wp_publisher: ROS publisher to direct the UAV to the landing waypoint
 #   _wp_getrange_srv_proxy: ROS proxy for using the autopilot/wp_getrange service
+#   _fpr_param_set_srv_proxy: ROS proxy for using the autopilot/fpr_param_set service
 #   _controller_state: determines what the controller is currently doing
 #   _transit_started: set to True when the transit wpt is issued
 #   _transit_complete: set to True when the transit wpt has been reached
@@ -93,13 +92,14 @@ class SwarmLandingSequencer(wp_controller.WaypointController):
         self._ownID = rospy.get_param("aircraft_id")
         self._leaderID = 0
         self._subswarm_id = 0
-        self._ldgWptIndex = LAND_B_WPT
+        self._ldgWptIndex = 0
         self._alt_block = 0
         self._wp_msg = apbrgmsg.LLA()
         self._swarm_uav_states = dict()
         self._swarm_keys = []
         self._subswarm_keys = []
-        self._wpt_srv_proxy = None
+        self._wp_getrange_srv_proxy = None
+        self._fpr_param_set_srv_proxy = None
         self._controller_state = None
 #        self.DBUG_PRINT = True
 #        self.WARN_PRINT = True
@@ -140,6 +140,8 @@ class SwarmLandingSequencer(wp_controller.WaypointController):
     def serviceProxySetup(self, params=[]):
         self._wp_getrange_srv_proxy = \
             self.createServiceProxy('wp_getrange', apbrgsrv.WPGetRange)
+        self._fpr_param_set_srv_proxy = \
+            self.createServiceProxy('fpr_param_set', apbrgsrv.ParamSet)
 
 
     # Runs one iteration of the controller, to include processing
@@ -241,21 +243,37 @@ class SwarmLandingSequencer(wp_controller.WaypointController):
     # @param srvReq service request message
     # @return Boolean value indicating behavior initiation success or failure
     def _init_landing_sequencer(self, srvReq):
-        # Get the landing waypoint info from the autopilot (hard coded for now)
-        wpt = self._wp_getrange_srv_proxy(self._ldgWptIndex, \
-                                          self._ldgWptIndex).points[0]
-        while wpt.command != enums.WP_TYPE_LOITER_TO_ALT:
-            self._ldgWptIndex += 1
+        try:
+            self._ldgWptIndex = srvReq.setting
             wpt = self._wp_getrange_srv_proxy(self._ldgWptIndex, \
                                               self._ldgWptIndex).points[0]
-        self._wp_msg.lat = wpt.x
-        self._wp_msg.lon = wpt.y
-        self._wp_msg.alt = self._swarm_uav_states[self._ownID].state.pose.pose.position.rel_alt
 
-        self._alt_block = 0
-        self._controller_state = NEGOTIATE_ORDER
-        self.set_ready_state(True)
-        return True
+            if wpt.command != enums.WP_TYPE_LAND_SEQUENCE:
+                raise Exception("Invalid land sequence WP type specified")
+
+            while wpt.command != enums.WP_TYPE_LOITER_TO_ALT:
+                self._ldgWptIndex += 1
+                wpt = self._wp_getrange_srv_proxy(self._ldgWptIndex, \
+                                                  self._ldgWptIndex).points[0]
+
+            if wpt.param2 < 0.0:
+                self._fpr_param_set_srv_proxy('WP_LOITER_RAD', -BASE_WP_LOITER_RAD)
+            else:
+                self._fpr_param_set_srv_proxy('WP_LOITER_RAD', BASE_WP_LOITER_RAD)
+
+            self._wp_msg.lat = wpt.x
+            self._wp_msg.lon = wpt.y
+            self._wp_msg.alt = self._swarm_uav_states[self._ownID].state.pose.pose.position.rel_alt
+
+            self._alt_block = 0
+            self._controller_state = NEGOTIATE_ORDER
+            self.set_ready_state(True)
+            return True
+
+        except Exception as ex: 
+            self.log_warn("Failed to initialize landing sequencer: " + str(ex))
+            self.set_ready_state(False)
+            return False
 
 
     # Computes this UAV's landing position (i.e., which UAV does it follow).
