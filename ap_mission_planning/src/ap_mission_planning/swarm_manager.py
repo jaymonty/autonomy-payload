@@ -134,9 +134,6 @@ class SwarmManager(nodeable.Nodeable):
     def callbackSetup(self, params=[]):
         self.createSubscriber("swarm_uav_states", apmsg.SwarmStateStamped, \
                               self._process_swarm_uav_states)
-        self.createSubscriber("selector_status", \
-                              apmsg.ControllerGroupStateStamped, \
-                              self._process_selector_status)
         self.createSubscriber("recv_subswarm", stdmsg.UInt8, \
                               self._process_subswarm_update)
         self.createSubscriber("status", apmsgs.Status, \
@@ -174,12 +171,10 @@ class SwarmManager(nodeable.Nodeable):
                            self._process_set_swarm_behavior)
         self.createService("set_swarm_state", apsrv.SetInteger, \
                            self._process_set_swarm_state)
-
-
-    # Establishes the service proxy for the SwarmManager object.
-    # @params: list of required parameters (none at present)
-    def serviceProxySetup(self, params=[]):
-        pass  # TODO:  move proxies from constructor to here
+        self.createService("run_swarm_sequence_land", apsrv.SetInteger, \
+                           self._process_set_sequence_land)
+        self.createService("run_swarm_fixed_formation", apsrv.SetSwarmFormation, \
+                           self._process_set_fixed_formation)
 
 
     # Executes one iteration of the timed loop.  At present, with the exception
@@ -292,12 +287,17 @@ class SwarmManager(nodeable.Nodeable):
 
             # If follower acft, set and initiate the follow controller
             else:
+                distance = SwarmManager.FIXED_FOLLOW_DIST
+                angle = math.pi
+                if type(srvReq) == apsrv.SetSwarmFormationRequest:
+                    distance = srvReq.distance
+                    angle = srvReq.angle
                 form_msg = apmsg.FormationOrderStamped()
                 form_msg.header.stamp = rospy.Time.now()
                 form_msg.header.frame_id = 'base_footprint'
                 form_msg.order.leader_id = high_ac_id
-                form_msg.order.range = SwarmManager.FIXED_FOLLOW_DIST
-                form_msg.order.angle = math.pi
+                form_msg.order.range = distance
+                form_msg.order.angle = angle
                 form_msg.order.alt_mode = follower.BASE_ALT_MODE
                 form_msg.order.control_alt = self._crnt_wpt_alt
                 self._follow_publisher.publish(form_msg)
@@ -314,11 +314,11 @@ class SwarmManager(nodeable.Nodeable):
     # Activates the swarm sequenced landing behavior.
     # @param srvReq service request message (not used for this behavior)
     # @return Boolean value indicating behavior initiation success or failure
-    def _activate_sequence_land(self, srvReq=None):
+    def _activate_sequence_land(self, srvReq):
         success = False
         try:
             # Initialize the controller
-            init = self._init_landing_sequencer_srv_proxy(1).result # '1' is a placeholder for now
+            init = self._init_landing_sequencer_srv_proxy(srvReq.setting).result
             if not init:
                 self.log_warn("Failed to initialize Swarm Landing Sequencer")
                 raise Exception("Failed to initialize Swarm Landing Sequencer")
@@ -326,18 +326,9 @@ class SwarmManager(nodeable.Nodeable):
             success = self._ctlr_select_srv_proxy(enums.LANDING_SEQUENCE_CTRLR).result
 
         except Exception as ex:
-            self.log_warn("Landing sequencer start exception" + str(ex))           
+            self.log_warn("Landing sequencer start exception: " + str(ex))           
 
         return success
-
-
-    # Sorts a list of tuples into ascending order.  The tuples are
-    # assumed to be of the form [ acftID, sortCriteria ].  The list
-    # itself is not affected (i.e., a new list is created)
-    # @param swarm_pairs:  list of tuples to be sorted
-    # @return a sorted list
-    def _swarm_sort(self, swarm_pairs):
-        return sorted(swarm_pairs, key = lambda tup: tup[1])
 
 
     # Goes through the list of swarm uav records and returns a list of those
@@ -379,62 +370,86 @@ class SwarmManager(nodeable.Nodeable):
         return apsrv.SetIntegerResponse(success)
 
 
-    # Handle swarm behavior activation service requests
-    # @param behaviorSrv: message indicating which mode to activate
+    # Handles service calls to the run_swarm_sequence_land service.   This
+    # method is essentially a pass-through that calls the
+    # _process_set_swarm_behavior method with the appropriate parameters for
+    # safe activation of the swarm behavior
+    # @param ldgSrv: service object containing desired behavior parameters
+    # @return a boolean message response indicating success or failure 
+    def _process_set_sequence_land(self, ldgSrv):
+        return self._process_set_swarm_behavior(ldgSrv, \
+                    behaviorID = enums.SWARM_SEQUENCE_LAND)
+
+
+    def _process_set_fixed_formation(self, formSrv):
+        success = self._process_setSwarm_behavior(formSrv, \
+                       behaviorID = enums.SWARM_FIXED_FORMATION)
+        return apsrv.SetSwarmFormationResponse(success.result)
+
+
+    # Handle swarm behavior activation service requests.  The method can
+    # activate a parameter-specified behavior (the activateSrv method
+    # will then be used by the activating function to incorporate any
+    # required parameters) or a service-specified behavior (in which case
+    # the activating function shouldn't require any parameters
+    # @param activateSrv: message indicating which mode to activate
+    # @param behaviorID: ID of behavior to activate (None uses srv value)
     # @return a boolean message response indicating success or failure
-    def _process_set_swarm_behavior(self, activateSrv):
+    def _process_set_swarm_behavior(self, activateSrv, behaviorID=None):
         success = False
+        activateBehavior = behaviorID
+        if activateBehavior == None:  activateBehavior = activateSrv.setting
 
         # Handle special cases first
 
         # EGRESS
-        if ((activateSrv.setting == enums.SWARM_EGRESS) and \
+        if ((activateBehavior == enums.SWARM_EGRESS) and \
             ((self._swarm_state == enums.INGRESS) or \
              (self._swarm_state == enums.SWARM_READY) or \
              (self._swarm_state == enums.SWARM_ACTIVE) or \
              (self._swarm_state == enums.EGRESS))):
-            init_method = self._behavior_activators[activateSrv.setting]
+            init_method = self._behavior_activators[activateBehavior]
             success = init_method(activateSrv)
 
         # Regular swarming behaviors (must be SWARM_READY or SWARM_ACTIVE)
-        elif ((activateSrv.setting in self._behavior_activators) and \
+        elif ((activateBehavior in self._behavior_activators) and \
               ((self._swarm_state == enums.SWARM_READY) or \
                (self._swarm_state == enums.SWARM_ACTIVE))):
-            init_method = self._behavior_activators[activateSrv.setting]
+            init_method = self._behavior_activators[activateBehavior]
             success = init_method(activateSrv)
 
         # Post-egress behaviors (must be EGRESS)
-        elif ((activateSrv.setting in self._egress_behavior_activators) and \
+        elif ((activateBehavior in self._egress_behavior_activators) and \
               (self._swarm_state == enums.EGRESS)):
-            init_method = self._egress_behavior_activators[activateSrv.setting]
+            init_method = self._egress_behavior_activators[activateBehavior]
             success = init_method(activateSrv)
 
         # Error cases (can't initiate the requested behavior)
-        elif ((activateSrv.setting not in self._behavior_activators) and \
+        elif ((activateBehavior not in self._behavior_activators) and \
               ((self._swarm_state == enums.SWARM_READY) or \
                (self._swarm_state == enums.SWARM_ACTIVE))):
             self.log_warn("requested behavior (%d) not available for normal swarming"\
-                          %activateSrv.setting)
+                          %activateBehavior)
 
-        elif ((activateSrv.setting not in self._egress_behavior_activators) and \
+        elif ((activateBehavior not in self._egress_behavior_activators) and \
               (self._swarm_state == enums.EGRESS)):
             self.log_warn("requested behavior (%d) not available for post-egress swarming"\
-                          %activateSrv.setting)
+                          %activateBehavior)
 
         else:
             self.log_warn("vehicle in swarm state %d; cannot initiate swarm behavior %d"\
-                          %(self._swarm_state, activateSrv.setting))
+                          %(self._swarm_state, activateBehavior))
 
         if success:
-            if activateSrv.setting == enums.SWARM_STANDBY:
+            if activateBehavior == enums.SWARM_STANDBY:
                 self._set_swarm_state(enums.SWARM_READY)
-            elif activateSrv.setting != enums.SWARM_EGRESS:
+            elif activateBehavior != enums.SWARM_EGRESS:
                 self._set_swarm_state(enums.SWARM_ACTIVE)
-            self.log_dbug("successful activation of swarm behavior %d" %activateSrv.setting)
+            self.log_dbug("successful activation of swarm behavior %d" %activateBehavior)
         else:
-            self.log_warn("failed to activate swarm behavior %d" %activateSrv.setting)
+            self.log_warn("failed to activate swarm behavior %d" %activateBehavior)
 
-        if success:  self._set_swarm_behavior(activateSrv.setting)
+        if success:  self._set_swarm_behavior(activateBehavior)
         return apsrv.SetIntegerResponse(success)
 
 
@@ -453,13 +468,6 @@ class SwarmManager(nodeable.Nodeable):
             self._swarm_keys.append(vehicle.vehicle_id)
             if vehicle.subswarm_id == self._subswarm_id:
                 self._subswarm_keys.append(vehicle.vehicle_id)
-
-
-    # Process ctlr_selector status messages 
-    # (only rqd to keep track of the "active" controller)
-    # @param statusMsg: selector mode message
-    def _process_selector_status(self, statusMsg):
-        pass # Not being used for now, but might be useful later
 
 
     # Process recv_subswarm messages.  Messages will be ignored if the
