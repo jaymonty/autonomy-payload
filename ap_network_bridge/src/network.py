@@ -14,6 +14,7 @@ from std_srvs import srv as std_srv
 import ap_lib.acs_messages as messages
 from ap_lib.acs_socket import Socket
 from ap_lib.acs_network import NetworkBridge
+from ap_lib import ap_enumerations as enums
 from ap_msgs import msg as ap_msg
 from ap_srvs import srv as ap_srv
 from autopilot_bridge import msg as pilot_msg
@@ -235,8 +236,34 @@ def net_subswarm_id(message, bridge):
     bridge.publish('recv_subswarm', msg, latched=True)
 
 def net_swarm_behavior(message, bridge):
-    bridge.callService('set_swarm_behavior', ap_srv.SetInteger,
-                       setting=message.swarm_behavior)
+
+    # Parse & process differently based on ordered behavior type
+    # Processing typically requires a call to a "setup" service
+    # followed by a call to the set_swarm_behavior service
+    if type(message) == messages.SuspendSwarmBehavior:
+        bridge.callService('set_swarm_behavior', ap_srv.SetInteger,
+                           setting=enums.SWARM_STANDBY)
+
+    elif type(message) == messages.SwarmEgress:
+        bridge.callService('set_swarm_behavior', ap_srv.SetInteger,
+                           setting=enums.SWARM_EGRESS)
+ 
+    elif type(message) == messages.SwarmFollow:
+        bridge.callService('set_swarm_behavior', ap_srv.SetInteger,
+                           setting=enums.FIXED_FOLLOW)
+
+    elif type(message) == messages.SwarmSequenceLand:
+        bridge.callService('run_swarm_sequence_land', ap_srv.SetInteger,
+                           setting=message.ldg_wpt)
+
+    elif type(message) == messages.SwarmSearch:
+        pass  # TODO:  Everything required to implement
+
+    # This one will go away once all of the behavior-specific
+    # messages are fully incorporated into SwarmCommander
+    elif type(message) == messages.SwarmBehavior:
+        bridge.callService('set_swarm_behavior', ap_srv.SetInteger,
+                           setting=message.swarm_behavior)
 
 def net_swarm_state(message, bridge):
     bridge.callService('set_swarm_state', ap_srv.SetInteger,
@@ -478,6 +505,11 @@ if __name__ == '__main__':
         bridge.addNetHandler(messages.FlightReady, net_flight_ready)
         bridge.addNetHandler(messages.SetSubswarm, net_subswarm_id)
         bridge.addNetHandler(messages.SwarmBehavior, net_swarm_behavior)
+        bridge.addNetHandler(messages.SuspendSwarmBehavior, net_swarm_behavior)
+        bridge.addNetHandler(messages.SwarmEgress, net_swarm_behavior)
+        bridge.addNetHandler(messages.SwarmFollow, net_swarm_behavior)
+        bridge.addNetHandler(messages.SwarmSequenceLand, net_swarm_behavior)
+        bridge.addNetHandler(messages.SwarmSearch, net_swarm_behavior)
         bridge.addNetHandler(messages.SwarmState, net_swarm_state)
         bridge.addNetHandler(messages.SetController, net_controller_mode) #depricate?
         bridge.addNetHandler(messages.FollowerSetup, net_follower_set) #depricate?
