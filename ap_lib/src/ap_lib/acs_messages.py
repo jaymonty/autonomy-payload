@@ -83,8 +83,9 @@ class Message(object):
         data = struct.pack(Message.hdr_fmt, *hdr_tupl)
 
         # Pack any payload
-        data = data + self._pack()
-
+        payload = self._pack()
+        if payload != '':
+            data = data + self._pack()
         return data
 
     # Parse data into a Message subtype
@@ -650,11 +651,7 @@ class SwarmBehavior(Message):
 
     def __init__(self):
         Message.__init__(self)
-
         self.swarm_behavior = None  # swarm_behavior type
-        # TODO:  replace 3-byte padding with parameter values
-        #        associated with specific swarm behaviors
-        #        as they are implemented
 
     def _pack(self):
         tupl = (int(self.swarm_behavior),)
@@ -663,6 +660,83 @@ class SwarmBehavior(Message):
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.swarm_behavior = int(fields[0])
+
+class SuspendSwarmBehavior(Message):
+    msg_type = 0x93
+
+    def __init__(self):
+        Message.__init__(self)
+        pass
+
+    def _pack(self):
+        return ''
+
+    def _unpack(self, data):
+        pass
+
+class SwarmEgress(Message):
+    msg_type = 0x94
+
+    def __init__(self):
+        Message.__init__(self)
+        pass
+
+    def _pack(self):
+        return ''
+
+    def _unpack(self, data):
+        pass
+
+class SwarmFollow(Message):
+    msg_type = 0x95
+    msg_fmt = '>bh?'
+
+    def __init__(self):
+        Message.__init__(self)
+        self.distance = None         # distance from the lead aircraft (m)
+        self.angle = None            # angle off the bow (radian angle *1000)
+        self.stack_formation = None  # True if same form for all with 1 lead
+
+    def _pack(self):
+        tupl = (int(self.distance), int(self.angle * 1000), bool(self.stack_formation))
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.distance = int(fields[0])
+        self.angle = int(fields[1]) / 1000.0
+        self.stack_formation = bool(fields[2])
+
+class SwarmSequenceLand(Message):
+    msg_type = 0x96
+    msg_fmt = '>B3x'
+
+    def __init__(self):
+        Message.__init__(self)
+        self.ldg_wpt = None  # WP ID of the landing sequence 
+
+    def _pack(self):
+        tupl = (int(self.ldg_wpt),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.ldg_wpt = int(fields[0])
+
+class SwarmSearch(Message):
+    # Place-holder--Dylan will figure out what it looks like
+    msg_type = 0x97
+
+    def __init__(self):
+        Message.__init__(self)
+
+        pass
+
+    def _pack(self):
+        return ''
+
+    def _unpack(self, data):
+        pass
 
 class SwarmState(Message):
     msg_type = 0x8F
