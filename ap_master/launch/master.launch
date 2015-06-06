@@ -62,6 +62,8 @@
     <remap from="network/set_swarm_behavior" to="swarm_manager/set_swarm_behavior" />
     <remap from="network/swarm_behavior" to="swarm_manager/swarm_behavior" />
     <remap from="network/set_swarm_state" to="swarm_manager/set_swarm_state" />
+    <remap from="network/run_swarm_sequence_land" to="swarm_manager/run_swarm_sequence_land" />
+    <remap from="network/run_swarm_fixed_follow" to="swarm_manager/run_swarm_fixed_follow" />
     <remap from="network/param_setlist" to="autopilot/fpr_param_setlist" />
     <remap from="network/load_param" to="autopilot/load_param" />
     <remap from="network/load_fence" to="autopilot/load_fence" />
@@ -93,6 +95,7 @@
     <node name="swarm_landing_sequencer" pkg="ap_path_planning" type="swarm_landing_sequencer.py" output="screen" args="">
       <remap from="swarm_landing_sequencer/payload_waypoint" to="autopilot/payload_waypoint" />
       <remap from="swarm_landing_sequencer/wp_getrange" to="autopilot/wp_getrange" />
+      <remap from="swarm_landing_sequencer/fpr_param_set" to="autopilot/fpr_param_set" />
       <remap from="swarm_landing_sequencer/waypoint_goto" to="autopilot/waypoint_goto" />
       <remap from="swarm_landing_sequencer/ctlr_status" to="controllers/ctlr_status" />
       <remap from="swarm_landing_sequencer/swarm_uav_states" to="swarm_tracker/swarm_uav_states" />
