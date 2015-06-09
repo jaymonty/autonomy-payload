@@ -28,18 +28,21 @@ RACETRACK_WP = 7     # First racetrack waypoint
 
 # Enumeration for available swarm behaviors
 SWARM_STANDBY = 0         # No swarm behavior (set no payload control)
-FIXED_FOLLOW = 1          # Canned follow positions based on side #
+SWARM_FIXED_FORMATION = 1 # Canned follow positions based on side #
+SWARM_SEARCH = 2          # Conduct a coordinated search of a specified area
 SWARM_SEQUENCE_LAND = 98  # Land in order (low-to-high UAV)
 SWARM_EGRESS = 99         # Egress the swarm for recovery
 
 # Mapping between swarm behaviors and strings for GUI use or debugging
-SWARM_BHVRS = {  SWARM_STANDBY:       'Standby', \
-                 FIXED_FOLLOW:        'Fixed Follow', \
-                 SWARM_SEQUENCE_LAND: 'Sequence Land', \
-                 SWARM_EGRESS:        'Egress' }
+SWARM_BHVRS = {  SWARM_STANDBY:         'Standby', \
+                 SWARM_FIXED_FORMATION: 'Fixed Follow', \
+                 SWARM_SEARCH:          'Swarm Search', \
+                 SWARM_SEQUENCE_LAND:   'Sequence Land', \
+                 SWARM_EGRESS:          'Egress' }
 
 SWARM_BHVR_VALUES = { 'Standby':       SWARM_STANDBY, \
-                      'Fixed Follow':  FIXED_FOLLOW, \
+                      'Fixed Follow':  SWARM_FIXED_FORMATION, \
+                      'Swarm Search':  SWARM_SEARCH, \
                       'Sequence Land': SWARM_SEQUENCE_LAND, \
                       'Egress':        SWARM_EGRESS }
 
