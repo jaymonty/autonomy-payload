@@ -25,7 +25,9 @@ if [ -z $DEVICE ] || [ -z $PARTNUM ]; then
 fi
 
 # Make sure partition is unmounted first
-umount $DEVPART &> /dev/null
+for part in `mount | grep $DEVPART | awk '{print $1}'`; do
+  umount $part &> /dev/null
+done
 
 # Expand the partition to the maximum size
 echo "Resizing the partition ..."
