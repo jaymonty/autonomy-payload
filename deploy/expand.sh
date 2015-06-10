@@ -25,7 +25,7 @@ if [ -z $DEVICE ] || [ -z $PARTNUM ]; then
 fi
 
 # Make sure partition is unmounted first
-for part in `mount | grep $DEVPART | awk '{print $1}'`; do
+for part in `mount | grep $DEVICE | awk '{print $1}'`; do
   umount $part &> /dev/null
 done
 
