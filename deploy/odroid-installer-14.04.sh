@@ -32,6 +32,9 @@ fi
 function install_initial
 {
 
+# Replacing resolv.conf later, don't hold up sudo resolution
+sudo sh -c 'echo -n > /etc/resolv.conf'
+
 # Make it so this user can do passwordless sudo :)
 sudo grep -x "$USER ALL=(ALL) NOPASSWD: ALL" /etc/sudoers > /dev/null
 if [ $? != 0 ]; then
@@ -115,16 +118,25 @@ check_fail "chown (interfaces config)"
 sudo sh -c "rm /etc/resolv.conf && echo \"nameserver 172.20.20.11\nnameserver 8.8.8.8\" > /etc/resolv.conf"
 check_fail "resolv conf"
 
+}
+
+#############################################
+# Set up network device for immediate install
+#############################################
+function install_setup_networking
+{
+
 # Stand up interface as-is for this boot
-if [ -z $INSTALL_DEV ]; then
-  INSTALL_DEV=`sudo ifconfig -a | grep wlan | awk '{print $1}'`
+if [ -z $NET_DEVICE ]; then
+  # If not specified, look for first wireless interface
+  NET_DEVICE=`sudo ifconfig -a | grep -m 1 wlan | awk '{print $1}'`
 fi
-sudo ifconfig $INSTALL_DEV down
+sudo ifconfig $NET_DEVICE down
 check_fail "ifconfig down"
-sudo iwconfig $INSTALL_DEV mode ad-hoc essid zephyr channel 6 ap 00:11:22:33:44:55 txpower 10
+sudo iwconfig $NET_DEVICE mode ad-hoc essid zephyr channel 6 ap 00:11:22:33:44:55 txpower 10
 # iface might not be wireless, let this fail
 #check_fail "iwconfig"
-sudo ifconfig $INSTALL_DEV inet 192.168.2.$AIRCRAFT_ID/24 up
+sudo ifconfig $NET_DEVICE inet 192.168.2.$AIRCRAFT_ID/24 up
 check_fail "ifconfig up"
 sudo route add default gw 192.168.2.1
 check_fail "route add"
@@ -301,6 +313,13 @@ check_fail "catkin_make clean"
 catkin_make
 check_fail "catkin_make"
 
+# Make sure ~/odroid-installer.sh is softlinked to repo version
+rm ~/odroid-installer.sh &> /dev/null
+ln -s ~/acs_ros_ws/src/autonomy-payload/deploy/odroid-installer-14.04.sh ~/odroid-installer.sh
+if [ $? != 0 ]; then
+  echo "WARNING: could not softlink install script into home!"
+fi
+
 }
 
 ###################################################
@@ -346,42 +365,59 @@ check_fail "init.d update"
 ###############################################################################
 # Main program flow
 
-INSTALL_INIT=true
-INSTALL_BASE=true
-INSTALL_DEV=
-GIT_REMOTE="origin"
+INSTALL_CONF=true   # Do initial configuration (IP, Name, etc)
+INSTALL_NETW=true   # Do immediate network device config
+INSTALL_BASE=true   # Install base software (ROS, etc)
+INSTALL_PAYL=true   # Install autonomy payload software
+INSTALL_INIT=true   # Set up init.d script
+NET_DEVICE=         # Network device for installation (if not wlan*)
+GIT_REMOTE="origin" # Git repository for payload install
 
 # Parse any arguments
-while getopts ":d:r:uq" opt; do
+while getopts ":d:g:uqcs" opt; do
   case $opt in
     d)
       if [ -z $OPTARG ]; then
         echo "Please specify a device"
         exit 1
       fi
-      INSTALL_DEV=$OPTARG
+      NET_DEVICE=$OPTARG
       ;;
-    r)
+    g)
       if [ -z $OPTARG ]; then
-        echo "Please specify a remote"
+        echo "Please specify a Git remote"
         exit 1
       fi
       GIT_REMOTE=$OPTARG
       ;;
     u)
+      INSTALL_CONF=false
+      INSTALL_NETW=false
       INSTALL_INIT=false
       ;;
     q)
-      INSTALL_INIT=false
+      INSTALL_CONF=false
+      INSTALL_NETW=false
       INSTALL_BASE=false
+      INSTALL_INIT=false
+      ;;
+    c)
+      INSTALL_NETW=false
+      INSTALL_BASE=false
+      INSTALL_PAYL=false
+      ;;
+    s)
+      INSTALL_INIT=false
       ;;
     \?)
       echo ""
       echo "usage: $0 [options]"
       echo "  -d DEVICE   Network device to configure for installation"
       echo "  -r REMOTE   Git remote to use for fetching"
-      echo "  -u          Update only (skip initial config)"
+      echo "  -u          Update only (skip initial config and init.d script)"
       echo "  -q          Quick update only (ALSO skip base software install)"
+      echo "  -c          Configuration and script only (no software install)"
+      echo "  -s          DON'T install startup (init.d) script"
       echo ""
       exit 0
       ;;
@@ -394,7 +430,11 @@ if [ `whoami` == "root" ]; then
   exit 1
 fi
 
-if [ $INSTALL_INIT == true ]; then
+# Stop any running payload
+echo "Stopping payload software ..."
+sudo service autonomy-payload stop
+
+if [ $INSTALL_CONF == true ]; then
   # Collect any needed user information
   echo ""
   read -p "Please enter a unique numeric ID for this aircraft: " AIRCRAFT_ID
@@ -408,50 +448,47 @@ if [ $INSTALL_INIT == true ]; then
   install_initial
 fi
 
-# Make sure user has Internet connection set up
-echo ""
-read -p "Please make sure you have an appropriate Internet gateway set up, then press Enter. "
-
-# Stop any running payload
-sudo service autonomy-payload stop
-
-# Shut down NTP service and get a proper time hack
-# (important for make/catkin_make to work correctly)
-sudo service ntp stop
-sudo ntpdate time.nps.edu  # This should be customized later
-if [ $? != 0 ]; then
-  echo ""
-  echo "Could not sync time using NTP (perhaps check your network connection?)"
-  echo ""
-  read -p "Enter to abort, or enter time (MMDDhhmm[[CC]YY][.ss]): " CURRENT_TIME
-  if [ -z $CURRENT_TIME ]; then exit 1; fi
-  sudo date $CURRENT_TIME
-  check_fail "set date/time"
+if [ $INSTALL_NETW == true ]; then
+  install_setup_networking
 fi
 
-# Conditionally perform base software install
+# Software install steps require both Internet and correct time
+if [ $INSTALL_BASE == true ] || [ $INSTALL_PAYL == true ]; then
+  # Make sure user has Internet connection set up
+  echo ""
+  read -p "Please make sure you have an appropriate Internet gateway set up, then press Enter. "
+
+  # Shut down NTP service and get a proper time hack
+  # (important for make/catkin_make to work correctly)
+  sudo service ntp stop
+  sudo ntpdate time.nps.edu  # This should be customized later
+  if [ $? != 0 ]; then
+    echo ""
+    echo "Could not sync time using NTP (perhaps check your network connection?)"
+    echo ""
+    read -p "Enter to abort, or enter time (MMDDhhmmYYYY): " CURRENT_TIME
+    if [ -z $CURRENT_TIME ]; then exit 1; fi
+    sudo date $CURRENT_TIME
+    check_fail "set date/time"
+  fi
+fi
+
+# Conditionally perform software installs
 if [ $INSTALL_BASE == true ]; then
   install_base_software
 fi
+if [ $INSTALL_PAYL == true ]; then
+  install_payload_software
 
-# Always perform payload software install
-install_payload_software
-
-# Make sure ~/odroid-installer.sh is softlinked to repo version
-rm ~/odroid-installer.sh &> /dev/null
-ln -s ~/acs_ros_ws/src/autonomy-payload/deploy/odroid-installer-14.04.sh ~/odroid-installer.sh
-if [ $? != 0 ]; then
-  echo "WARNING: could not softlink install script into home!"
+  # Perform any remediation steps (fixes discovered later on)
+  # In a separate script so we always run the latest version
+  . ~/acs_ros_ws/src/autonomy-payload/deploy/remediate-14.04.sh
 fi
 
-# If performing an initial install, set up autostart
+# Conditionally install init.d script
 if [ $INSTALL_INIT == true ]; then
   install_autostart
 fi
-
-# Perform any remediation steps (fixes discovered later on)
-# In a separate script so we always run the latest version
-. ~/acs_ros_ws/src/autonomy-payload/deploy/remediate-14.04.sh
 
 # Final message(s) to user
 echo ""
