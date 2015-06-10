@@ -6,8 +6,10 @@
 
 TARGET=$1
 VERSION=$2
-TARGET_BOOT=${TARGET}1
-TARGET_ROOT=${TARGET}2
+BOOT_NUM=1
+ROOT_NUM=2
+TARGET_BOOT=${TARGET}${BOOT_NUM}
+TARGET_ROOT=${TARGET}${ROOT_NUM}
 MOUNTPOINT=/media/odroid
 HOMEDIR=$MOUNTPOINT/home/odroid
 SCRIPT=odroid-installer-${VERSION}.sh
@@ -51,30 +53,10 @@ umount $TARGET_ROOT &> /dev/null
 
 echo "Preparing media for installation ..."
 
-# NOTE: This was copied and modified from the old odroid-config utility
-p2_start=`fdisk -l $TARGET | grep $TARGET_ROOT | awk '{print $2}'`
-fdisk $TARGET <<EOF
-p
-d
-2
-n
-p
-2
-$p2_start
+./expand.sh $TARGET $ROOT_NUM
+check_fail "Couldn't prepare the media."
 
-p
-w
-EOF
-check_fail "Couldn't resize the partition."
-
-echo "Running e2fsck ... please wait ..."
-e2fsck -f -y $TARGET_ROOT &> /dev/null
-if [ $? != 0 -a $? != 1 -a $? != 2 ]; then
-  echo "Irrecoverable fsck errors ($?); please run manually"
-  exit 1
-fi
-resize2fs $TARGET_ROOT
-check_fail "Couldn't expand the filesystem."
+echo "Deploying installer script ..."
 
 mount $TARGET_ROOT $MOUNTPOINT
 check_fail "Couldn't mount the filesystem."
@@ -89,8 +71,11 @@ check_fail "Couldn't set permissions on installer script."
 umount $MOUNTPOINT
 check_fail "Couldn't umount filesystem."
 
+echo ""
 echo "The media is prepared for installation. Please boot it on an ODroid"
-echo "using a console cable, then perform the following:"
+echo "using a console cable:"
+echo "    miniterm.py /dev/ttyUSB0 115200 --lf"
+echo "then perform the following:"
 echo "    su - odroid"
 echo "    ./odroid-installer.sh"
 echo "and follow the prompts. If you are using older media that boots to"
