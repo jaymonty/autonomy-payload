@@ -107,14 +107,9 @@ class SwarmManager(nodeable.Nodeable):
         self._subswarm_keys = []
         self._follow_publisher = None
         self._swarm_state_publisher = None
-        self._ctlr_select_srv_proxy = \
-            rospy.ServiceProxy("ctlr_selector/set_selector_mode", \
-                               apsrv.SetInteger)
-        self._wp_getrange_srv_proxy = \
-            rospy.ServiceProxy("autopilot/wp_getrange", apmsrv.WPGetRange)
-        self._init_landing_sequencer_srv_proxy = \
-            rospy.ServiceProxy("swarm_landing_sequencer/init_landing_sequencer", \
-            apsrv.SetInteger)
+        self._ctlr_select_srv_proxy = None
+        self._wp_getrange_srv_proxy = None
+        self._init_landing_sequencer_srv_proxy = None
 #        self.DBUG_PRINT = True
 #        self.WARN_PRINT = True
 
@@ -175,6 +170,17 @@ class SwarmManager(nodeable.Nodeable):
                            self._process_set_sequence_land)
         self.createService("run_swarm_fixed_formation", apsrv.SetSwarmFormation, \
                            self._process_set_fixed_formation)
+
+
+    # Establishes the service proxies for the SwarmManager object.
+    # @param params: list of required parameters (none are at present)
+    def serviceProxySetup(self, params=[]):
+        self._ctlr_select_srv_proxy = \
+            self.createServiceProxy("set_selector_mode", apsrv.SetInteger)
+        self._wp_getrange_srv_proxy = \
+            self.createServiceProxy("wp_getrange", apmsrv.WPGetRange)
+        self._init_landing_sequencer_srv_proxy = \
+            self.createServiceProxy("init_landing_sequencer", apsrv.SetInteger)
 
 
     # Executes one iteration of the timed loop.  At present, with the exception
@@ -268,24 +274,32 @@ class SwarmManager(nodeable.Nodeable):
     def _activate_fixed_follow(self, srvReq=None):
         success = False
         try:
-            # ID the lead (highest) aircraft in the subswarm
-            high_ac_id = self._ownID
-            high_ac_alt = self._crnt_wpt_alt
-            for acft in self._subswarm_keys:
-                swarm_record = self._swarm_uav_states[acft]
-                if acft != self._ownID and \
-                   swarm_record.state.pose.pose.position.alt > high_ac_alt:
-                    high_ac_id = acft
-                    high_ac_alt = swarm_record.state.pose.pose.position.alt
+            # Sort the participating aircraft by altitude
+            low_to_high = []
+            for uav in self._subswarm_keys:
+                if uav == self._ownID:
+                    low_to_high.append([ self._ownID, self._crnt_wpt_alt ])
+                else:
+                    low_to_high.append([ self._swarm_uav_states[uav].vehicle_id, \
+                                         self._swarm_uav_states[uav].state.pose.pose.position.alt])
+            low_to_high = sorted(low_to_high, key = lambda tup: tup[1])
+
+            # ID the UAV to follow (own ID means this UAV is form lead)
+            lead_ac_id = low_to_high[-1][0]
+            if type(srvReq) == apsrv.SetSwarmFormationRequest and \
+               not srvReq.stack_formation and lead_ac_id != self._ownID:
+                for uav in range(len(low_to_high)-2, -1, -1):
+                    if low_to_high[uav][0] == self._ownID:
+                        lead_ac_id = low_to_high[uav+1][0]
+                        break
 
             # If leader acft, set NO_PAYLOAD_CTRL and send to the racetrack
-            if high_ac_id == self._ownID:  # This AC is leader
+            if lead_ac_id == self._ownID:  # This AC is leader
                 success = self._ctlr_select_srv_proxy(enums.NO_PAYLOAD_CTRL).result
                 if success:
                     time.sleep(SwarmManager.TIMING_DELAY) # give the controller switch time to take
                     self._wp_goto_publisher.publish(stdmsg.UInt16(enums.RACETRACK_WP))
 
-            # If follower acft, set and initiate the follow controller
             else:
                 distance = SwarmManager.FIXED_FOLLOW_DIST
                 angle = math.pi
@@ -295,7 +309,7 @@ class SwarmManager(nodeable.Nodeable):
                 form_msg = apmsg.FormationOrderStamped()
                 form_msg.header.stamp = rospy.Time.now()
                 form_msg.header.frame_id = 'base_footprint'
-                form_msg.order.leader_id = high_ac_id
+                form_msg.order.leader_id = lead_ac_id
                 form_msg.order.range = distance
                 form_msg.order.angle = angle
                 form_msg.order.alt_mode = follower.BASE_ALT_MODE
@@ -382,7 +396,7 @@ class SwarmManager(nodeable.Nodeable):
 
 
     def _process_set_fixed_formation(self, formSrv):
-        success = self._process_setSwarm_behavior(formSrv, \
+        success = self._process_set_swarm_behavior(formSrv, \
                        behaviorID = enums.SWARM_FIXED_FORMATION)
         return apsrv.SetSwarmFormationResponse(success.result)
 
@@ -559,7 +573,7 @@ if __name__ == '__main__':
     # Register normal swarm behavior activation methods
     swarm_manager.register_swarm_behavior(enums.SWARM_STANDBY, \
                                           swarm_manager._activate_swarm_standby)
-    swarm_manager.register_swarm_behavior(enums.FIXED_FOLLOW, \
+    swarm_manager.register_swarm_behavior(enums.SWARM_FIXED_FORMATION, \
                                           swarm_manager._activate_fixed_follow)
     swarm_manager.register_swarm_behavior(enums.SWARM_EGRESS, \
                                           swarm_manager._activate_egress)
