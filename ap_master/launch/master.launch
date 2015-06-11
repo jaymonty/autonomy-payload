@@ -63,7 +63,7 @@
     <remap from="network/swarm_behavior" to="swarm_manager/swarm_behavior" />
     <remap from="network/set_swarm_state" to="swarm_manager/set_swarm_state" />
     <remap from="network/run_swarm_sequence_land" to="swarm_manager/run_swarm_sequence_land" />
-    <remap from="network/run_swarm_fixed_follow" to="swarm_manager/run_swarm_fixed_follow" />
+    <remap from="network/run_swarm_fixed_formation" to="swarm_manager/run_swarm_fixed_formation" />
     <remap from="network/param_setlist" to="autopilot/fpr_param_setlist" />
     <remap from="network/load_param" to="autopilot/load_param" />
     <remap from="network/load_fence" to="autopilot/load_fence" />
@@ -132,6 +132,8 @@
       <remap from="swarm_manager/acs_pose" to="autopilot/acs_pose" />
       <remap from="swarm_manager/status" to="autopilot/status" />
       <remap from="swarm_manager/waypoint_goto" to="autopilot/waypoint_goto" />
+      <remap from="swarm_manager/wp_getrange" to="autopilot/wp_getrange" />
+      <remap from="swarm_manager/init_landing_sequencer" to="swarm_landing_sequencer/init_landing_sequencer" />
     </node>
   </group>
 
