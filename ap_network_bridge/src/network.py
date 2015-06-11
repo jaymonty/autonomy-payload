@@ -249,8 +249,9 @@ def net_swarm_behavior(message, bridge):
                            setting=enums.SWARM_EGRESS)
  
     elif type(message) == messages.SwarmFollow:
-        bridge.callService('set_swarm_behavior', ap_srv.SetInteger,
-                           setting=enums.FIXED_FOLLOW)
+        bridge.callService('run_swarm_fixed_formation', ap_srv.SetSwarmFormation,
+                           distance=message.distance, angle=message.angle, \
+                           stack_formation=message.stack_formation)
 
     elif type(message) == messages.SwarmSequenceLand:
         bridge.callService('run_swarm_sequence_land', ap_srv.SetInteger,
