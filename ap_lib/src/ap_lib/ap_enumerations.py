@@ -7,17 +7,20 @@ NO_PAYLOAD_CTRL = 0
 WP_SEQUENCE_CTRLR = 1
 FOLLOW_CTRLR = 2
 LANDING_SEQUENCE_CTRLR = 3
+SWARM_SEARCH_CTRLR = 4
 
 # Mapping between controller modes and strings for GUI use or debugging
 CTL_MODES = { NO_PAYLOAD_CTRL:        'Autopilot', \
               WP_SEQUENCE_CTRLR:      'Wpt Sequencer', \
-              FOLLOW_CTRLR:           'Follower',
-              LANDING_SEQUENCE_CTRLR: 'Land Sequencer' }
+              FOLLOW_CTRLR:           'Follower', \
+              LANDING_SEQUENCE_CTRLR: 'Land Sequencer', \
+              SWARM_SEARCH_CTRLR:     'Swarm Searcher' }
 
 CTL_MODE_VALUES = { 'Autopilot':      NO_PAYLOAD_CTRL, \
                     'Wpt Sequencer':  WP_SEQUENCE_CTRLR, \
                     'Follower':       FOLLOW_CTRLR, \
-                    'Land Sequencer': LANDING_SEQUENCE_CTRLR }
+                    'Land Sequencer': LANDING_SEQUENCE_CTRLR, \
+                    'Swarm Searcher': SWARM_SEARCH_CTRLR }
 
 # Fixed (per convention) state-specific waypoints
 TAKEOFF_WP = 1       # Airborne
