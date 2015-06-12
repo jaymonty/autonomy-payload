@@ -31,6 +31,8 @@ add_message_files(
   ControllerGroupStateStamped.msg
   MsgStat.msg
   MsgStatList.msg
+  SwarmSearchWaypoint.msg
+  SwarmSearchWaypointList.msg
 )
 
 ## Generate added messages and services with any dependencies listed here
