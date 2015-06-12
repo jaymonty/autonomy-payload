@@ -120,6 +120,7 @@
 	<remap from="swarm_searcher/payload_waypoint" to="autopilot/payload_waypoint" />
 	<remap from="swarm_searcher/ctlr_status" to="controllers/ctlr_status" />
 	<remap from="swarm_searcher/recv_swarm_search_waypoint" to="network/recv_swarm_search_waypoint" />
+	<remap from="swarm_searcher/swarmSearch_setup" to="swarm_manager/swarmSearch_setup" />
     </node>
 
     <node name="ctlr_selector" pkg="ap_mission_planning" type="ctlr_select.py" output="screen" args="" >
