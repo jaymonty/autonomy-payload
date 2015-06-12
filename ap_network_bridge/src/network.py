@@ -149,12 +149,15 @@ def sub_pose(msg, bridge):
 def sub_swarm_search_waypoint(msg, bridge):
     message = messages.networkWpCmd()
     message.msg_dst = Socket.ID_BCAST_ALL
-    message.lat = msg.waypoint.lat
-    message.lon = msg.waypoint.lon
-    message.alt = msg.waypoint.alt
-    message.recID = msg.recipientvehicle_id
-    message.searchCellX = msg.searchCell_x
-    message.searchCellY = msg.searchCell_y
+    for waypointMsg in msg.waypoints:
+        wpMsg = ap_msg.SwarmSearchWaypoint()
+        wpMsg.waypoint.lat = waypointMsg.waypoint.lat
+        wpMsg.waypoint.lon = waypointMsg.waypoint.lon
+        wpMsg.waypoint.alt = waypointMsg.waypoint.alt
+        wpMsg.recipientvehicle_id = waypointMsg.recipientvehicle_id
+        wpMsg.searchCell_x = waypointMsg.searchCell_x
+        wpMsg.searchCell_y = waypointMsg.searchCell_y
+        message.wpMsg_list.append(wpMsg)
     bridge.sendMessage(message)
 
 #-----------------------------------------------------------------------
@@ -244,13 +247,17 @@ def net_waypoint_goto(message, bridge):
     bridge.publish('recv_waypoint_goto', msg, latched=True)
 
 def net_waypoint_command(message, bridge):
-    msg = ap_msg.SwarmSearchWaypoint()
-    msg.waypoint.lat = message.lat
-    msg.waypoint.lon = message.lon
-    msg.waypoint.alt = message.alt
-    msg.recipientvehicle_id = message.recID
-    msg.searchCell_x = message.searchCellX
-    msg.searchCell_y = message.searchCellY
+    msg = ap_msg.SwarmSearchWaypointList()
+    msg.header.stamp = rospy.Time(message.msg_secs, message.msg_nsecs)
+    for wpMsg in message.wpMsg_list:
+        waypointMsg = ap_msg.SwarmSearchWaypoint()
+        waypointMsg.waypoint.lat = wpMsg.lat
+        waypointMsg.waypoint.lon = wpMsg.lon
+        waypointMsg.waypoint.alt = wpMsg.alt
+        waypointMsg.recipientvehicle_id = wpMsg.recID
+        waypointMsg.searchCell_x = wpMsg.searchCellX
+        waypointMsg.searchCell_y = wpMsg.searchCellY
+        msg.waypoints.append(waypointMsg)
     bridge.publish('recv_swarm_search_waypoint', msg, latched=True)
 
 def net_slave_setup(message, bridge):
@@ -526,7 +533,7 @@ if __name__ == '__main__':
                              log_success=False)
         bridge.addSubHandler('send_pose', pilot_msg.Geodometry, sub_pose)
         bridge.addSubHandler('swarm_state', std_msgs.msg.UInt8, sub_swarm_state)
-        bridge.addSubHandler('send_swarm_search_waypoint', ap_msg.SwarmSearchWaypoint, sub_swarm_search_waypoint)
+        bridge.addSubHandler('send_swarm_search_waypoint', ap_msg.SwarmSearchWaypointList, sub_swarm_search_waypoint)
         bridge.addNetHandler(messages.Pose, net_pose,
                              log_success=False)
         bridge.addNetHandler(messages.Heartbeat, net_heartbeat,
