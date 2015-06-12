@@ -146,6 +146,17 @@ def sub_pose(msg, bridge):
     message.vaz = msg.twist.twist.angular.z
     bridge.sendMessage(message)
 
+def sub_swarm_search_waypoint(msg, bridge):
+    message = messages.networkWpCmd()
+    message.msg_dst = Socket.ID_BCAST_ALL
+    message.lat = msg.waypoint.lat
+    message.lon = msg.waypoint.lon
+    message.alt = msg.waypoint.alt
+    message.recID = msg.recipientvehicle_id
+    message.searchCellX = msg.searchCell_x
+    message.searchCellY = msg.searchCell_y
+    bridge.sendMessage(message)
+
 #-----------------------------------------------------------------------
 # Network receive handlers
 # NOTE: Be sure to add a handler in the "main" code below
@@ -231,6 +242,16 @@ def net_waypoint_goto(message, bridge):
     msg = std_msgs.msg.UInt16()
     msg.data = message.index
     bridge.publish('recv_waypoint_goto', msg, latched=True)
+
+def net_waypoint_command(message, bridge):
+    msg = ap_msg.SwarmSearchWaypoint()
+    msg.waypoint.lat = message.lat
+    msg.waypoint.lon = message.lon
+    msg.waypoint.alt = message.alt
+    msg.recipientvehicle_id = message.recID
+    msg.searchCell_x = message.searchCellX
+    msg.searchCell_y = message.searchCellY
+    bridge.publish('recv_swarm_search_waypoint', msg, latched=True)
 
 def net_slave_setup(message, bridge):
     bridge.callService('slave_setup', pilot_srv.SlaveSetup,
@@ -505,6 +526,7 @@ if __name__ == '__main__':
                              log_success=False)
         bridge.addSubHandler('send_pose', pilot_msg.Geodometry, sub_pose)
         bridge.addSubHandler('swarm_state', std_msgs.msg.UInt8, sub_swarm_state)
+        bridge.addSubHandler('send_swarm_search_waypoint', ap_msg.SwarmSearchWaypoint, sub_swarm_search_waypoint)
         bridge.addNetHandler(messages.Pose, net_pose,
                              log_success=False)
         bridge.addNetHandler(messages.Heartbeat, net_heartbeat,
@@ -538,6 +560,7 @@ if __name__ == '__main__':
         bridge.addNetHandler(messages.FlightStatus, net_auto_status,
                              log_success=False)
         bridge.addNetHandler(messages.WeatherData, net_weather_update)
+        bridge.addNetHandler(messages.networkWpCmd, net_waypoint_command)
 
         # Run the loop (shouldn't stop until node is shut down)
         print "\nStarting network bridge loop...\n"
