@@ -21,6 +21,14 @@ def _bool16(val):
         return 0xffff
     return 0x0000
 
+class wpMsg(): #Struct to store temporary variables
+    lat = None
+    lon = None
+    alt = None
+    recID = None
+    searchCellX = None
+    searchCellY = None
+
 # Bitmasks
 SUBSWARM_MASK = 0x1F  # low 5 bits (of 8)
 FL_REL_MASK = 0x80    # high bit (of 8)
@@ -833,37 +841,46 @@ class WeatherData(Message):
         self.wind_direction = fields[3] 
 
 class networkWpCmd(Message):
-    msg_type = 0x93
-    msg_fmt = '>lllBBBx'
+    msg_type = 0x99
+    msg_fmt_base = '>B3x'
+    msg_fmt_base_sz = struct.calcsize(msg_fmt_base)
+    msg_fmt_wp = '>lllBBBx'
+    msg_fmt_wp_sz = struct.calcsize(msg_fmt_wp)
+
 
     def __init__(self):
         Message.__init__(self)
-
-	self.lat = None		# Decimal degrees (e.g. 35.123456)
-        self.lon = None		# Decimal degrees (e.g. -120.123456)
-        self.alt = None		# Decimal meters MSL (WGS84)
-	self.recID = None	# Recipient ID (1-255 currently)
-	self.searchCellX = None	# X (0-255)
-	self.searchCellY = None	# Y (0-255)
-	# 1 padding bytes       
+        self.wpMsg_list = []     # List of wpMsg tuples
 
     def _pack(self):
-        tupl = (int(self.lat * 1e07),
-                int(self.lon * 1e07),
-                int(self.alt * 1e03),
-		int(self.recID),
-                int(self.searchCellX),
-                int(self.searchCellY))
-        return struct.pack(type(self).msg_fmt, *tupl)
+        tupl = (len(self.wpMsg_list),)
+        for waypointMsg in self.wpMsg_list:
+            tupl += (int(waypointMsg.waypoint.lat * 1e07), # Decimal degrees (e.g. 35.123456)
+                    int(waypointMsg.waypoint.lon * 1e07),  # Decimal degrees (e.g. -120.123456)
+                    int(waypointMsg.waypoint.alt * 1e03),  # Decimal meters MSL (WGS84)
+                    int(waypointMsg.recipientvehicle_id),  # Recipient ID (1-255 currently)
+                    int(waypointMsg.searchCell_x),         # X (0-255)
+                    int(waypointMsg.searchCell_y),)        # Y (0-255)
+                                                           # 1 padding bytes
+        fmt = type(self).msg_fmt_base + \
+              len(self.wpMsg_list) * type(self).msg_fmt_wp.lstrip('>')
+        return struct.pack(fmt, *tupl)
 
     def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.lat = fields[0] / 1e07
-        self.lon = fields[1] / 1e07
-        self.alt = fields[2] / 1e03
-        self.recID = fields[3]
-        self.searchCellX = fields[4]
-        self.searchCellY = fields[5]
+        base_fields = struct.unpack_from(type(self).msg_fmt_base, data, 0)
+        wpMsg_count = base_fields[0]
+        offset = type(self).msg_fmt_base_sz
+        for waypointMsg in range(wpMsg_count):
+            fields = struct.unpack_from(type(self).msg_fmt_wp, data, offset)
+            _wpMsg = wpMsg()
+            _wpMsg.lat = fields[0] / 1e07
+            _wpMsg.lon = fields[1] / 1e07
+            _wpMsg.alt = fields[2] / 1e03
+            _wpMsg.recID = fields[3]
+            _wpMsg.searchCellX = fields[4]
+            _wpMsg.searchCellY = fields[5]
+            self.wpMsg_list.append(_wpMsg)
+            offset += type(self).msg_fmt_wp_sz
 
 class AutopilotReboot(Message):
     msg_type = 0xFD
