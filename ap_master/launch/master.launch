@@ -114,6 +114,12 @@
       <remap from="wp_sequencer/wp_sequencer_set" to="controllers/wp_sequencer_set" />
     </node>
 
+    <node name="swarm_searcher" pkg="ap_path_planning" type="swarm_searcher.py" output="screen" args="" >
+	<remap from="swarm_searcher/swarm_uav_states" to="swarm_tracker/swarm_uav_states" />
+	<remap from="swarm_searcher/payload_waypoint" to="autopilot/payload_waypoint" />
+	<remap from="swarm_searcher/ctlr_status" to="controllers/ctlr_status" />
+    </node>
+
     <node name="ctlr_selector" pkg="ap_mission_planning" type="ctlr_select.py" output="screen" args="" >
       <remap from="ctlr_selector/wp_getall" to="autopilot/wp_getall" />
       <remap from="ctlr_selector/wp_getlast" to="autopilot/wp_getlast" />
@@ -140,6 +146,7 @@
       <remap from="swarm_manager/wp_getrange" to="autopilot/wp_getrange" />
       <remap from="swarm_manager/init_landing_sequencer" to="swarm_landing_sequencer/init_landing_sequencer" />
     </node>
+
   </group>
 
 </launch>
