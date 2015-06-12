@@ -586,5 +586,5 @@ class SwarmSearcher(WaypointController):
 if __name__ == '__main__':
     args = rospy.myargv(argv=sys.argv)
     searcher = SwarmSearcher("swarm_searcher",rospy.get_param("aircraft_id"),args)
-    searcher.runAsNode(1, [], [], [])
+    searcher.runAsNode(10, [], [], [])
     #print "\033[94m" + "SwarmSearcher main code, args is: " + str(args) + "\033[0m"
