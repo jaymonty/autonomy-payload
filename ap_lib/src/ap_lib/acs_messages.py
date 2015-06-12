@@ -832,6 +832,39 @@ class WeatherData(Message):
         self.wind_speed = fields[2] 
         self.wind_direction = fields[3] 
 
+class networkWpCmd(Message):
+    msg_type = 0x93
+    msg_fmt = '>lllBBBx'
+
+    def __init__(self):
+        Message.__init__(self)
+
+	self.lat = None		# Decimal degrees (e.g. 35.123456)
+        self.lon = None		# Decimal degrees (e.g. -120.123456)
+        self.alt = None		# Decimal meters MSL (WGS84)
+	self.recID = None	# Recipient ID (1-255 currently)
+	self.searchCellX = None	# X (0-255)
+	self.searchCellY = None	# Y (0-255)
+	# 1 padding bytes       
+
+    def _pack(self):
+        tupl = (int(self.lat * 1e07),
+                int(self.lon * 1e07),
+                int(self.alt * 1e03),
+		int(self.recID),
+                int(self.searchCellX),
+                int(self.searchCellY))
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.lat = fields[0] / 1e07
+        self.lon = fields[1] / 1e07
+        self.alt = fields[2] / 1e03
+        self.recID = fields[3]
+        self.searchCellX = fields[4]
+        self.searchCellY = fields[5]
+
 class AutopilotReboot(Message):
     msg_type = 0xFD
 
