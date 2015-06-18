@@ -50,6 +50,8 @@ class ControllerType(object):
 
         self._run_srv = rospy.ServiceProxy('%s/%s_run' %(c_name, c_name), \
                                            payload_srvs.SetBoolean)
+        self._pause_srv = rospy.ServiceProxy('%s/%s_pause' %(c_name, c_name), \
+                                             payload_srvs.SetBoolean)
 
         # A dummy message to use until a status message is received
         self.status = payload_msgs.ControllerState()
@@ -75,8 +77,18 @@ class ControllerType(object):
 
     # Activate or deactive this controller type
     # @param active: Boolean value to activate or deactivate the controller
+    # @return post-call active state of the controller
     def set_active(self, active):
         resp = self._run_srv(active)
+        self.status.is_active = resp.result
+        return resp.result
+
+
+    # Pause or unpause this controller type
+    # @param pause: Boolean value to pause or unpause the controller
+    # @return post-call "paused" state of the controller
+    def set_pause(self, pause):
+        resp = self._pause_srv(pause)
         self.status.is_active = resp.result
         return resp.result
 
@@ -157,6 +169,8 @@ class ControllerSelector(nodeable.Nodeable):
     def serviceSetup(self, params=[]):
         self.createService('set_selector_mode', payload_srvs.SetInteger, \
                            self._srv_ctlr_mode)
+        self.createService('pause_current_ctlr', payload_srvs.SetBoolean, \
+                           self._srv_pause_ctlr)
 
 
     # Initializes ROS service proxies for this class.  This class requires
@@ -331,6 +345,16 @@ class ControllerSelector(nodeable.Nodeable):
         else:
             return payload_srvs.SetIntegerResponse(False)
 
+
+    # Implementing funcion for the pause_current_ctlr service.  If a payload
+    # controller is currently active, it will be paused or unpaused by this
+    # method based on the contents of the request (True to pause)
+    # @param req_msg: service (SetBoolean) message with the pause command
+    # @return the post-call pause value of the currently active controller
+    def _srv_pause_ctlr(self, req_msg):
+        if self._current_mode == enums.NO_PAYLOAD_CTRL:
+            return payload_srvs.SetBooleanResponse(False)
+        return self._controllers[self._current_mode].set_pause(req_msg.enable)
 
     # Callback for the selector_mode topic used to request
     # activating a specific controller
