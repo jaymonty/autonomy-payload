@@ -244,6 +244,10 @@ def net_swarm_behavior(message, bridge):
         bridge.callService('set_swarm_behavior', ap_srv.SetInteger,
                            setting=enums.SWARM_STANDBY)
 
+    elif type(message) == messages.PauseSwarmBehavior:
+        bridge.callService('pause_current_ctlr', ap_srv.SetBoolean,
+                           enable=message.behavior_pause)
+
     elif type(message) == messages.SwarmEgress:
         bridge.callService('set_swarm_behavior', ap_srv.SetInteger,
                            setting=enums.SWARM_EGRESS)
@@ -507,6 +511,7 @@ if __name__ == '__main__':
         bridge.addNetHandler(messages.SetSubswarm, net_subswarm_id)
         bridge.addNetHandler(messages.SwarmBehavior, net_swarm_behavior)
         bridge.addNetHandler(messages.SuspendSwarmBehavior, net_swarm_behavior)
+        bridge.addNetHandler(messages.PauseSwarmBehavior, net_swarm_behavior)
         bridge.addNetHandler(messages.SwarmEgress, net_swarm_behavior)
         bridge.addNetHandler(messages.SwarmFollow, net_swarm_behavior)
         bridge.addNetHandler(messages.SwarmSequenceLand, net_swarm_behavior)
