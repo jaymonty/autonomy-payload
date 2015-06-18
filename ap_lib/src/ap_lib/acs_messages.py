@@ -674,6 +674,22 @@ class SuspendSwarmBehavior(Message):
     def _unpack(self, data):
         pass
 
+class PauseSwarmBehavior(Message):
+    msg_type = 0x98
+    msg_fmt = '>?3x'
+
+    def __init__(self):
+        Message.__init__(self)
+        self.behavior_pause = None
+
+    def _pack(self):
+        tupl = (bool(self.behavior_pause),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.behavior_pause = bool(fields[0])
+
 class SwarmEgress(Message):
     msg_type = 0x94
 
