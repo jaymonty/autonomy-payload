@@ -54,6 +54,7 @@
     <remap from="network/update_ctlr_status" to="controllers/selector_status" />
     <remap from="network/slave_setup" to="autopilot/slave_setup" />
     <remap from="network/controller_mode" to="ctlr_selector/set_selector_mode" />
+    <remap from="network/pause_current_ctlr" to="ctlr_selector/pause_current_ctlr" />
     <remap from="network/cal_pressure" to="autopilot/cal_pressure" />
     <remap from="network/cal_gyros" to="autopilot/cal_gyros" />
     <remap from="network/demo_servos" to="autopilot/demo_servos" />
