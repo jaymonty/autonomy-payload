@@ -21,7 +21,7 @@ import ap_lib.waypoint_controller as wp_controller
 import autopilot_bridge.srv as apbrgsrv
 import autopilot_bridge.msg as apbrgmsg
 
-LAND_WP_DIST = 200.0     # Distance from landing wp to start descent
+LAND_WP_DIST = 100.0     # Distance from landing wp to start descent
 LAND_BASE_ALT = 100.0    # AGL alt order for "next" aircraft to land
 ALT_BLOCK_SIZE = 15.0    # Separation between altitude order
 ALT_BLOCK_CAPTURE = 3.0  # UAV within lower alt block at this alt offset
@@ -147,6 +147,14 @@ class SwarmLandingSequencer(wp_controller.WaypointController):
     # Runs one iteration of the controller, to include processing
     # object-specific data and publishing required control messages
     def runController(self):
+
+        # Make sure the aircraft this one is following is still valid
+        # If it is not, need to figure out a new aircraft to follow
+        if ((self._leaderID not in self._subswarm_keys) or \
+            ((self._controller_state != LANDING) and \
+             (self._swarm_uav_states[self._leaderID].swarm_behavior != \
+                                            enums.SWARM_SEQUENCE_LAND))):
+            self._controller_state = NEGOTIATE_ORDER
 
         # Newly activated controller--determine landing sequence first
         if self._controller_state == NEGOTIATE_ORDER:

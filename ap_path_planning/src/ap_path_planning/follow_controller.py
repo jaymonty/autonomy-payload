@@ -168,6 +168,24 @@ class FollowController(WaypointController):
             self.publishWaypoint(lla)
 
 
+    # Pauses and unpauses the controller (will not have any effect on a
+    # controller that is not active).  This method overrides the Controller
+    # class method so that the waypoint position can be set to the current
+    # UAV position.  The parent class method is explicitly called at the
+    # end of this implementation.
+    # @param pause: Boolean value to activate or pause or unpause
+    def set_pause(self, pause):
+        if not self.is_active: return
+        if pause:
+            lla = apbrg.LLA()
+            lla.lat = self.ownLat
+            lla.lon = self.ownLon
+            lla.alt = self.ownRelAlt
+            self.publishWaypoint(lla)
+
+        return super(FollowController, self).set_pause(pause)
+
+
     #--------------------------
     # Object-specific functions
     #--------------------------
@@ -277,6 +295,10 @@ class FollowController(WaypointController):
                 selfUpdated = True
 
             elif swarmAC.vehicle_id == self.followID:
+                if self.is_active and swarmAC.swarm_state == enums.AP_ERROR:
+                    self.set_ready_state(False)
+                    self.log_warn("leader UAV not in auto mode, disabling controller")
+
                 self.followLat = swarmAC.state.pose.pose.position.lat
                 self.followLon = swarmAC.state.pose.pose.position.lon
                 self.followAlt = swarmAC.state.pose.pose.position.alt
@@ -284,6 +306,7 @@ class FollowController(WaypointController):
                 self.followVx = swarmAC.state.twist.twist.linear.x
                 self.followVy = swarmAC.state.twist.twist.linear.y
                 leaderUpdated = True
+
         if self.is_active and not leaderUpdated:
             self.set_ready_state(False)
             self.log_warn("leader aircraft not present in swarm update")
