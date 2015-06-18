@@ -530,6 +530,17 @@ class SwarmManager(nodeable.Nodeable):
             if (statusMsg.mis_cur >= enums.SWARM_STANDBY_WP):
                 self._set_swarm_state(enums.SWARM_READY)
 
+        # Check for autopilot transition out of auto mode while swarming
+        # if this happens, set subswarm 0, swarm state standby, and deactivate controller
+        if ((self._subswarm_id != 0) and \
+            (statusMsg.mode != enums.AUTO)):
+            self._set_subswarm(0)
+            self._set_swarm_behavior(enums.SWARM_STANDBY)
+            self._set_swarm_state(enums.AP_ERROR)
+            self._ctlr_select_srv_proxy(enums.NO_PAYLOAD_CTRL)
+            self.log_warn("Invalid autopilot mode (%d) for swarming" %statusMsg.mode)
+            return # The rest of this isn't required
+
         try:
             # Capture the type and altitude of waypoint that is current if required
             if not statusMsg.mis_cur in self._waypoint_types:
