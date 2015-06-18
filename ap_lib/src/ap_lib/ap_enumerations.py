@@ -56,6 +56,7 @@ EGRESS = 5        # Transit to recovery staging (still required?)
 LANDING = 6       # Flight crew has control for landing
 ON_DECK = 7       # Aircraft has landed
 POST_FLIGHT = 8   # Post landing checks (will probably not be seen)
+AP_ERROR = 9      # Error state (probably due to wrong autopilot mode)
 
 
 # Mapping between swarm states and strings for GUI use or debugging
@@ -67,7 +68,8 @@ STATE_STRINGS = { PRE_FLIGHT:   'Preflight', \
                   EGRESS:       'Egress', \
                   LANDING:      'Landing', \
                   ON_DECK:      'On Deck',
-                  POST_FLIGHT:  'Post Flight' }
+                  POST_FLIGHT:  'Post Flight',
+                  AP_ERROR:     'State Error' }
 
 STATE_VALUES = { 'Preflight':    PRE_FLIGHT, \
                  'Flight Ready': FLIGHT_READY, \
@@ -77,7 +79,8 @@ STATE_VALUES = { 'Preflight':    PRE_FLIGHT, \
                  'Egress':       EGRESS, \
                  'Landing':      LANDING, \
                  'On Deck':      ON_DECK, \
-                 'Post Flight':  POST_FLIGHT }
+                 'Post Flight':  POST_FLIGHT,
+                 'State Error':  AP_ERROR }
 
 # Enumeration for autopilot modes
 RTL = 0

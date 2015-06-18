@@ -33,8 +33,9 @@ MIN_REL_ALT = 50.0 # Minimum relative altitude that a controller can order
 #
 # Class member variables:
 #   controllerID: identifier (int) for this particular controller
-#   is_ready: set to True when a waypoint sequence has been loaded
-#   is_active: set to True is the waypoint sequencer is running
+#   is_ready: set to True when the controller has been initialized
+#   is_active: set to True when the controller is running 
+#   is_paused: set to True when an active controller is paused
 #   _statusPublisher: publisher object for controller status
 #   _statusStamp: timestamp of the last status message publication
 #   _sequence: number of waypoint sequences that have been ordered
@@ -51,6 +52,7 @@ MIN_REL_ALT = 50.0 # Minimum relative altitude that a controller can order
 #   set_ready_state: "safe" transitions between controller ready and not ready
 #   _sendStatusMessage: publishes the controller's periodic status message
 #   _activate_srv: handler for the controller's *_run service
+#   _pause_srv: handler for the controller's *_pause service
 #
 # "Virtual" methods for inheriting class implementation
 #   runController: implements 1 iteration of the controller's functionality
@@ -65,11 +67,13 @@ class Controller(nodeable.Nodeable):
         self._sequence = 0
         self.is_ready = False
         self.is_active = False
+        self.is_paused = False
         self._statusStamp = None
         self._sequence = 0
         self._statusPublisher = \
             self.createPublisher("ctlr_status", apmsg.ControllerState, 1)
         self.createService("%s_run"%nodename, apsrv.SetBoolean, self._activate_srv)
+        self.createService("%s_pause"%nodename, apsrv.SetBoolean, self._pause_srv)
 
 
     #-------------------------------------------------------------------
@@ -98,7 +102,7 @@ class Controller(nodeable.Nodeable):
                    (self._statusStamp.secs + (self._statusStamp.nsecs / 1e9))
         if interval >= 1.0:
             self._sendStatusMessage(time)
-        if self.is_ready and self.is_active:
+        if self.is_ready and self.is_active and not self.is_paused:
             self.runController()
 
 
@@ -140,6 +144,7 @@ class Controller(nodeable.Nodeable):
         # Only needs to do anything if the ready state is changing
         if ready and self.is_ready == False:
             self.is_ready = True
+            self.is_paused = False
             self._sendStatusMessage(rospy.Time.now())
             self.log_dbug("ready state set to 'True'")
         elif ready == False and self.is_ready:
@@ -147,6 +152,33 @@ class Controller(nodeable.Nodeable):
             self.is_active = False
             self._sendStatusMessage(rospy.Time.now())
             self.log_dbug("ready state and active state set to 'False'")
+
+
+    # Pauses and unpauses the controller (will not have any effect on a
+    # controller that is not active).  A paused controller should be able to
+    # to be unpaused without being re-initialized (i.e., the behavior is still
+    # active, its control function is just being bypassed).
+    # NOTE: Does not do anything except change the value of the is_paused
+    #       member variable.  If more is required to achieve correct behavior,
+    #       this method should be overridden by the implementing class.  Call
+    #       this version at the end of the subclass definition.
+    # @param pause: Boolean value to activate or pause or unpause
+    def set_pause(self, pause):
+        if not self.is_active: return
+        if ((pause and not self.is_paused) or \
+            (not pause and self.is_paused)):
+            self.is_paused = pause
+            self.log_dbug("is_paused set to " + str(pause))
+            self._sendStatusMessage(rospy.Time.now())
+        return self.is_paused
+
+
+    # Implements the service for pausing and unpausing the controller
+    # @param activate_req: service call (SetBoolean) message
+    # @return service response (SetBoolean) message
+    def _pause_srv(self, pause_req):
+        resp = self.set_pause(pause_req.enable)
+        return apsrv.SetBooleanResponse(resp)
 
 
     # Publishes a ControllerState message to the controller status topic
@@ -158,5 +190,6 @@ class Controller(nodeable.Nodeable):
         status.sequence = self._sequence
         status.is_ready = self.is_ready
         status.is_active = self.is_active
+        status.is_paused = self.is_paused
         self._statusPublisher.publish(status)
 
