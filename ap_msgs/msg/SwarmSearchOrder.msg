@@ -1,0 +1,6 @@
+float32 searchAreaLength
+float32 searchAreaWidth
+float32 lat
+float32 lon
+uint8 masterSearcherID
+uint8 searchAlgoEnum
