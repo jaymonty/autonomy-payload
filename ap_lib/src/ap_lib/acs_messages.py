@@ -21,7 +21,7 @@ def _bool16(val):
         return 0xffff
     return 0x0000
 
-class wpMsg(): #Struct to store temporary variables
+class wpMsg(): #Struct to store swarm search waypoint variables
     lat = None
     lon = None
     alt = None
@@ -748,19 +748,36 @@ class SwarmSequenceLand(Message):
         self.ldg_wpt = int(fields[0])
 
 class SwarmSearch(Message):
-    # Place-holder--Dylan will figure out what it looks like
     msg_type = 0x97
+    msg_fmt = '>llllBB2x'
 
     def __init__(self):
         Message.__init__(self)
-
-        pass
+        self.searchAreaLength = None # Length (X) of search Area in metres
+        self.searchAreaWidth = None  # Width (Y) of search Area in metres
+        self.lat = None              # Bottom Left latitude of search Area in Decimal degrees (e.g. 35.123456)
+        self.lon = None              # Bottom Left lontitude of search Area in Decimal degrees (e.g. -120.123456)
+        self.masterSearcherID = None # ID of Master Searcher
+        self.searchAlgoEnum = None   # Enumeration of search Algo
+        # 2 padding bytes
 
     def _pack(self):
-        return ''
+        tupl = (int(self.searchAreaLength * 1e2),
+                int(self.searchAreaWidth * 1e2),
+                int(self.lat * 1e7),
+                int(self.lon * 1e7),
+                int(self.masterSearcherID),
+                int(self.searchAlgoEnum))
+        return struct.pack(type(self).msg_fmt, *tupl)
 
     def _unpack(self, data):
-        pass
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.searchAreaLength = fields[0] / 1e2
+        self.searchAreaWidth = fields[1] / 1e2
+        self.lat = fields[2] / 1e7
+        self.lon = fields[3] / 1e7
+        self.masterSearcherID = fields[4]
+        self.searchAlgoEnum = fields[5]
 
 class SwarmState(Message):
     msg_type = 0x8F
@@ -840,13 +857,12 @@ class WeatherData(Message):
         self.wind_speed = fields[2] 
         self.wind_direction = fields[3] 
 
-class networkWpCmd(Message):
+class NetworkWpCmd(Message):
     msg_type = 0x99
     msg_fmt_base = '>B3x'
     msg_fmt_base_sz = struct.calcsize(msg_fmt_base)
     msg_fmt_wp = '>lllBBBx'
     msg_fmt_wp_sz = struct.calcsize(msg_fmt_wp)
-
 
     def __init__(self):
         Message.__init__(self)
