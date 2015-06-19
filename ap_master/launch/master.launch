@@ -66,6 +66,7 @@
     <remap from="network/set_swarm_state" to="swarm_manager/set_swarm_state" />
     <remap from="network/run_swarm_sequence_land" to="swarm_manager/run_swarm_sequence_land" />
     <remap from="network/run_swarm_fixed_formation" to="swarm_manager/run_swarm_fixed_formation" />
+    <remap from="network/run_swarm_search" to="swarm_manager/run_swarm_search" />
     <remap from="network/send_swarm_search_waypoint" to="swarm_searcher/send_swarm_search_waypoint" />
     <remap from="network/param_setlist" to="autopilot/fpr_param_setlist" />
     <remap from="network/load_param" to="autopilot/load_param" />
@@ -73,6 +74,7 @@
     <remap from="network/load_rally" to="autopilot/load_rally" />
     <remap from="network/load_wp" to="autopilot/load_wp" />
     <remap from="network/recv_weather" to="autopilot/weather_update" />
+    <remap from="network/acs_pose" to="autopilot/acs_pose" />
   </node>
 
   <node name="swarm_tracker" pkg="ap_perception" type="swarm_tracker_node.py" output="screen" args="" >
@@ -115,12 +117,13 @@
       <remap from="wp_sequencer/wp_sequencer_set" to="controllers/wp_sequencer_set" />
     </node>
 
-    <node name="swarm_searcher" pkg="ap_path_planning" type="swarm_searcher.py" output="screen" args="101" >
+    <node name="swarm_searcher" pkg="ap_path_planning" type="swarm_searcher.py" output="screen" args="" >
 	<remap from="swarm_searcher/swarm_uav_states" to="swarm_tracker/swarm_uav_states" />
 	<remap from="swarm_searcher/payload_waypoint" to="autopilot/payload_waypoint" />
 	<remap from="swarm_searcher/ctlr_status" to="controllers/ctlr_status" />
 	<remap from="swarm_searcher/recv_swarm_search_waypoint" to="network/recv_swarm_search_waypoint" />
 	<remap from="swarm_searcher/swarmSearch_setup" to="swarm_manager/swarmSearch_setup" />
+	<remap from="swarm_searcher/acs_pose" to="autopilot/acs_pose" />
     </node>
 
     <node name="ctlr_selector" pkg="ap_mission_planning" type="ctlr_select.py" output="screen" args="" >
