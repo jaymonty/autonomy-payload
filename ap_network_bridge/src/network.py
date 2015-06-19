@@ -20,6 +20,8 @@ from ap_srvs import srv as ap_srv
 from autopilot_bridge import msg as pilot_msg
 from autopilot_bridge import srv as pilot_srv
 
+#TODO Remove gloabal variable
+rel_Altitude = None  # Global storage for Relative Altitude of the UAV
 #-----------------------------------------------------------------------
 # Timed event handlers
 # NOTE: Be sure to add a handler in the "main" code below
@@ -147,7 +149,7 @@ def sub_pose(msg, bridge):
     bridge.sendMessage(message)
 
 def sub_swarm_search_waypoint(msg, bridge):
-    message = messages.networkWpCmd()
+    message = messages.NetworkWpCmd()
     message.msg_dst = Socket.ID_BCAST_ALL
     for waypointMsg in msg.waypoints:
         wpMsg = ap_msg.SwarmSearchWaypoint()
@@ -159,6 +161,11 @@ def sub_swarm_search_waypoint(msg, bridge):
         wpMsg.searchCell_y = waypointMsg.searchCell_y
         message.wpMsg_list.append(wpMsg)
     bridge.sendMessage(message)
+
+#TODO Remove gloabal variable
+def sub_swarm_relAlt_update(msg, bridge):
+    global rel_Altitude
+    rel_Altitude = msg.pose.pose.position.rel_alt
 
 #-----------------------------------------------------------------------
 # Network receive handlers
@@ -247,13 +254,17 @@ def net_waypoint_goto(message, bridge):
     bridge.publish('recv_waypoint_goto', msg, latched=True)
 
 def net_waypoint_command(message, bridge):
+    #TODO Remove gloabal variable
+    global rel_Altitude
+    if rel_Altitude is None: return
+    print "Dylan test 1" + str(rel_Altitude)
     msg = ap_msg.SwarmSearchWaypointList()
     msg.header.stamp = rospy.Time(message.msg_secs, message.msg_nsecs)
     for wpMsg in message.wpMsg_list:
         waypointMsg = ap_msg.SwarmSearchWaypoint()
         waypointMsg.waypoint.lat = wpMsg.lat
         waypointMsg.waypoint.lon = wpMsg.lon
-        waypointMsg.waypoint.alt = wpMsg.alt
+        waypointMsg.waypoint.alt = rel_Altitude
         waypointMsg.recipientvehicle_id = wpMsg.recID
         waypointMsg.searchCell_x = wpMsg.searchCellX
         waypointMsg.searchCell_y = wpMsg.searchCellY
@@ -299,7 +310,10 @@ def net_swarm_behavior(message, bridge):
                            setting=message.ldg_wpt)
 
     elif type(message) == messages.SwarmSearch:
-        pass  # TODO:  Everything required to implement
+        bridge.callService('run_swarm_search', ap_srv.SetSwarmSearchRequest, \
+                           masterSearcherID=message.masterSearcherID, \
+                           searchAlgoEnum=message.searchAlgoEnum, lat=message.lat, lon=message.lon, \
+                           searchAreaLength=message.searchAreaLength, searchAreaWidth=message.searchAreaWidth)
 
     # This one will go away once all of the behavior-specific
     # messages are fully incorporated into SwarmCommander
@@ -534,6 +548,7 @@ if __name__ == '__main__':
         bridge.addSubHandler('send_pose', pilot_msg.Geodometry, sub_pose)
         bridge.addSubHandler('swarm_state', std_msgs.msg.UInt8, sub_swarm_state)
         bridge.addSubHandler('send_swarm_search_waypoint', ap_msg.SwarmSearchWaypointList, sub_swarm_search_waypoint)
+        bridge.addSubHandler('acs_pose', pilot_msg.Geodometry, sub_swarm_relAlt_update)
         bridge.addNetHandler(messages.Pose, net_pose,
                              log_success=False)
         bridge.addNetHandler(messages.Heartbeat, net_heartbeat,
@@ -567,7 +582,7 @@ if __name__ == '__main__':
         bridge.addNetHandler(messages.FlightStatus, net_auto_status,
                              log_success=False)
         bridge.addNetHandler(messages.WeatherData, net_weather_update)
-        bridge.addNetHandler(messages.networkWpCmd, net_waypoint_command)
+        bridge.addNetHandler(messages.NetworkWpCmd, net_waypoint_command)
 
         # Run the loop (shouldn't stop until node is shut down)
         print "\nStarting network bridge loop...\n"
