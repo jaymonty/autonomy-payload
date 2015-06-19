@@ -524,6 +524,7 @@ if __name__ == '__main__':
     ctlrsel.add_controller(enums.WP_SEQUENCE_CTRLR, "wp_sequencer")
     ctlrsel.add_controller(enums.FOLLOW_CTRLR, "follower")
     ctlrsel.add_controller(enums.LANDING_SEQUENCE_CTRLR, "swarm_landing_sequencer", False)
+    ctlrsel.add_controller(enums.SWARM_SEARCH_CTRLR, "swarm_searcher")
 
     # Start loop
     # TODO: Is this fast enough?

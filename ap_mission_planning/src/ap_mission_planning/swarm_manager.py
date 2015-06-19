@@ -148,6 +148,8 @@ class SwarmManager(nodeable.Nodeable):
             self.createPublisher("swarm_state", stdmsg.UInt8, 1, True)
         self._swarm_behavior_publisher = \
             self.createPublisher("swarm_behavior", stdmsg.UInt8, 1, True)
+        self._swarm_search_publisher = \
+            self.createPublisher("swarmSearch_setup", apmsg.SwarmSearchOrderStamped, 1)
         self._wp_goto_publisher = \
             self.createPublisher("waypoint_goto", stdmsg.UInt16, 1, False)
 
@@ -170,7 +172,8 @@ class SwarmManager(nodeable.Nodeable):
                            self._process_set_sequence_land)
         self.createService("run_swarm_fixed_formation", apsrv.SetSwarmFormation, \
                            self._process_set_fixed_formation)
-
+        self.createService("run_swarm_search", apsrv.SetSwarmSearchRequest, \
+                           self._process_set_swarm_search)
 
     # Establishes the service proxies for the SwarmManager object.
     # @param params: list of required parameters (none are at present)
@@ -344,6 +347,28 @@ class SwarmManager(nodeable.Nodeable):
 
         return success
 
+    # Activates the swarm search behavior.
+    # @param srvReq service request message (not used for this behavior)
+    # @return Boolean value indicating behavior initiation success or failure
+    def _activate_swarm_search(self, searchReq=None):
+        success = False
+        try:
+            swarmSearch_msg = apmsg.SwarmSearchOrderStamped()
+            swarmSearch_msg.header.stamp = rospy.Time.now()
+            swarmSearch_msg.order.searchAreaLength = searchReq.searchAreaLength
+            swarmSearch_msg.order.searchAreaWidth = searchReq.searchAreaWidth
+            swarmSearch_msg.order.lat = searchReq.lat
+            swarmSearch_msg.order.lon = searchReq.lon
+            swarmSearch_msg.order.masterSearcherID = searchReq.masterSearcherID
+            swarmSearch_msg.order.searchAlgoEnum = searchReq.searchAlgoEnum
+            self._swarm_search_publisher.publish(swarmSearch_msg)
+            time.sleep(SwarmManager.TIMING_DELAY) # give the swarm search message a second to take
+            success = self._ctlr_select_srv_proxy(enums.SWARM_SEARCH_CTRLR).result
+
+        except Exception as ex:
+            self.log_warn("Swarm Search exception: " + str(ex))
+
+        return success
 
     # Goes through the list of swarm uav records and returns a list of those
     # that are assigned to a particular subswarm
@@ -394,12 +419,15 @@ class SwarmManager(nodeable.Nodeable):
         return self._process_set_swarm_behavior(ldgSrv, \
                     behaviorID = enums.SWARM_SEQUENCE_LAND)
 
-
     def _process_set_fixed_formation(self, formSrv):
         success = self._process_set_swarm_behavior(formSrv, \
                        behaviorID = enums.SWARM_FIXED_FORMATION)
         return apsrv.SetSwarmFormationResponse(success.result)
 
+    def _process_set_swarm_search(self, searchSrv):
+        success = self._process_set_swarm_behavior(searchSrv, \
+                       behaviorID = enums.SWARM_SEARCH)
+        return apsrv.SetSwarmSearchRequestResponse(success.result)
 
     # Handle swarm behavior activation service requests.  The method can
     # activate a parameter-specified behavior (the activateSrv method
@@ -586,6 +614,8 @@ if __name__ == '__main__':
                                           swarm_manager._activate_swarm_standby)
     swarm_manager.register_swarm_behavior(enums.SWARM_FIXED_FORMATION, \
                                           swarm_manager._activate_fixed_follow)
+    swarm_manager.register_swarm_behavior(enums.SWARM_SEARCH, \
+                                          swarm_manager._activate_swarm_search)
     swarm_manager.register_swarm_behavior(enums.SWARM_EGRESS, \
                                           swarm_manager._activate_egress)
 
