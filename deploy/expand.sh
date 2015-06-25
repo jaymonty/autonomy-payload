@@ -39,10 +39,10 @@ fi
 fdisk $DEVICE <<EOF &> /dev/null
 p
 d
-2
+$PARTNUM
 n
 p
-2
+$PARTNUM
 $part_start
 
 p
