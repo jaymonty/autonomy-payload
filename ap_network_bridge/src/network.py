@@ -153,6 +153,7 @@ def net_pose(message, bridge):
     msg = ap_msg.SwarmVehicleState()
     msg.vehicle_id = message.msg_src
     msg.subswarm_id = message.msg_sub
+    msg.received_at = rospy.Time.now()  # TODO: get from socket lib
     msg.state.header.stamp.secs = message.msg_secs
     msg.state.header.stamp.nsecs = message.msg_nsecs
     msg.state.header.seq = 0
