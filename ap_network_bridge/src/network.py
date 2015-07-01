@@ -203,6 +203,14 @@ def net_mode(message, bridge):
     msg.data = message.mode
     bridge.publish('recv_mode', msg, latched=True)
 
+def net_weather_update(message, bridge):
+    msg = pilot_msg.WeatherData()
+    msg.baro_millibars = message.baro
+    msg.temp_C = message.temperature
+    msg.wind_mph = message.wind_speed
+    msg.wind_direction = message.wind_direction
+    bridge.publish('recv_weather', msg, latched=True)
+
 def net_land(message, bridge):
     msg = std_msgs.msg.Empty()
     bridge.publish('recv_land', msg, latched=True)
@@ -529,6 +537,7 @@ if __name__ == '__main__':
         bridge.addNetHandler(messages.PayloadShutdown, net_shutdown)
         bridge.addNetHandler(messages.FlightStatus, net_auto_status,
                              log_success=False)
+        bridge.addNetHandler(messages.WeatherData, net_weather_update)
 
         # Run the loop (shouldn't stop until node is shut down)
         print "\nStarting network bridge loop...\n"
