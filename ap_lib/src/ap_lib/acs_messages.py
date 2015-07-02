@@ -827,10 +827,10 @@ class WeatherData(Message):
 
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.baro = int(fields[0])
-        self.temperature = int(fields[1])
-        self.wind_speed = int(fields[2]) 
-        self.wind_direction = int(fields[3]) 
+        self.baro = fields[0]
+        self.temperature = fields[1]
+        self.wind_speed = fields[2] 
+        self.wind_direction = fields[3] 
 
 class AutopilotReboot(Message):
     msg_type = 0xFD
