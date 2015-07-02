@@ -792,6 +792,18 @@ class UAVListWidget(QListWidget):
         ad.enable = True         # Boolean
         self._sendMessage(ad)
 
+    def handleArmAll(self):
+        items = [self.item(i) for i in range(1,self.count())]
+
+        ad = messages.Arm()
+        ad.msg_secs = 0
+        ad.msg_nsecs = 0
+        ad.enable = True         # Boolean
+        for item in items:
+            ad.msg_dst = int(item.getID())
+            self._sendMessage(ad)
+
+
     def handleDisArm(self):
         item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT,
                                      UAVListWidgetItem.STATE_READY])
@@ -805,6 +817,17 @@ class UAVListWidget(QListWidget):
         ad.msg_nsecs = 0
         ad.enable = False         # Boolean
         self._sendMessage(ad)
+
+    def handleDisArmAll(self):
+        items = [self.item(i) for i in range(1,self.count())]
+
+        ad = messages.Arm()
+        ad.msg_secs = 0
+        ad.msg_nsecs = 0
+        ad.enable = False         # Boolean
+        for item in items:
+            ad.msg_dst = int(item.getID())
+            self._sendMessage(ad)
 
     def handleAPReboot(self):
         item = self._checkItemState([UAVListWidgetItem.STATE_PREFLIGHT,
@@ -836,6 +859,55 @@ class UAVListWidget(QListWidget):
         fr.msg_nsecs = 0
         fr.ready = (item.getState() == UAVListWidgetItem.STATE_PREFLIGHT)
         self._sendMessage(fr)
+
+    def handleFlightReadyAll(self):
+
+        items = [self.item(i) for i in range(1,self.count())]
+
+        # Toggle the aircraft to be flight-ready, or not
+        fr = messages.FlightReady()
+        fr.msg_secs = 0
+        fr.msg_nsecs = 0
+        fr.ready = True
+
+        for item in items:
+            fr.msg_dst = int(item.getID())
+            self._sendMessage(fr)
+
+    def handleUnFlightReadyAll(self):
+
+        items = [self.item(i) for i in range(1,self.count())]
+
+        # Toggle the aircraft to be flight-ready, or not
+        fr = messages.FlightReady()
+        fr.msg_secs = 0
+        fr.msg_nsecs = 0
+        fr.ready = False
+
+        for item in items:
+            fr.msg_dst = int(item.getID())
+            self._sendMessage(fr)
+
+
+
+    def handleCalpressAll(self):
+
+        items = [self.item(i) for i in range(1,self.count())]
+
+        self._okBox("Please cover the pitot tube.")
+
+        # Calibrate the airspeed sensor
+        cl = messages.Calibrate()
+        cl.msg_secs = 0
+        cl.msg_nsecs = 0
+        cl.index = 1
+
+        for item in items:
+            cl.msg_dst = int(item.getID())
+            self._sendMessage(cl)
+
+        self._okBox("Please wait for the 'as' and 'aspd' lights to become green.")
+
 
     def handleConfig(self, stack, alt):
         item = self._checkItemState([UAVListWidgetItem.STATE_READY])
@@ -1004,6 +1076,9 @@ if __name__ == '__main__':
     parser.add_option("-o", "--operator", dest="op_mode",
                       action="store_true", default=False,
                       help="UAV Operator mode")
+    parser.add_option("-z", "--debug", dest="debug_mode",
+                      action="store_true", default=False,
+                      help="Debugging mode")
     # NOTE: This is an old SITL hack; can probably remove
     parser.add_option("--lo-reverse", dest="lo_reverse",
                       action="store_true", default=False,
@@ -1013,6 +1088,8 @@ if __name__ == '__main__':
     # Can constrain which widgets we see based on roles
     show_ft = not opts.op_mode
     show_op = not opts.ft_mode
+    show_debug = opts.debug_mode
+
     if show_ft and show_op:
         print "WARNING: With great power comes great responsibility!"
         mode_string = " -- OMNI MODE"
@@ -1271,6 +1348,32 @@ if __name__ == '__main__':
         btCalpress.setStyleSheet("background-color: darkgray")
         btCalpress.clicked.connect(lst.handleCalpress)
         tlayout.addWidget(btCalpress)
+
+    if show_debug:
+        btArmAll = QPushButton("ARM ALL")
+        btArmAll.setStyleSheet("background-color: red")
+        btArmAll.clicked.connect(lst.handleArmAll)
+        lay_right.addWidget(btArmAll)
+
+        btDisArmAll = QPushButton("DISARM ALL")
+        btDisArmAll.setStyleSheet("background-color: red")
+        btDisArmAll.clicked.connect(lst.handleDisArmAll)
+        lay_right.addWidget(btDisArmAll)
+
+        btFlightReadyAll = QPushButton("FLIGHT READY ALL")
+        btFlightReadyAll.setStyleSheet("background-color: red")
+        btFlightReadyAll.clicked.connect(lst.handleFlightReadyAll)
+        lay_right.addWidget(btFlightReadyAll)
+
+        btUnFlightReadyAll = QPushButton("UNDO FLIGHT READY ALL")
+        btUnFlightReadyAll.setStyleSheet("background-color: red")
+        btUnFlightReadyAll.clicked.connect(lst.handleUnFlightReadyAll)
+        lay_right.addWidget(btUnFlightReadyAll)
+
+        btCalPressAll = QPushButton("CAL PRESSURE ALL")
+        btCalPressAll.setStyleSheet("background-color: red")
+        btCalPressAll.clicked.connect(lst.handleCalpressAll)
+        lay_right.addWidget(btCalPressAll)
 
     btCalgyros = QPushButton("Cal Gyros")
     btCalgyros.setStyleSheet("background-color: darkgray")
