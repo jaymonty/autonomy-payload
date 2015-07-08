@@ -167,6 +167,12 @@ def sub_swarm_relAlt_update(msg, bridge):
     global rel_Altitude
     rel_Altitude = msg.pose.pose.position.rel_alt
 
+def sub_altitude_slot(msg, bridge):
+    message = messages.AltitudeSlot()
+    message.msg_dst = Socket.ID_BCAST_ALL
+    message.altitude_slot = msg.altitude_slot
+    bridge.sendMessage(message)
+
 #-----------------------------------------------------------------------
 # Network receive handlers
 # NOTE: Be sure to add a handler in the "main" code below
@@ -208,6 +214,13 @@ def net_auto_status(message, bridge):
     msg.active_controller = message.ctl_mode
     msg.autopilot_mode = message.mode
     bridge.publish('recv_swarm_ctl_state', msg, queue_size = 50)
+
+#NOTE: Removed as currently unnecassary, but applicable for future use
+# def net_altitude_slot(message, bridge):
+#     msg = ap_msg.AltitudeSlot()
+#     msg.vehicle_id = message.msg_src
+#     msg.altitude_slot = message.altitude_slot
+#     bridge.publish('recv_alt_slots', msg, queue_size = 50)
 
 def net_heartbeat(message, bridge):
     msg = pilot_msg.Heartbeat()
@@ -299,7 +312,7 @@ def net_swarm_behavior(message, bridge):
     elif type(message) == messages.SwarmEgress:
         bridge.callService('set_swarm_behavior', ap_srv.SetInteger,
                            setting=enums.SWARM_EGRESS)
- 
+
     elif type(message) == messages.SwarmFollow:
         bridge.callService('run_swarm_fixed_formation', ap_srv.SetSwarmFormation,
                            distance=message.distance, angle=message.angle, \
@@ -478,6 +491,13 @@ def net_mission_config(message, bridge):
             # Update OK flag
             rospy.set_param('ok_' + cfg, res.ok)
 
+            # Indicate to SwarmTakeOff that mission config has been set
+            # NOTE: This eventually needs to live elsewhere once we aren't
+            # always going to piggy back on mission config
+            msg = std_msgs.msg.UInt8()
+            msg.data = message.takeoff_active
+            bridge.publish('swarm_takeoff_active_mode', msg, latched=True)
+
             # Clean up temp file
             os.remove(temp_file)
 
@@ -549,10 +569,14 @@ if __name__ == '__main__':
         bridge.addSubHandler('swarm_state', std_msgs.msg.UInt8, sub_swarm_state)
         bridge.addSubHandler('send_swarm_search_waypoint', ap_msg.SwarmSearchWaypointList, sub_swarm_search_waypoint)
         bridge.addSubHandler('acs_pose', pilot_msg.Geodometry, sub_swarm_relAlt_update)
+        bridge.addSubHandler('send_alt_slot', ap_msg.AltitudeSlot, sub_altitude_slot)
         bridge.addNetHandler(messages.Pose, net_pose,
                              log_success=False)
         bridge.addNetHandler(messages.Heartbeat, net_heartbeat,
                              log_success=False)
+        # NOTE: Left tag in for future use
+        # bridge.addNetHandler(messages.AltitudeSlot, net_altitude_slot,
+                            #  log_success=False)
         bridge.addNetHandler(messages.Arm, net_arm)
         bridge.addNetHandler(messages.Mode, net_mode)
         bridge.addNetHandler(messages.Land, net_land)
@@ -591,4 +615,3 @@ if __name__ == '__main__':
         print "NETWORK BRIDGE FATAL ERROR: " + str(ex.args[0])
         # If rospy happened to get initialized before the error, log there too
         rospy.logfatal(str(ex.args[0]))
-
