@@ -909,7 +909,7 @@ class UAVListWidget(QListWidget):
         self._okBox("Please wait for the 'as' and 'aspd' lights to become green.")
 
 
-    def handleConfig(self, stack, alt):
+    def handleConfig(self, stack, alt, takeoff_active):
         item = self._checkItemState([UAVListWidgetItem.STATE_READY])
         if item is None:
             return
@@ -917,15 +917,23 @@ class UAVListWidget(QListWidget):
         try:
             mc_alt = int(alt)
             if mc_alt <= 50:
-                raise Exception("")
+                raise Exception("Please supply a valid altitude above 50m")
+
             mc_stack = int(stack)
-            if mc_stack <= 0:
-                raise Exception("")
-        except:
-            print "You must supply a valid altitude!"
+            if mc_stack != 1 and mc_stack != 2:
+                raise Exception("Please enter a valid stack (1 or 2)")
+
+            mc_takeoff_active = int(takeoff_active)
+            if mc_takeoff_active != 0 and mc_takeoff_active != 1 and \
+                mc_takeoff_active != 2:
+                raise Exception("Please enter a valid swarm takeoff mode\n - 0 No Control\n - 1 Waypoint altitude deconfliction\n - 2 Waypoint and Rally altitude deconfliction")
+
+        except Exception as ex:
+            print str(ex)
             return
 
-        if not self._confirmBox("Send config to aircraft %d?" % item.getID()):
+        if not self._confirmBox("Altitude: %d, Stack: %d, Takeoff Control: %d\n Send this config to aircraft %d?" \
+            % (mc_alt, mc_stack, mc_takeoff_active, item.getID())):
             return
 
         # Send desired mission config
@@ -935,6 +943,7 @@ class UAVListWidget(QListWidget):
         mc.msg_nsecs = 0
         mc.std_alt = mc_alt
         mc.stack_num = mc_stack
+        mc.takeoff_active = mc_takeoff_active
         self._sendMessage(mc)
 
     def handleAUTO(self):
@@ -1238,12 +1247,23 @@ if __name__ == '__main__':
         lnAlt.setText("100")
         clay_left_row.addWidget(lnAlt)
         clay_left.addLayout(clay_left_row)
+        # Swarm Takeoff activate
+        clay_left_row = QHBoxLayout()
+        lbl = QLabel("Activate Takeoff Sequencer")
+        clay_left_row.addWidget(lbl)
+        lnTakeoffSeq = QLineEdit()
+        lnTakeoffSeq.setFixedWidth(50)
+        lnTakeoffSeq.setAlignment(Qt.AlignRight)
+        lnTakeoffSeq.setText("0")
+        clay_left_row.addWidget(lnTakeoffSeq)
+        clay_left.addLayout(clay_left_row)
         # Populate left side
         clayout.addLayout(clay_left)
         # Send button
         btConfig = QPushButton("Send Config")
         btConfig.clicked.connect(lambda : lst.handleConfig(lnStack.text(),
-                                                           lnAlt.text()))
+                                                           lnAlt.text(),
+                                                           lnTakeoffSeq.text()))
         clay_right.addWidget(btConfig)
         # Populate right side
         clayout.addStretch(1)
@@ -1403,4 +1423,3 @@ if __name__ == '__main__':
     # Start the GUI do-loop
     win.show()
     app.exec_()
-
