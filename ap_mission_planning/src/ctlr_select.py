@@ -19,7 +19,7 @@ import std_msgs.msg as std_msgs
 import ap_msgs.msg as payload_msgs
 import ap_srvs.srv as payload_srvs
 import autopilot_bridge.msg as mavbridge_msgs
-import autopilot_bridge.srv as mavbridge_srv 
+import autopilot_bridge.srv as mavbridge_srv
 from ap_lib import nodeable
 from ap_lib import ap_enumerations as enums
 
@@ -252,7 +252,7 @@ class ControllerSelector(nodeable.Nodeable):
         try:
             self._lock.acquire()
             stale_time = rospy.Time.now() - rospy.Duration(3)
-            
+
             # Is this reset to NO_PAYLOAD_CONTROL
             if mode == enums.NO_PAYLOAD_CTRL:
                 if self._current_mode != enums.NO_PAYLOAD_CTRL:
@@ -297,7 +297,7 @@ class ControllerSelector(nodeable.Nodeable):
 
             # Shut down any other active controllers (don't send to safety waypoint)
             self._deactivate_all_controllers(False)
-    
+
             # Make sure the specified infinite loiter waypoint actually IS one
             if not self._loiter_wp_id in self._loiter_wps:
                 raise Exception("Invalid infinite loiter WP specified for controller switch")
@@ -411,7 +411,7 @@ class ControllerSelector(nodeable.Nodeable):
         with self._lock:
             self._ap_status = msg
             self._ap_status_last = rospy.Time.now()
-            if self._current_mode != 0:
+            if self._current_mode != enums.NO_PAYLOAD_CTRL:
                 if self._ap_status.mode != mavbridge_msgs.Status.MODE_AUTO:
                     self.log_warn("autopilot mode (%d) not compatible with waypoint control" \
                                   %self._ap_status.mode)
@@ -525,8 +525,8 @@ if __name__ == '__main__':
     ctlrsel.add_controller(enums.FOLLOW_CTRLR, "follower")
     ctlrsel.add_controller(enums.LANDING_SEQUENCE_CTRLR, "swarm_landing_sequencer", False)
     ctlrsel.add_controller(enums.SWARM_SEARCH_CTRLR, "swarm_searcher")
+    ctlrsel.add_controller(enums.TAKEOFF_SEQUENCE_CTRLR, "swarm_takeoff_sequencer", False)
 
     # Start loop
     # TODO: Is this fast enough?
     ctlrsel.runAsNode(1.0)
-
