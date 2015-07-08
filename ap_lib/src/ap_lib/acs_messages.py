@@ -354,6 +354,23 @@ class Pose(Message):
         self.vay = fields[11] / 1e02
         self.vaz = fields[12] / 1e02
 
+class AltitudeSlot(Message):
+    msg_type = 0x02
+    msg_fmt = '>Hxx'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.altitude_slot = 0.0           # The intended relative altitude slot
+
+    def _pack(self):
+        tupl = (int(self.altitude_slot),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.altitude_slot = int(fields[0])
+
 class Heartbeat(Message):
     msg_type = 0x80
     msg_fmt = '>L'
@@ -816,23 +833,25 @@ class Demo(Message):
 
 class MissionConfig(Message):
     msg_type = 0x91
-    msg_fmt = '>HBx'
+    msg_fmt = '>HBB'
 
     def __init__(self):
         Message.__init__(self)
 
         self.std_alt = None     # Standard (RELATIVE) altitude (m)
         self.stack_num = None   # Index of stack (of pancakes) to be in
+        self.takeoff_active = None
         # 1 padding byte
 
     def _pack(self):
-        tupl = (int(self.std_alt), int(self.stack_num))
+        tupl = (int(self.std_alt), int(self.stack_num), int(self.takeoff_active))
         return struct.pack(type(self).msg_fmt, *tupl)
 
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.std_alt = int(fields[0])
         self.stack_num = int(fields[1])
+        self.takeoff_active = int(fields[2])
 
 class WeatherData(Message):
     msg_type = 0x92

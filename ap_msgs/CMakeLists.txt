@@ -18,6 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## Generate messages in the 'msg' folder
 add_message_files(
   FILES
+  AltitudeSlot.msg
   SwarmControlState.msg
   SwarmStateStamped.msg
   SwarmVehicleState.msg
@@ -69,4 +70,3 @@ catkin_package(
 include_directories(
   ${catkin_INCLUDE_DIRS}
 )
-
