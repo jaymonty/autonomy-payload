@@ -49,6 +49,7 @@
     <remap from="network/recv_sequencer_set" to="controllers/wp_sequencer_set" />
     <remap from="network/recv_ap_reboot" to="autopilot/reboot" />
     <remap from="network/send_pose" to="autopilot/acs_pose" />
+    <remap from="network/send_alt_slot" to="autopilot/intended_alt_slot" />
     <remap from="network/update_subswarm" to="swarm_manager/update_subswarm" />
     <remap from="network/swarm_state" to="swarm_manager/swarm_state" />
     <remap from="network/update_flight_status" to="autopilot/status" />
@@ -75,6 +76,7 @@
     <remap from="network/load_wp" to="autopilot/load_wp" />
     <remap from="network/recv_weather" to="autopilot/weather_update" />
     <remap from="network/acs_pose" to="autopilot/acs_pose" />
+    <remap from="network/swarm_takeoff_active_mode" to="swarm_takeoff_sequencer/active_mode" />
   </node>
 
   <node name="swarm_tracker" pkg="ap_perception" type="swarm_tracker_node.py" output="screen" args="" >
@@ -108,6 +110,20 @@
       <remap from="swarm_landing_sequencer/ctlr_status" to="controllers/ctlr_status" />
       <remap from="swarm_landing_sequencer/swarm_uav_states" to="swarm_tracker/swarm_uav_states" />
       <remap from="swarm_landing_sequencer/update_subswarm" to="swarm_manager/update_subswarm" />
+    </node>
+
+    <node name="swarm_takeoff_sequencer" pkg="ap_path_planning" type="swarm_takeoff_sequencer.py" output="screen" args="">
+      <remap from="swarm_takeoff_sequencer/payload_waypoint" to="autopilot/payload_waypoint" />
+      <remap from="swarm_takeoff_sequencer/waypoint_goto" to="autopilot/waypoint_goto" />
+      <remap from="swarm_takeoff_sequencer/ctlr_status" to="controllers/ctlr_status" />
+      <remap from="swarm_takeoff_sequencer/swarm_uav_states" to="swarm_tracker/swarm_uav_states" />
+      <remap from="swarm_takeoff_sequencer/update_subswarm" to="swarm_manager/update_subswarm" />
+      <remap from="swarm_takeoff_sequencer/wp_getrange" to="autopilot/wp_getrange" />
+      <remap from="swarm_takeoff_sequencer/load_wp" to="autopilot/load_wp" />
+      <remap from="swarm_takeoff_sequencer/load_rally" to="autopilot/load_rally" />
+      <remap from="swarm_takeoff_sequencer/param_setlist" to="autopilot/fpr_param_setlist" />
+      <remap from="swarm_takeoff_sequencer/swarm_state" to="swarm_manager/swarm_state" />
+      <remap from="swarm_takeoff_sequencer/intended_alt_slot" to="autopilot/intended_alt_slot" />
     </node>
 
     <node name="wp_sequencer" pkg="ap_path_planning" type="wp_sequencer_node.py" output="screen" args="">
@@ -151,6 +167,7 @@
       <remap from="swarm_manager/waypoint_goto" to="autopilot/waypoint_goto" />
       <remap from="swarm_manager/wp_getrange" to="autopilot/wp_getrange" />
       <remap from="swarm_manager/init_landing_sequencer" to="swarm_landing_sequencer/init_landing_sequencer" />
+      <remap from="swarm_manager/init_takeoff_sequencer" to="swarm_takeoff_sequencer/init_takeoff_sequencer" />
     </node>
 
   </group>
