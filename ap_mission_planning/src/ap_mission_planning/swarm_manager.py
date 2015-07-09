@@ -371,6 +371,9 @@ class SwarmManager(nodeable.Nodeable):
         except Exception as ex:
             self.log_warn("Swarm Search exception: " + str(ex))
 
+        return success
+
+
     # Activates the swarm sequenced takeoff behavior.
     # @param srvReq service request message (not used for this behavior)
     # @return Boolean value indicating behavior initiation success or failure
@@ -479,6 +482,8 @@ class SwarmManager(nodeable.Nodeable):
             if (self._swarm_state == enums.INGRESS):
                 init_method = self._behavior_activators[activateBehavior]
                 success = init_method(activateSrv)
+                if success:
+                   self._set_swarm_state(enums.INGRESS)
             else:
                 self.log_warn("Takeoff Sequence not available when not in Ingress")
 
@@ -490,6 +495,8 @@ class SwarmManager(nodeable.Nodeable):
              (self._swarm_state == enums.EGRESS))):
             init_method = self._behavior_activators[activateBehavior]
             success = init_method(activateSrv)
+            if success:
+                self._set_swarm_state(enums.EGRESS)
 
         # Regular swarming behaviors (must be SWARM_READY or SWARM_ACTIVE)
         elif ((activateBehavior in self._behavior_activators) and \
@@ -497,6 +504,8 @@ class SwarmManager(nodeable.Nodeable):
                (self._swarm_state == enums.SWARM_ACTIVE))):
             init_method = self._behavior_activators[activateBehavior]
             success = init_method(activateSrv)
+            if success:
+                self._set_swarm_state(enums.SWARM_ACTIVE)
 
         # Post-egress behaviors (must be EGRESS)
         elif ((activateBehavior in self._egress_behavior_activators) and \
@@ -521,12 +530,6 @@ class SwarmManager(nodeable.Nodeable):
                           %(self._swarm_state, activateBehavior))
 
         if success:
-            if activateBehavior == enums.SWARM_STANDBY:
-                self._set_swarm_state(enums.SWARM_READY)
-            elif activateBehavior == enums.SWARM_SEQUENCE_TAKEOFF:
-                self._set_swarm_state(enums.INGRESS)
-            elif activateBehavior != enums.SWARM_EGRESS:
-                self._set_swarm_state(enums.SWARM_ACTIVE)
             self.log_dbug("successful activation of swarm behavior %d" %activateBehavior)
         else:
             self.log_warn("failed to activate swarm behavior %d" %activateBehavior)
