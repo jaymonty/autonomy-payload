@@ -920,8 +920,8 @@ class UAVListWidget(QListWidget):
                 raise Exception("Please supply a valid altitude above 50m")
 
             mc_stack = int(stack)
-            if mc_stack != 1 and mc_stack != 2:
-                raise Exception("Please enter a valid stack (1 or 2)")
+            if mc_stack <= 0:
+                raise Exception("Please enter a valid stack")
 
             mc_takeoff_active = int(takeoff_active)
             if mc_takeoff_active != 0 and mc_takeoff_active != 1 and \
