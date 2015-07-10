@@ -56,12 +56,16 @@ if __name__ == '__main__':
         msg = ap_msg.MsgStatList()
         msg.header.stamp = rospy.Time.now()
         for k,v in sorted(msg_rates.items()):
+            if float(v.count) == 0:
+                continue
             v.latency /= float(v.count)
             msg.stat.append(v)
+        pose_pub.publish(msg)
+
+        for k in msg_rates:
             # TODO: Reconsider this way of clearing data
             msg_rates[k].count = 0
             msg_rates[k].latency = 0
-        pose_pub.publish(msg)
 
         # Sleep, just servicing callbacks
         r.sleep()
