@@ -58,10 +58,9 @@ if __name__ == '__main__':
         for k,v in sorted(msg_rates.items()):
             v.latency /= float(v.count)
             msg.stat.append(v)
+            # TODO: Reconsider this way of clearing data
+            msg_rates[k] = 0
         pose_pub.publish(msg)
-
-        # Clear data for next sample period
-        msg_rates = {}
 
         # Sleep, just servicing callbacks
         r.sleep()
