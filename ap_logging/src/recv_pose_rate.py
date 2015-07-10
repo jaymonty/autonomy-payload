@@ -59,7 +59,8 @@ if __name__ == '__main__':
             v.latency /= float(v.count)
             msg.stat.append(v)
             # TODO: Reconsider this way of clearing data
-            msg_rates[k] = 0
+            msg_rates[k].count = 0
+            msg_rates[k].latency = 0
         pose_pub.publish(msg)
 
         # Sleep, just servicing callbacks
