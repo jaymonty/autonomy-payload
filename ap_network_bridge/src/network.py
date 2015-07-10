@@ -270,7 +270,7 @@ def net_waypoint_command(message, bridge):
     #TODO Remove gloabal variable
     global rel_Altitude
     if rel_Altitude is None: return
-    print "Dylan test 1" + str(rel_Altitude)
+    #print "Dylan test 1" + str(rel_Altitude)
     msg = ap_msg.SwarmSearchWaypointList()
     msg.header.stamp = rospy.Time(message.msg_secs, message.msg_nsecs)
     for wpMsg in message.wpMsg_list:
