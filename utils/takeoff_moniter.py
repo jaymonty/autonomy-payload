@@ -50,17 +50,17 @@ if __name__ == '__main__':
             time.sleep(0.1)
             continue
         elif message == False:  # Packet received, but ignored
-            print "<Ignored packet>"
             continue
 
         uav = str(message.msg_src)
 
         if uav not in uav_list:
-            uav_list[uav] = [0, 0]
+            uav_list[uav] = [0, 0, time.time()]
 
+        # Update last time heard
+        uav_list[uav][2] = time.time()
         if isinstance(message, messages.FlightStatus):
             uav_list[uav][0] = message.alt_rel/1000.
-
         elif isinstance(message, messages.AltitudeSlot):
             uav_list[uav][1] = message.altitude_slot
 
@@ -68,15 +68,19 @@ if __name__ == '__main__':
         t = time.time()
         if t - .5 > last_sec:
             last_sec = int(t)
-
             os.system('clear')
-            for uav in uav_list:
-                print ("UAV %s \t Alt: %.3f \t Slot %d" % (uav, uav_list[uav][0], uav_list[uav][1]))
+            # If a message is old then delete it else print it out
+            for uav in uav_list.keys():
+                if uav_list[uav][2] + 5 < time.time():
+                    del uav_list[uav]
+                else:
+                    print ("UAV %s \t Alt: %.3f \t Slot %d" % \
+                        (uav, uav_list[uav][0], uav_list[uav][1]))
 
             for idx in uav_list:
                 for ndx in uav_list:
-                    if idx != ndx and uav_list[idx][1] == uav_list[ndx][1] and uav_list[idx][1] != 0:
-                        # TODO: Filter out repetions
+                    if idx != ndx and uav_list[idx][1] == uav_list[ndx][1] \
+                        and uav_list[idx][1] != 0:
                         print "\033[1;31mERROR: \033[96m"+str(idx)+"\033[94m and \033[96m"+str(ndx)+ \
                             "\033[94m have conflicting slots at \033[1;31m"+str(uav_list[idx][1])+"\033[0m"
 
