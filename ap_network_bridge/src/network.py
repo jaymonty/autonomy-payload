@@ -422,6 +422,10 @@ net_demo.active = False
 
 def net_mission_config(message, bridge):
     def main():
+        # NOTE: Save param flag so we don't "ok" it if verify failed
+        old_ok_param = rospy.has_param('ok_param') and \
+                       rospy.get_param('ok_param')
+
         # Reset OK flags so users know work is in progress
         for cfg in ['rally', 'wp', 'param']:
             rospy.set_param('ok_' + cfg, False)
@@ -447,7 +451,8 @@ def net_mission_config(message, bridge):
         res = bridge.callService('param_setlist',
                                  pilot_srv.ParamSetList,
                                  param=plist)
-        rospy.set_param('ok_param', res.ok)
+        # NOTE: Only "ok" if prior verify worked AND these sets worked
+        rospy.set_param('ok_param', res.ok and old_ok_param)
 
         # Build out templates and load them
         for cfg in ['rally', 'wp']:
