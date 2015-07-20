@@ -75,7 +75,6 @@
     <remap from="network/load_rally" to="autopilot/load_rally" />
     <remap from="network/load_wp" to="autopilot/load_wp" />
     <remap from="network/recv_weather" to="autopilot/weather_update" />
-    <remap from="network/acs_pose" to="autopilot/acs_pose" />
     <remap from="network/swarm_takeoff_active_mode" to="swarm_takeoff_sequencer/active_mode" />
   </node>
 
