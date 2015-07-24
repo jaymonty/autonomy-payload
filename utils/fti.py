@@ -1296,7 +1296,7 @@ if __name__ == '__main__':
     # Arm and disarm throttle buttons
     alayout = QHBoxLayout()
     btArm = QPushButton("ARM Throttle")
-    btArm.setStyleSheet("background-color: indianred")
+    btArm.setStyleSheet("background-color: indianred; font: bold")
     btArm.clicked.connect(lst.handleArm)
     alayout.addWidget(btArm)
     btDisArm = QPushButton("Disarm Throttle")
@@ -1324,7 +1324,7 @@ if __name__ == '__main__':
         mlayout.addWidget(lnWP)
         btWP.clicked.connect(lambda : lst.handleWP(lnWP.text()))
         btRTL = QPushButton("RTL")
-        btRTL.setStyleSheet("background-color: indianred")
+        btRTL.setStyleSheet("background-color: indianred; font: bold")
         btRTL.clicked.connect(lst.handleRTL)
         mlayout.addWidget(btRTL)
         lay_right.addLayout(mlayout)
