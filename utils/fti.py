@@ -32,7 +32,7 @@ class UAVState():
 # A QListWidgetItem for UAVs, with some custom data and printing
 class UAVListWidgetItem(QListWidgetItem):
     # Standard item attributes
-    FONT = QFont('Helvetica', 14)
+    FONT = QFont('Helvetica', 10)
 
     # UAV state
     STATE_NONE = UAVState('INVALID', QBrush(QColor('white')))
@@ -135,7 +135,7 @@ class UAVListWidgetItem(QListWidgetItem):
 
     def processPose(self, msg):
         self._msg_p = msg
-        # TODO: Decide what "offline" means if we see poses but not status
+        self._time = time.time()
 
     # Process a status message
     def processStatus(self, msg):
@@ -152,7 +152,8 @@ class UAVListWidgetItem(QListWidgetItem):
             # Ready && (Alt > 10m AGL) -> Active/Flying
             # NOTE: ok conditions should be integrated elsewhere
             # NOTE: no airspeed integrated yet (tricky for takeoff)
-            all_ok = msg.armed and msg.ok_ahrs and msg.ok_as and \
+            #all_ok = msg.armed and msg.ok_ahrs and msg.ok_as and \
+            all_ok = msg.armed and msg.ok_as and \
                      msg.ok_gps and msg.ok_ins and msg.ok_mag and \
                      msg.ok_pwr and msg.ready and \
                      (msg.mode == 4) and \
@@ -181,7 +182,7 @@ class UAVListWidget(QListWidget):
     SEND_RETRY = 3
 
     # Time (in seconds) we start culling aircraft
-    OFFLINE_TIME = 5.0
+    OFFLINE_TIME = 10.0
     DELETE_TIME = 30.0
 
     def __init__(self, sock, filter_states=[], parent=None):
@@ -331,7 +332,7 @@ class UAVListWidget(QListWidget):
             layout.addWidget(lbl)
         return layout
 
-    LIGHT_STA_OK = [('ahrs', ''),
+    LIGHT_STA_OK = [#('ahrs', ''),
                     ('as', ''),
                     ('gps', ''),
                     ('ins', ''),
