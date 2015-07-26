@@ -623,7 +623,7 @@ class SwarmSearcher(wp_controller.WaypointController):
                     lla = apbrgmsg.LLA()
                     lla.lat = waypointMsg.waypoint.lat
                     lla.lon = waypointMsg.waypoint.lon
-                    lla.alt = waypointMsg.waypoint.alt
+                    lla.alt = self.searchUAVMap[self.ownID].assignedAltitude
                     self.publishWaypoint(lla)
                     #print "\033[94m" + "Swarm Search node: Slave Searcher \033[96m["+str(self.ownID)+"]\033[94m proceeding to assigned waypoint at \033[93m"+str(lla)+"\033[0m"
                     print "\033[94m" + "Swarm Searcher \033[96m["+str(self.ownID)+"]\033[94m proceeding to assigned cell \033[93m[" + str(waypointMsg.searchCell_x)+", "+ str(waypointMsg.searchCell_y)+"]\033[0m"
@@ -637,7 +637,8 @@ class SwarmSearcher(wp_controller.WaypointController):
         try:
             # Future to-do:
             # Check subswarmID that this setup message is for
-                # If this uav is part of the subswarm, check if ownself being assigned to be master searcher in the setup message
+
+            if self.rel_Altitude is None: raise ValueError('Relative Altitude has not been specified yet')
             self.search_master_searcher_id = swarmSearchSetup.order.masterSearcherID
             if self.ownID == self.search_master_searcher_id:
                 print "\033[94mSwarm Search Master \033[96m["+str(self.ownID)+"]\033[94m received command from swarm manager \033[96m"+str(swarmSearchSetup)+"\033[0m"
@@ -661,13 +662,15 @@ class SwarmSearcher(wp_controller.WaypointController):
                     print "\033[94mSwarm Search Master \033[96m["+str(self.ownID)+"]\033[94m search operation with \033[96m"+ str(self.numOfRunsToDo) +"\033[94m run(s) started on \033[96m"+str(time.asctime(time.localtime(time.time())))+"\033[0m"
                     for vehicle in self.searchUAVMap:
                         self.searchUAVMap[vehicle].assignedAltitude = self.rel_Altitude
-                        print "\033[94mSwarm Search node: Searcher \033[96m[" + str(vehicle) + "] \033[94massigned safety altitude \033[0m" + str(self.searchUAVMap[vehicle].assignedAltitude)
+                    print "\033[94mSwarm Search Master \033[96m[" + str(self.ownID) + "] \033[94massigned relative altitude for search \033[0m" + str(self.searchUAVMap[self.ownID].assignedAltitude)
                     self._activate_swarm_search()
                     self.set_ready_state(True)
                 else:
                     print "\033[94mSwarm Search Master \033[96m["+str(self.ownID)+"]\033[94m ignored command from swarm manager as search operation is underway. Suspend operation first before assigning any new operation\033[0m"
             else:
                 self.ExecuteMasterSearcherBehavior = False
+                self.searchUAVMap[self.ownID].assignedAltitude = self.rel_Altitude
+                print "\033[94mSwarm Search node: Searcher \033[96m[" + str(self.ownID) + "] \033[94massigned relative altitude for search \033[0m" + str(self.searchUAVMap[self.ownID].assignedAltitude)
             self.set_ready_state(True)
         except Exception as ex:
             self.log_warn("Failed to initialize swarm search: " + str(ex))
