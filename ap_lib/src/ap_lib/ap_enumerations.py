@@ -27,10 +27,10 @@ CTL_MODE_VALUES = { 'Autopilot':      NO_PAYLOAD_CTRL, \
 
 # Fixed (per convention) state-specific waypoints
 TAKEOFF_WP = 1       # Airborne
-INGRESS_LOITER_WP = 2 # Ingress loiter for time waypoint at constant 75m altitude
-INGRESS_CYLINDER_WP = 3 # Ingress loiter to altitude waypoint at calculated alt slot
-SWARM_STANDBY_WP = 4 # Available for tasking
-SWARM_EGRESS_WP = 5  # Leaving swarm for recovery
+INGRESS_LOITER_WP = 3 # Ingress loiter for time waypoint at constant 75m altitude
+INGRESS_CYLINDER_WP = 4 # Ingress loiter to altitude waypoint at calculated alt slot
+SWARM_STANDBY_WP = 5 # Available for tasking
+SWARM_EGRESS_WP = 6  # Leaving swarm for recovery
 RACETRACK_WP = 7     # First racetrack waypoint
 
 
