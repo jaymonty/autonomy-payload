@@ -32,6 +32,8 @@ INGRESS_CYLINDER_WP = 4 # Ingress loiter to altitude waypoint at calculated alt 
 SWARM_STANDBY_WP = 5 # Available for tasking
 SWARM_EGRESS_WP = 6  # Leaving swarm for recovery
 RACETRACK_WP = 7     # First racetrack waypoint
+LAND_A_WP = 12       # First WP in the east-to-west (RW27) landing sequence
+LAND_B_WP = 17       # First WP in the west-to-east (RW10) landing sequence
 
 
 # Enumeration for available swarm behaviors
@@ -138,3 +140,9 @@ WP_TYPE_LAND = 21
 WP_TYPE_TAKEOFF = 22
 WP_TYPE_LOITER_TO_ALT = 31
 WP_TYPE_LAND_SEQUENCE = 189
+WP_TYPE_ENABLE_FENCE = 207
+
+# Miscellaneous mission parameter enumerations
+BASE_REL_ALT = 100.0
+ALT_BLOCK_SIZE = 15.0
+
