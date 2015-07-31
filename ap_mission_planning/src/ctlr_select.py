@@ -42,10 +42,12 @@ class ControllerType(object):
     # Initializer creates a "minimally" initialized ControllerType object
     # @param c_id:  ID (int enumeration) for the controller
     # @param c_name:  name for the controller
-    # @param req_loiter_wp: True if an infinite loiter wp is always used
-    def __init__(self, c_id, c_name, req_loiter_wp):
+    # @param is_wp_ctlr: True if controller inherits from WaypointController
+    # @param req_loiter_wp: True if an infinite loiter wp is ALWAYS required
+    def __init__(self, c_id, c_name, is_wp_ctlr, req_loiter_wp):
         self.id = c_id
         self.name = c_name
+        self.is_wp_controller = is_wp_ctlr
         self.requires_loiter_wp = req_loiter_wp
 
         self._run_srv = rospy.ServiceProxy('%s/%s_run' %(c_name, c_name), \
@@ -223,12 +225,18 @@ class ControllerSelector(nodeable.Nodeable):
     #------------------------
 
     # Add a new controller type by ID and name
-    def add_controller(self, c_id, c_name, require_loiter_wp=True):
+    # @param c_id: controller ID (must be a unique integer)
+    # @param c_name: node name of the controller
+    # @param is_wp_ctlr: does the controller object inherits from WaypointController
+    # @param require_loiter_wp: does the controller ALWAYS require the loiter waypoint
+    def add_controller(self, c_id, c_name, is_wp_ctlr=True, require_loiter_wp=True):
         if c_id in self._controllers:
             raise Exception("Attempted to redefine controller %u (%s) as %s" % \
                             (c_id, self.controllers[c_id].name, c_name))
         try:
-            self._controllers[c_id] = ControllerType(c_id, c_name, require_loiter_wp)
+            if not is_wp_ctlr:
+                require_loiter_wp = False # Doesn't make sense if this isn't the case
+            self._controllers[c_id] = ControllerType(c_id, c_name, is_wp_ctlr, require_loiter_wp)
         except Exception as ex:
             raise Exception("Failed to define controller %u (%s)" % \
                             (c_id, c_name))
@@ -299,12 +307,14 @@ class ControllerSelector(nodeable.Nodeable):
             self._deactivate_all_controllers(False)
 
             # Make sure the specified infinite loiter waypoint actually IS one
-            if not self._loiter_wp_id in self._loiter_wps:
+            if ((self._controllers[mode].is_wp_controller) and \
+                (not self._loiter_wp_id in self._loiter_wps)):
                 raise Exception("Invalid infinite loiter WP specified for controller switch")
 
             # Make sure the autopilot is using the infinite loiter waypoint
-            # TODO: See item 5 in class header (infinite loiter/safe behavior conflict)
-            if self._ap_status.mis_cur != self._loiter_wp_id:
+            # iff the controller to be activated inherits from WaypointController
+            if ((self._controllers[mode].is_wp_controller) and \
+                (self._ap_status.mis_cur != self._loiter_wp_id)):
                 wpindex = std_msgs.UInt16()
                 wpindex.data = self._loiter_wp_id
                 self._pub_wpindex.publish(wpindex)
@@ -320,7 +330,7 @@ class ControllerSelector(nodeable.Nodeable):
             if success:
                 self._current_mode = mode
             else:
-                self._current_mode = controller.NO_PAYLOAD_CONTROL
+                self._current_mode = enums.NO_PAYLOAD_CONTROL
 
         except Exception as ex:
             # If we get here, something is wrong
@@ -469,7 +479,6 @@ class ControllerSelector(nodeable.Nodeable):
     # control mode.  The waypoint must be an infinite loiter waypoint
     def _retrieve_last_ap_waypoint(self):
         try:
-            # in case the service wasn't available at startup (ordering)
             if self._wp_getlast == None:
                 self._wp_getlast = \
                     self.setupServiceProxy('wp_getlast', mavbridge_srv.WPGetAll)
@@ -478,7 +487,7 @@ class ControllerSelector(nodeable.Nodeable):
             self._loiter_wps = []
             if len(self._wp_list) > 0 and \
                self._wp_list[0].command == enums.WP_TYPE_LOITER:
-                self._loiter_wps.append(self._wp_list[0].seq)
+                self._loiter_wps = [ self._wp_list[0].seq ]
 
         except Exception as ex:
             self._loiter_wps = []
@@ -521,11 +530,11 @@ class ControllerSelector(nodeable.Nodeable):
 if __name__ == '__main__':
     # Initialize state machine
     ctlrsel = ControllerSelector(ControllerSelector.ros_nodename)
-    ctlrsel.add_controller(enums.WP_SEQUENCE_CTRLR, "wp_sequencer")
-    ctlrsel.add_controller(enums.FOLLOW_CTRLR, "follower")
-    ctlrsel.add_controller(enums.LANDING_SEQUENCE_CTRLR, "swarm_landing_sequencer", False)
+    ctlrsel.add_controller(enums.WP_SEQUENCE_CTRLR, "wp_sequencer", True, True)
+    ctlrsel.add_controller(enums.FOLLOW_CTRLR, "follower", True, True)
+    ctlrsel.add_controller(enums.LANDING_SEQUENCE_CTRLR, "swarm_landing_sequencer", True, False)
     ctlrsel.add_controller(enums.SWARM_SEARCH_CTRLR, "swarm_searcher")
-    ctlrsel.add_controller(enums.TAKEOFF_SEQUENCE_CTRLR, "swarm_takeoff_sequencer", False)
+    ctlrsel.add_controller(enums.TAKEOFF_SEQUENCE_CTRLR, "swarm_takeoff_sequencer", False, False)
 
     # Start loop
     # TODO: Is this fast enough?

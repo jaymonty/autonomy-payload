@@ -9,6 +9,7 @@
 import sys
 import math
 import time
+import threading
 
 # ROS library imports
 import rospy
@@ -42,8 +43,7 @@ import autopilot_bridge.srv as apmsrv
 #   _swarm_keys: list of all aircraft IDs (keys) in the swarm dictionary
 #   _subswarm_keys: list of subswarm aircraft IDs (keys) in the swarm dictionary
 #   _waypoint_types: dictionary mapping waypoint IDs to waypoint type
-#   _waypoint_alts: dictionary mapping waypoint IDs to altitudes (MSL)
-#   _crnt_wpt_alt: most recently ordered waypoint altitude (MSL)
+#   _crnt_wpt_id: ID of the most recently ordered waypoint
 #   _update_subswarm_publisher: ROS publisher to assign vehicle to a subswarm
 #   _swarm_state_publisher: ROS publisher to publish the current swarming state
 #   _swarm_behavior_publisher: ROS publisher to publish the active swarm behavior
@@ -52,6 +52,7 @@ import autopilot_bridge.srv as apmsrv
 #   _ctlr_select_srv_proxy: ROS proxy for the ctlr_selector set mode service
 #   _wp_getrange_srv_proxy: ROS proxy for the wp_getrange service
 #   _init_landing_sequencer_srv_proxy: ROS proxy for the init_landing_sequencer service
+#   _lock: reentrant lock to avoid threading errors (swarm dictionary)
 #
 # Inherited from Nodeable:
 #   nodeName:  Name of the node to start or node in which the object is
@@ -101,8 +102,7 @@ class SwarmManager(nodeable.Nodeable):
         self._egress_behavior_activators = dict()
         self._swarm_uav_states = dict()
         self._waypoint_types = dict()
-        self._waypoint_alts = dict()
-        self._crnt_wpt_alt = 0.0
+        self._crnt_wpt_id = 0
         self._swarm_keys = []
         self._subswarm_keys = []
         self._follow_publisher = None
@@ -111,6 +111,7 @@ class SwarmManager(nodeable.Nodeable):
         self._wp_getrange_srv_proxy = None
         self._init_landing_sequencer_srv_proxy = None
         self._init_takeoff_sequencer_srv_proxy = None
+        self._lock = threading.RLock()
 #        self.DBUG_PRINT = True
 #        self.WARN_PRINT = True
 
@@ -280,14 +281,23 @@ class SwarmManager(nodeable.Nodeable):
     def _activate_fixed_follow(self, srvReq=None):
         success = False
         try:
+            wpt = self._wp_getrange_srv_proxy(self._crnt_wpt_id, \
+                                              self._crnt_wpt_id).points[0]
+            with self._lock:
+                own_ac = self._swarm_uav_states[self._ownID]
+            msl_offset = own_ac.state.pose.pose.position.alt -\
+                         own_ac.state.pose.pose.position.rel_alt
+            own_alt = wpt.z + msl_offset
+
             # Sort the participating aircraft by altitude
             low_to_high = []
-            for uav in self._subswarm_keys:
-                if uav == self._ownID:
-                    low_to_high.append([ self._ownID, self._crnt_wpt_alt ])
-                else:
-                    low_to_high.append([ self._swarm_uav_states[uav].vehicle_id, \
-                                         self._swarm_uav_states[uav].state.pose.pose.position.alt])
+            with self._lock:
+                for uav in self._subswarm_keys:
+                    if uav == self._ownID:
+                        low_to_high.append([ self._ownID, own_alt ])
+                    else:
+                        low_to_high.append([ self._swarm_uav_states[uav].vehicle_id, \
+                                             self._swarm_uav_states[uav].state.pose.pose.position.alt])
             low_to_high = sorted(low_to_high, key = lambda tup: tup[1])
 
             # ID the UAV to follow (own ID means this UAV is form lead)
@@ -319,7 +329,7 @@ class SwarmManager(nodeable.Nodeable):
                 form_msg.order.range = distance
                 form_msg.order.angle = angle
                 form_msg.order.alt_mode = follower.BASE_ALT_MODE
-                form_msg.order.control_alt = self._crnt_wpt_alt
+                form_msg.order.control_alt = own_alt
                 self._follow_publisher.publish(form_msg)
                 time.sleep(SwarmManager.TIMING_DELAY) # give the form set message a second to take
                 success = self._ctlr_select_srv_proxy(enums.FOLLOW_CTRLR).result
@@ -349,6 +359,7 @@ class SwarmManager(nodeable.Nodeable):
             self.log_warn("Landing sequencer start exception: " + str(ex))
 
         return success
+
 
     # Activates the swarm search behavior.
     # @param srvReq service request message (not used for this behavior)
@@ -399,10 +410,12 @@ class SwarmManager(nodeable.Nodeable):
     # @return a list of records for UAVs assigned to the requested subswarm
     def _get_subswarm(self, subswarm_id):
         result = set()
-        for uav in self._swarm_uav_states:
-            if self._swarm_uav_states[uav].subswarm_id == subswarm_id:
-                result.add(self._swarm_uav_states[uav])
+        with self._lock:
+            for uav in self._swarm_uav_states:
+                if self._swarm_uav_states[uav].subswarm_id == subswarm_id:
+                    result.add(self._swarm_uav_states[uav])
         return result
+
 
     #-----------------------------------------------------
     # ROS service implementation functions for this object
@@ -546,14 +559,15 @@ class SwarmManager(nodeable.Nodeable):
     # Handle incoming swarm_uav_states messages
     # @param swarmMsg: message containing swarm data (SwarmStateStamped)
     def _process_swarm_uav_states(self, swarmMsg):
-        self._swarm_uav_states.clear()
-        del self._swarm_keys[:]
-        del self._subswarm_keys[:]
-        for vehicle in swarmMsg.swarm:
-            self._swarm_uav_states[vehicle.vehicle_id] = vehicle
-            self._swarm_keys.append(vehicle.vehicle_id)
-            if vehicle.subswarm_id == self._subswarm_id:
-                self._subswarm_keys.append(vehicle.vehicle_id)
+        with self._lock:
+            self._swarm_uav_states.clear()
+            del self._swarm_keys[:]
+            del self._subswarm_keys[:]
+            for vehicle in swarmMsg.swarm:
+                self._swarm_uav_states[vehicle.vehicle_id] = vehicle
+                self._swarm_keys.append(vehicle.vehicle_id)
+                if vehicle.subswarm_id == self._subswarm_id:
+                    self._subswarm_keys.append(vehicle.vehicle_id)
 
 
     # Process recv_subswarm messages.  Messages will be ignored if the
@@ -620,37 +634,26 @@ class SwarmManager(nodeable.Nodeable):
             self.log_warn("Invalid autopilot mode (%d) for swarming" %statusMsg.mode)
             return # The rest of this isn't required
 
-        try:
-            # Capture the type and altitude of waypoint that is current if required
-            if not statusMsg.mis_cur in self._waypoint_types:
-                wpt = self._wp_getrange_srv_proxy(statusMsg.mis_cur, \
-                                                  statusMsg.mis_cur).points[0]
-                self._waypoint_types[statusMsg.mis_cur] = wpt.command
-                own_ac = self._swarm_uav_states[self._ownID]
-                msl_offset = own_ac.state.pose.pose.position.alt -\
-                             own_ac.state.pose.pose.position.rel_alt
-                self._waypoint_alts[statusMsg.mis_cur] = wpt.z + msl_offset
-                self.log_dbug("Processed new waypoint id " + str(statusMsg.mis_cur) + \
-                              ", type " + str(self._waypoint_types[statusMsg.mis_cur]) + \
-                              ", altitude " + str(self._waypoint_alts[statusMsg.mis_cur]))
+        self._crnt_wpt_id = statusMsg.mis_cur
 
-            self._crnt_wpt_alt = self._waypoint_alts[statusMsg.mis_cur]
+        if (self._swarm_state == enums.LANDING):
+            if (statusMsg.as_read <= 5.0):
+                self._set_swarm_state(enums.ON_DECK)
 
-            if (self._swarm_state == enums.LANDING):
-                if (statusMsg.as_read <= 5.0):
-                    self._set_swarm_state(enums.ON_DECK)
+        else:
+            try:
+                if not statusMsg.mis_cur in self._waypoint_types:
+                    wpt = self._wp_getrange_srv_proxy(statusMsg.mis_cur, \
+                                                      statusMsg.mis_cur).points[0]
+                    self._waypoint_types[statusMsg.mis_cur] = wpt.command
 
-            # Can transition to LANDING at any time after launch
-            # NOTE:  This check is hardcoded as a fixed waypoint ID for now.  Will
-            #        need to change to remove dependence on mission file organization
-            elif (self._waypoint_types[statusMsg.mis_cur] == enums.WP_TYPE_LAND) and\
-                 (self._swarm_state != enums.ON_DECK):
-                self._set_swarm_state(enums.LANDING)
-                self._set_subswarm(0)
-
-        except Exception as ex:
-            self.log_warn('Exception while getting  data for waypoint # ' +\
-                          str(statusMsg.mis_cur) + ': ' + str(ex))
+                if (self._waypoint_types[statusMsg.mis_cur] == enums.WP_TYPE_LAND) and \
+                   (self._swarm_state != enums.ON_DECK):
+                    self._set_swarm_state(enums.LANDING)
+                    self._set_subswarm(0)
+            except Exception as ex:
+                self.log_warn('Exception while getting  data for waypoint # ' +\
+                              str(statusMsg.mis_cur) + ': ' + str(ex))
 
 
 #-----------------------------------------------------------------------
