@@ -83,10 +83,17 @@ sudo update-locale LANG=C LANGUAGE=C LC_ALL=C LC_MESSAGES=POSIX
 # Disable automatic apt tasks
 sudo rm /etc/cron.daily/apt
 
-# Remove any old wireless device entries from udev
-# (this will make our wifi device 'wlan0')
-sudo sh -c "echo -n > /etc/udev/rules.d/70-persistent-net.rules"
-check_fail "echo (udev rules)"
+# Remove any old wireless device entries from udev, and add a
+# generic rule to make *any* wifi device 'wlan0'
+cat > udev.tmp <<EOF
+# Catch-all for wlan devices
+SUBSYSTEM=="net", ACTION=="add", DRIVERS=="?*", ATTR{dev_id}=="0x0", ATTR{type}=="1", KERNEL=="wlan*", NAME="wlan0"
+EOF
+check_fail "cat (udev rules)"
+sudo mv udev.tmp /etc/udev/rules.d/70-persistent-net.rules
+check_fail "mv (udev rules)"
+sudo chown root:root /etc/udev/rules.d/70-persistent-net.rules
+check_fail "chown (udev rules)"
 
 # Create network configuration
 cat > interfaces.tmp <<EOF

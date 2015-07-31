@@ -20,3 +20,16 @@ if [ $? != 0 ]; then
   check_fail "timezone update"
 fi
 
+# Remove any old wireless device entries from udev, and add a
+# generic rule to make *any* wifi device 'wlan0'
+# NOTE: replicated in initial config stage
+cat > udev.tmp <<EOF
+# Catch-all for wlan devices
+SUBSYSTEM=="net", ACTION=="add", DRIVERS=="?*", ATTR{dev_id}=="0x0", ATTR{type}=="1", KERNEL=="wlan*", NAME="wlan0"
+EOF
+check_fail "cat (udev rules)"
+sudo mv udev.tmp /etc/udev/rules.d/70-persistent-net.rules
+check_fail "mv (udev rules)"
+sudo chown root:root /etc/udev/rules.d/70-persistent-net.rules
+check_fail "chown (udev rules)"
+
