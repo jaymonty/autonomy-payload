@@ -103,9 +103,11 @@
 
     <node name="swarm_landing_sequencer" pkg="ap_path_planning" type="swarm_landing_sequencer.py" output="screen" args="">
       <remap from="swarm_landing_sequencer/payload_waypoint" to="autopilot/payload_waypoint" />
+      <remap from="swarm_landing_sequencer/set_landing" to="autopilot/set_landing" />
       <remap from="swarm_landing_sequencer/wp_getrange" to="autopilot/wp_getrange" />
       <remap from="swarm_landing_sequencer/fpr_param_set" to="autopilot/fpr_param_set" />
       <remap from="swarm_landing_sequencer/waypoint_goto" to="autopilot/waypoint_goto" />
+      <remap from="swarm_landing_sequencer/status" to="autopilot/status" />
       <remap from="swarm_landing_sequencer/ctlr_status" to="controllers/ctlr_status" />
       <remap from="swarm_landing_sequencer/swarm_uav_states" to="swarm_tracker/swarm_uav_states" />
       <remap from="swarm_landing_sequencer/update_subswarm" to="swarm_manager/update_subswarm" />
