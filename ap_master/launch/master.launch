@@ -169,6 +169,7 @@
       <remap from="swarm_manager/wp_getrange" to="autopilot/wp_getrange" />
       <remap from="swarm_manager/init_landing_sequencer" to="swarm_landing_sequencer/init_landing_sequencer" />
       <remap from="swarm_manager/init_takeoff_sequencer" to="swarm_takeoff_sequencer/init_takeoff_sequencer" />
+      <remap from="swarm_manager/deactivate_swarm_search" to="swarm_searcher/deactivate_swarm_search" />
     </node>
 
   </group>

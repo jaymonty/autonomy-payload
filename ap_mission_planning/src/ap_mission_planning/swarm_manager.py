@@ -112,6 +112,7 @@ class SwarmManager(nodeable.Nodeable):
         self._init_landing_sequencer_srv_proxy = None
         self._init_takeoff_sequencer_srv_proxy = None
         self._lock = threading.RLock()
+        self._deactivate_swarm_searcher = None
 #        self.DBUG_PRINT = True
 #        self.WARN_PRINT = True
 
@@ -135,7 +136,8 @@ class SwarmManager(nodeable.Nodeable):
                               self._process_subswarm_update)
         self.createSubscriber("status", apmsgs.Status, \
                               self._process_autopilot_status)
-
+        self.createSubscriber("deactivate_swarm_search", stdmsg.UInt8, \
+                              self._process_deactivate_swarm_search)
 
     # Establishes the publishers for the SwarmManager object.  The object
     # publishes to the set_selector_mode topic to initiate control as
@@ -655,6 +657,10 @@ class SwarmManager(nodeable.Nodeable):
                 self.log_warn('Exception while getting  data for waypoint # ' +\
                               str(statusMsg.mis_cur) + ': ' + str(ex))
 
+    def _process_deactivate_swarm_search(self, deactivateMsg):
+        self._deactivate_swarm_searcher = apsrv.SetInteger
+        self._deactivate_swarm_searcher.setting = enums.SWARM_STANDBY
+        self._process_set_swarm_behavior(self._deactivate_swarm_searcher)
 
 #-----------------------------------------------------------------------
 # Main code
