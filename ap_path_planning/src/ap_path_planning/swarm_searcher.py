@@ -166,6 +166,7 @@ class SwarmSearcher(wp_controller.WaypointController):
         self._swarmSearchPublisher = None
         self._assignedSearchMessage = apmsg.SwarmSearchWaypointList()
 
+
     #-------------------------------------------------
     # Implementation of parent class virtual functions
     #-------------------------------------------------
@@ -186,6 +187,8 @@ class SwarmSearcher(wp_controller.WaypointController):
     def publisherSetup(self, params=[]):
         self._swarmSearchPublisher = \
             self.createPublisher("send_swarm_search_waypoint", apmsg.SwarmSearchWaypointList, 1)
+        self._searchDeactivatePublisher = \
+            self.createPublisher("deactivate_swarm_search", stdmsg.UInt8, 1, True)
 
     def serviceSetup(self, params=[]):
         pass
@@ -255,7 +258,6 @@ class SwarmSearcher(wp_controller.WaypointController):
                         currentPose = self.searchUAVMap[vehicle].pose
                         tgt_cell = self.searchUAVMap[vehicle].originalLLA
                         if gps_distance(currentPose[0], currentPose[1], tgt_cell[0], tgt_cell[1]) < SEARCH_ARRIVAL_THRESHOLD:
-                            self.searchUAVMap[vehicle].status = SEARCH_READY
                             if vehicle != self.search_master_searcher_id: 
                                 _wpMsg = wpMsg()
                                 _wpMsg.recipientvehicle_id = vehicle
@@ -266,9 +268,11 @@ class SwarmSearcher(wp_controller.WaypointController):
                                 _wpMsg.searchCell_y = 255
                                 self._assignedSearchMessage.waypoints.append(_wpMsg)
                                 self.wpmsgQueued = True
+                            else:
+                                self.searchUAVMap[vehicle].status = SEARCH_READY
 
                 if egressComplete == True:
-                    print "\033[94mSwarm Search Master \033[96m["+str(self.ownID)+"]\033[94m egress completed\033[0m"
+                    print "\033[94mSwarm Search Master \033[96m["+str(self.ownID)+"]\033[94m Master searcher has egressed and all slave searchers deactivated\033[0m"
                     self.SEARCH_STATUS = SEARCH_READY
                     self.searchGrid = None
                     if self.numOfRunsDone == self.numOfRunsToDo:
@@ -278,7 +282,7 @@ class SwarmSearcher(wp_controller.WaypointController):
                         self.SEARCH_STATUS = SEARCH_READY
                         self.searchGrid = None
                         self.ExecuteMasterSearcherBehavior = False
-                        self.set_ready_state(False)
+                        self._searchDeactivatePublisher.publish(1)
                     else:
                         self._activate_swarm_search()
 
@@ -585,7 +589,7 @@ class SwarmSearcher(wp_controller.WaypointController):
                 if vehicle.swarm_state != self.searchUAVMap[vehicle.vehicle_id].receivedState:
                     if self.ExecuteMasterSearcherBehavior == True:
                         if self.searchUAVMap[vehicle.vehicle_id].receivedState == SEARCH_SWARM_SEARCH_ACTIVE_STATE and vehicle.swarm_state == SEARCH_SWARM_SEARCH_READY_STATE:
-                            print "\033[92mUAV \033[96m[" + str(vehicle.vehicle_id) + "] \033[94msuspended swarm behaviour. \033[0m"
+                            print "\033[92mUAV \033[96m[" + str(vehicle.vehicle_id) + "] \033[94mterminated swarm behaviour. \033[0m"
                             self.searchUAVMap[vehicle.vehicle_id].status = SEARCH_FAULT
                             if self.ownID == vehicle.vehicle_id:
                                 currentTime = time.time()
@@ -601,7 +605,7 @@ class SwarmSearcher(wp_controller.WaypointController):
                                 self.SEARCH_STATUS = SEARCH_READY
                                 self.searchGrid = None
                                 self.ExecuteMasterSearcherBehavior = False
-                                self.set_ready_state(False)
+                                self._searchDeactivatePublisher.publish(1)
                     self.searchUAVMap[vehicle.vehicle_id].receivedState = vehicle.swarm_state
                     if self.searchUAVMap[vehicle.vehicle_id].receivedState == SEARCH_SWARM_SEARCH_ACTIVE_STATE:
                         self.searchUAVMap[vehicle.vehicle_id].status = SEARCH_READY # This is correct. When swarm behaviour just turn active, the first local state is search ready
@@ -616,8 +620,8 @@ class SwarmSearcher(wp_controller.WaypointController):
         # Check if own UAV supposed to recepient of this message
         for waypointMsg in swarmSearchWP.waypoints:
             if self.ownID == waypointMsg.recipientvehicle_id:
-                if waypointMsg.searchCell_x == 255 and waypointMsg.searchCell_y == 255:
-                    self.set_ready_state(False)
+                if waypointMsg.searchCell_x >= 254 and waypointMsg.searchCell_y >= 254:
+                    self._searchDeactivatePublisher.publish(1)
                     print "\033[94m" + "Swarm Searcher \033[96m["+str(self.ownID)+"]\033[94m proceeding to deactivate\033[0m"
                 else:
                     lla = apbrgmsg.LLA()
@@ -625,13 +629,10 @@ class SwarmSearcher(wp_controller.WaypointController):
                     lla.lon = waypointMsg.waypoint.lon
                     lla.alt = self.searchUAVMap[self.ownID].assignedAltitude
                     self.publishWaypoint(lla)
-                    #print "\033[94m" + "Swarm Search node: Slave Searcher \033[96m["+str(self.ownID)+"]\033[94m proceeding to assigned waypoint at \033[93m"+str(lla)+"\033[0m"
                     print "\033[94m" + "Swarm Searcher \033[96m["+str(self.ownID)+"]\033[94m proceeding to assigned cell \033[93m[" + str(waypointMsg.searchCell_x)+", "+ str(waypointMsg.searchCell_y)+"]\033[0m"
             else:
-                if waypointMsg.searchCell_x == 255 and waypointMsg.searchCell_y == 255:
+                if waypointMsg.searchCell_x >= 254 and waypointMsg.searchCell_y >= 254:
                     print "\033[94m" + "Swarm Search \033[96m["+str(self.ownID)+"]\033[94m node: Received network wp cmd for Slave Searcher \033[96m["+str(waypointMsg.recipientvehicle_id)+"]\033[94m to deactivate\033[0m"
-                else:
-                    print "\033[94m" + "Swarm Search \033[96m["+str(self.ownID)+"]\033[94m node: Received network wp cmd for Slave Searcher \033[96m["+str(waypointMsg.recipientvehicle_id)+"]\033[94m to visit assigned cell \033[93m[" + str(waypointMsg.searchCell_x)+", "+ str(waypointMsg.searchCell_y)+"]\033[0m"
 
     def _process_swarmSearch_setup(self, swarmSearchSetup):
         try:
@@ -642,9 +643,6 @@ class SwarmSearcher(wp_controller.WaypointController):
             self.search_master_searcher_id = swarmSearchSetup.order.masterSearcherID
             if self.ownID == self.search_master_searcher_id:
                 print "\033[94mSwarm Search Master \033[96m["+str(self.ownID)+"]\033[94m received command from swarm manager \033[96m"+str(swarmSearchSetup)+"\033[0m"
-                # hardcoded to assume there is only 1 subswarm and master searcher was preassigned in the launch file
-                # The algo selection, location and size of search grid is hard coded and number of runs do is unlimited
-                # self.bottomLeftLLA = [35.718788,-120.768071]
                 if self.ExecuteMasterSearcherBehavior == False:
                     self.search_Operation_StartTime = time.time()
                     self.bottomLeftLLA = [swarmSearchSetup.order.lat, swarmSearchSetup.order.lon]
