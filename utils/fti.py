@@ -630,12 +630,21 @@ class UAVListWidget(QListWidget):
 
         # If we have a radio and have atcommander.py, try configuration
         if use_telem:
+            # Calculate radio parameters
+            netid = self.mav_id
+            minfreq = (netid % 3) * 9000 + 902000
+            maxfreq = (netid % 3) * 9000 + 910000
+
             # Enumerate commands by function call
             commands = [lambda: atc.leave_command_mode_force(),
                         lambda: atc.unstick(),
                         lambda: atc.enter_command_mode(),
                         lambda: atc.set_param(ATCommandSet.PARAM_NETID,
-                                              self.mav_id),
+                                              netid),
+                        lambda: atc.set_param(ATCommandSet.PARAM_MIN_FREQ,
+                                              minfreq),
+                        lambda: atc.set_param(ATCommandSet.PARAM_MAX_FREQ,
+                                              maxfreq),
                         lambda: atc.write_params(),
                         lambda: atc.reboot(),
                         lambda: atc.leave_command_mode()]
