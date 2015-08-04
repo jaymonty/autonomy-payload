@@ -101,6 +101,8 @@ GUIDED = 3
 AUTO = 4
 FBWB = 5
 CIRCLE = 6
+LOITER = 7
+INITIALIZING = 8
 UNMAPPED = 15
 
 # Mapping between autopilot modes and strings for GUI use or debugging
@@ -111,6 +113,8 @@ MODE_STRINGS = { RTL:      'RTL', \
                  AUTO:     'AUTO', \
                  FBWB:     'FBWB', \
                  CIRCLE:   'CIRCLE', \
+                 LOITER:   'LOITER', \
+                 INITIALIZING: 'INITIALIZING', \
                  UNMAPPED: 'UNMAPPED' }
 
 MODE_VALUES = { 'RTL':      RTL, \
@@ -120,6 +124,8 @@ MODE_VALUES = { 'RTL':      RTL, \
                 'AUTO':     AUTO, \
                 'FBWB':     FBWB, \
                 'CIRCLE':   CIRCLE, \
+                'LOITER':   LOITER, \
+                'INITIALIZING' : INITIALIZING, \
                 'UNMAPPED': UNMAPPED }
 #UNMAPPED = ACRO, LOITER, INITIALIZING, TRAINING, STABILIZE, CRUISE
 
