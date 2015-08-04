@@ -111,10 +111,12 @@ class UAVListWidgetItem(QListWidgetItem):
         return float(max(self._aspd))
 
     def getModeString(self):
-        MODES = ['RTL', 'MANUAL', 'FBWA', 'GUIDED', 'AUTO', 'FBWB', 'CIRCLE']
+        MODES = ['RTL', 'MANUAL', 'FBWA', 'GUIDED', 'AUTO', 'FBWB', 'CIRCLE',
+                 'LOITER','INITIALIZING']
         if self._msg_s is None: return 'UNKNOWN'
         if self.getState() == self.STATE_OFFLINE: return 'OFFLINE'
         if self._msg_s.mode >= len(MODES): return 'UNKNOWN'
+
         return MODES[self._msg_s.mode]
 
     # Set the state (color)
