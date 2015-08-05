@@ -9,11 +9,13 @@ try:
         raise Exception('')
     device = str(sys.argv[1])
     baudrate = int(sys.argv[2])
-    max_time = 0
+    max_time = -1
     if len(sys.argv) == 4:
         max_time = int(sys.argv[3])
 except:
     print "usage: %s DEVICE BAUDRATE [MAX_TIME]" % sys.argv[0]
+    print "  Set MAX_TIME to -1 (or omit) to run forever"
+    print "  Set MAX_TIME to 0 to run until first valid traffic"
     sys.exit(1)
 
 master = mavutil.mavlink_connection(device, baudrate, autoreconnect=True)
@@ -23,7 +25,7 @@ msg_count = 0
 msg_bytes = 0
 
 last_second = int(time.time())
-if max_time > 0: max_time += last_second
+end_time = last_second + max_time
 
 while True:
     try:
@@ -33,10 +35,11 @@ while True:
 
     if msg:
         t = msg.get_type()
-        if t not in msg_types: msg_types[t] = 0
-        msg_types[t] += 1
-        msg_count += 1
-        msg_bytes += len(msg.get_msgbuf())
+        if t != "BAD_DATA":
+            if t not in msg_types: msg_types[t] = 0
+            msg_types[t] += 1
+            msg_count += 1
+            msg_bytes += len(msg.get_msgbuf())
     else:
         time.sleep(0.1)
 
@@ -49,6 +52,9 @@ while True:
             for k,v in sorted(msg_types.items()):
                 print "  %-24s %u" % (k, v)
 
+            if max_time == 0:
+                sys.exit(0)
+
         last_second = t
         msg_count = 0
         msg_bytes = 0
@@ -56,5 +62,5 @@ while True:
 
         time.sleep(0.1)
 
-    if 0 < max_time < t:
+    if max_time > 0 and end_time <= t:
         sys.exit(0)
