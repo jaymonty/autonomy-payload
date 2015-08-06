@@ -230,11 +230,16 @@ class SetIDTask(Task):
         res = srv("SYSID_THISMAV", float(self._acid))
         return res.ok
 
-# Increase/decrease power based on arming state
+# Increase/decrease wifi transmit power
+# ready + armed => increase power
+# not ready => decrease power
+# disarm => (no effect)
 class TxPowerTask(Task):
 
     def __init__(self):
         Task.__init__(self, "Tx Power")
+        self.ready = False
+        self.armed = False
 
     def _set(self, level):
         res = subprocess.call("sudo iwconfig wlan0 txpower %u" % level,
@@ -244,10 +249,23 @@ class TxPowerTask(Task):
     def on_start(self):
         return self._set(10)
 
+    def on_arm(self):
+        self.armed = True
+        if self.ready:
+            return self._set(20)
+        return None
+
+    def on_disarm(self):
+        self.armed = False
+
     def on_ready(self):
-        return self._set(20)
+        self.ready = True
+        if self.armed:
+            return self._set(20)
+        return None
 
     def on_not_ready(self):
+        self.ready = False
         return self._set(10)
 
 # Fetch "blessed" configs
