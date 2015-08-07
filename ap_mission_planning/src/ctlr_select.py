@@ -421,7 +421,7 @@ class ControllerSelector(nodeable.Nodeable):
         with self._lock:
             self._ap_status = msg
             self._ap_status_last = rospy.Time.now()
-            if self._current_mode != enums.NO_PAYLOAD_CTRL:
+            if self._current_mode != 0:
                 if self._ap_status.mode != mavbridge_msgs.Status.MODE_AUTO:
                     self.log_warn("autopilot mode (%d) not compatible with waypoint control" \
                                   %self._ap_status.mode)
@@ -534,7 +534,6 @@ if __name__ == '__main__':
     ctlrsel.add_controller(enums.FOLLOW_CTRLR, "follower", True, True)
     ctlrsel.add_controller(enums.LANDING_SEQUENCE_CTRLR, "swarm_landing_sequencer", True, False)
     ctlrsel.add_controller(enums.SWARM_SEARCH_CTRLR, "swarm_searcher")
-    ctlrsel.add_controller(enums.TAKEOFF_SEQUENCE_CTRLR, "swarm_takeoff_sequencer", False, False)
 
     # Start loop
     # TODO: Is this fast enough?
