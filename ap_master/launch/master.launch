@@ -74,7 +74,6 @@
     <remap from="network/load_rally" to="autopilot/load_rally" />
     <remap from="network/load_wp" to="autopilot/load_wp" />
     <remap from="network/recv_weather" to="autopilot/weather_update" />
-    <remap from="network/acs_pose" to="autopilot/acs_pose" />
   </node>
 
   <node name="swarm_tracker" pkg="ap_perception" type="swarm_tracker_node.py" output="screen" args="" >
