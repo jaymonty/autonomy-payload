@@ -8,22 +8,19 @@ WP_SEQUENCE_CTRLR = 1
 FOLLOW_CTRLR = 2
 LANDING_SEQUENCE_CTRLR = 3
 SWARM_SEARCH_CTRLR = 4
-TAKEOFF_SEQUENCE_CTRLR = 5
 
 # Mapping between controller modes and strings for GUI use or debugging
 CTL_MODES = { NO_PAYLOAD_CTRL:        'Autopilot', \
               WP_SEQUENCE_CTRLR:      'Wpt Sequencer', \
               FOLLOW_CTRLR:           'Follower', \
               LANDING_SEQUENCE_CTRLR: 'Land Sequencer', \
-              SWARM_SEARCH_CTRLR:     'Swarm Searcher', \
-              TAKEOFF_SEQUENCE_CTRLR: 'Takeoff Sequencer' }
+              SWARM_SEARCH_CTRLR:     'Swarm Searcher' }
 
 CTL_MODE_VALUES = { 'Autopilot':      NO_PAYLOAD_CTRL, \
                     'Wpt Sequencer':  WP_SEQUENCE_CTRLR, \
                     'Follower':       FOLLOW_CTRLR, \
                     'Land Sequencer': LANDING_SEQUENCE_CTRLR, \
-                    'Swarm Searcher': SWARM_SEARCH_CTRLR, \
-                    'Takeoff Sequencer': TAKEOFF_SEQUENCE_CTRLR }
+                    'Swarm Searcher': SWARM_SEARCH_CTRLR }
 
 # Fixed (per convention) state-specific waypoints
 TAKEOFF_WP = 1       # Airborne
@@ -42,22 +39,19 @@ SWARM_FIXED_FORMATION = 1 # Canned follow positions based on side #
 SWARM_SEARCH = 2          # Conduct a coordinated search of a specified area
 SWARM_SEQUENCE_LAND = 98  # Land in order (low-to-high UAV)
 SWARM_EGRESS = 99         # Egress the swarm for recovery
-SWARM_SEQUENCE_TAKEOFF = 97 # Takeoff in coordinated behavior
 
 # Mapping between swarm behaviors and strings for GUI use or debugging
 SWARM_BHVRS = {  SWARM_STANDBY:         'Standby', \
                  SWARM_FIXED_FORMATION: 'Fixed Follow', \
                  SWARM_SEARCH:          'Swarm Search', \
                  SWARM_SEQUENCE_LAND:   'Sequence Land', \
-                 SWARM_EGRESS:          'Egress', \
-                 SWARM_SEQUENCE_TAKEOFF: 'Sequence Takeoff' }
+                 SWARM_EGRESS:          'Egress' }
 
 SWARM_BHVR_VALUES = { 'Standby':       SWARM_STANDBY, \
                       'Fixed Follow':  SWARM_FIXED_FORMATION, \
                       'Swarm Search':  SWARM_SEARCH, \
                       'Sequence Land': SWARM_SEQUENCE_LAND, \
-                      'Egress':        SWARM_EGRESS, \
-                      'Sequence Takeoff': SWARM_SEQUENCE_TAKEOFF }
+                      'Egress':        SWARM_EGRESS }
 
 # Enumeration for swarming states
 PRE_FLIGHT = 0    # Powered on, going through pre-fllight checks
