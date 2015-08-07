@@ -624,6 +624,7 @@ class SwarmManager(nodeable.Nodeable):
 
             if (statusMsg.mis_cur == enums.SWARM_STANDBY_WP):
                 self._set_swarm_state(enums.SWARM_READY)
+                self._set_swarm_behavior(enums.SWARM_STANDBY)
 
         # Check for autopilot transition out of auto mode while swarming
         # if this happens, set subswarm 0, swarm state standby, and deactivate controller
