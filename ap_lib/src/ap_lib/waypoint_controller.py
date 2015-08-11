@@ -15,10 +15,7 @@ from rospy import rostime
 from ap_lib import nodeable
 from ap_lib import controller
 from autopilot_bridge.msg import LLA
-
-
-# Global variables (constants)
-MIN_REL_ALT = 50.0 # Minimum relative altitude that a controller can order
+import ap_lib.ap_enumerations as enums
 
 
 # Abstract object for wrapping a control-order-issuing ACS ROS object 
@@ -65,10 +62,9 @@ class WaypointController(controller.Controller):
     # safe altitude.  Additional safety checks can be implemented here as required.
     # @param wp: computed waypoint (LLA)
     def publishWaypoint(self, wp):
-        if wp.alt >= MIN_REL_ALT: #verify valid altitude order
+        if wp.alt >= enums.MIN_REL_ALT and wp.alt <= enums.MAX_REL_ALT: #verify valid altitude order
+            self.intent.loc = wp
             self._wpPublisher.publish(wp)
-            self.log_dbug("Sent to (%0.06f, %0.06f, %0.03f" \
-                              %(wp.lat, wp.lon, wp.alt))
         else:
             self.set_active(False)
             self.log_warn("Altitude control mode invalid or invalid altitude order")

@@ -18,7 +18,6 @@ import ap_srvs.srv as apsrv
 
 # Global variables (constants)
 CTRLR_BASENAME = 'controllers' # Default base name for controller topics
-MIN_REL_ALT = 50.0 # Minimum relative altitude that a controller can order
 
 
 # Abstract object for wrapping a control-order-issuing ACS ROS object 
@@ -50,6 +49,7 @@ MIN_REL_ALT = 50.0 # Minimum relative altitude that a controller can order
 #   executeTimedLoop: implementation of the Nodeable class "virtual" function
 #   set_active: "safe" controller activation and deactivation
 #   set_ready_state: "safe" transitions between controller ready and not ready
+#   _sendIntentMessage: publishes the controller's intent message at 1Hz
 #   _sendStatusMessage: publishes the controller's periodic status message
 #   _activate_srv: handler for the controller's *_run service
 #   _pause_srv: handler for the controller's *_pause service
@@ -64,14 +64,17 @@ class Controller(nodeable.Nodeable):
     def __init__(self, nodename, ctrlrID):
         nodeable.Nodeable.__init__(self, nodename)
         self.controllerID = ctrlrID
-        self._sequence = 0
         self.is_ready = False
         self.is_active = False
         self.is_paused = False
+        self.intent = apmsg.VehicleIntent()
+        self.intent.swarm_behavior = ctrlrID
         self._statusStamp = None
         self._sequence = 0
         self._statusPublisher = \
             self.createPublisher("ctlr_status", apmsg.ControllerState, 1)
+        self._intentPublisher = \
+            self.createPublisher("payload_intent", apmsg.VehicleIntent, 1)
         self.createService("%s_run"%nodename, apsrv.SetBoolean, self._activate_srv)
         self.createService("%s_pause"%nodename, apsrv.SetBoolean, self._pause_srv)
 
@@ -94,17 +97,20 @@ class Controller(nodeable.Nodeable):
     # controller is ready and active, the object-specific control
     # method will be called.  Status messages will be published regardless
     def executeTimedLoop(self):
-        if self._statusStamp == None: self._statusStamp = rospy.Time.now()
+        try:
+            if self._statusStamp == None: self._statusStamp = rospy.Time.now()
 
-        # Publish a status message at 1-second intervals
-        time = rospy.Time.now()
-        interval = (time.secs + (time.nsecs / 1e9)) - \
-                   (self._statusStamp.secs + (self._statusStamp.nsecs / 1e9))
-        if interval >= 1.0:
-            self._sendStatusMessage(time)
-        if self.is_ready and self.is_active and not self.is_paused:
-            self.runController()
-
+            # Publish a status message at 1-second intervals
+            time = rospy.Time.now()
+            interval = (time.secs + (time.nsecs / 1e9)) - \
+                       (self._statusStamp.secs + (self._statusStamp.nsecs / 1e9))
+            if interval >= 1.0:
+                self._sendStatusMessage(time)
+                self._sendIntentMessage()
+            if self.is_ready and self.is_active and not self.is_paused:
+                self.runController()
+        except Exception as ex:
+            self.log_warn("%s, Loop Error: %s" % (self.nodeName, str(ex)))
 
     #---------------------------------------------------------
     # Class-specific methods implementing class functionality
@@ -180,6 +186,10 @@ class Controller(nodeable.Nodeable):
         resp = self.set_pause(pause_req.enable)
         return apsrv.SetBooleanResponse(resp)
 
+    # Publishes a VehicleIntent message
+    def _sendIntentMessage(self):
+        if self.is_ready and self.is_active and not self.is_paused:
+            self._intentPublisher.publish(self.intent)
 
     # Publishes a ControllerState message to the controller status topic
     # @param time: timestamp for the message
