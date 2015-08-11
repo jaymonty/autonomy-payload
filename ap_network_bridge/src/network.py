@@ -160,6 +160,15 @@ def sub_swarm_search_waypoint(msg, bridge):
         message.wpMsg_list.append(wpMsg)
     bridge.sendMessage(message)
 
+def sub_intent(msg, bridge):
+    message = messages.VehicleIntent()
+    message.msg_dst = Socket.ID_BCAST_ALL
+    message.swarm_behavior = msg.swarm_behavior
+    message.lat = msg.loc.lat
+    message.lon = msg.loc.lon
+    message.alt = msg.loc.alt
+    bridge.sendMessage(message)
+
 #-----------------------------------------------------------------------
 # Network receive handlers
 # NOTE: Be sure to add a handler in the "main" code below
@@ -542,6 +551,7 @@ if __name__ == '__main__':
         bridge.addSubHandler('send_pose', pilot_msg.Geodometry, sub_pose)
         bridge.addSubHandler('swarm_state', std_msgs.msg.UInt8, sub_swarm_state)
         bridge.addSubHandler('send_swarm_search_waypoint', ap_msg.SwarmSearchWaypointList, sub_swarm_search_waypoint)
+        bridge.addSubHandler('payload_intent', ap_msg.VehicleIntent, sub_intent)
         bridge.addNetHandler(messages.Pose, net_pose,
                              log_success=False)
         bridge.addNetHandler(messages.Heartbeat, net_heartbeat,
