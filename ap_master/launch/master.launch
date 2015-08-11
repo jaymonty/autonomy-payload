@@ -94,6 +94,7 @@
   <group if="$(arg do_ctlr)">
     <node name="follower" pkg="ap_path_planning" type="follower_node.py" output="screen" args="">
       <remap from="follower/payload_waypoint" to="autopilot/payload_waypoint" />
+      <remap from="follower/payload_intent" to="network/payload_intent" />
       <remap from="follower/ctlr_status" to="controllers/ctlr_status" />
       <remap from="follower/swarm_uav_states" to="swarm_tracker/swarm_uav_states" />
       <remap from="follower/follower_set" to="controllers/follower_set" />
@@ -101,6 +102,7 @@
 
     <node name="swarm_landing_sequencer" pkg="ap_path_planning" type="swarm_landing_sequencer.py" output="screen" args="">
       <remap from="swarm_landing_sequencer/payload_waypoint" to="autopilot/payload_waypoint" />
+      <remap from="swarm_landing_sequencer/payload_intent" to="network/payload_intent" />
       <remap from="swarm_landing_sequencer/set_landing" to="autopilot/set_landing" />
       <remap from="swarm_landing_sequencer/wp_getrange" to="autopilot/wp_getrange" />
       <remap from="swarm_landing_sequencer/fpr_param_set" to="autopilot/fpr_param_set" />
@@ -115,16 +117,18 @@
       <remap from="wp_sequencer/payload_waypoint" to="autopilot/payload_waypoint" />
       <remap from="wp_sequencer/ctlr_status" to="controllers/ctlr_status" />
       <remap from="wp_sequencer/acs_pose" to="autopilot/acs_pose" />
+      <remap from="wp_sequencer/payload_intent" to="network/payload_intent" />
       <remap from="wp_sequencer/wp_sequencer_set" to="controllers/wp_sequencer_set" />
     </node>
 
     <node name="swarm_searcher" pkg="ap_path_planning" type="swarm_searcher.py" output="screen" args="" >
-	<remap from="swarm_searcher/swarm_uav_states" to="swarm_tracker/swarm_uav_states" />
-	<remap from="swarm_searcher/payload_waypoint" to="autopilot/payload_waypoint" />
-	<remap from="swarm_searcher/ctlr_status" to="controllers/ctlr_status" />
-	<remap from="swarm_searcher/recv_swarm_search_waypoint" to="network/recv_swarm_search_waypoint" />
-	<remap from="swarm_searcher/swarmSearch_setup" to="swarm_manager/swarmSearch_setup" />
-	<remap from="swarm_searcher/acs_pose" to="autopilot/acs_pose" />
+    	<remap from="swarm_searcher/swarm_uav_states" to="swarm_tracker/swarm_uav_states" />
+    	<remap from="swarm_searcher/payload_waypoint" to="autopilot/payload_waypoint" />
+    	<remap from="swarm_searcher/payload_intent" to="network/payload_intent" />
+    	<remap from="swarm_searcher/ctlr_status" to="controllers/ctlr_status" />
+    	<remap from="swarm_searcher/recv_swarm_search_waypoint" to="network/recv_swarm_search_waypoint" />
+    	<remap from="swarm_searcher/swarmSearch_setup" to="swarm_manager/swarmSearch_setup" />
+    	<remap from="swarm_searcher/acs_pose" to="autopilot/acs_pose" />
     </node>
 
     <node name="ctlr_selector" pkg="ap_mission_planning" type="ctlr_select.py" output="screen" args="" >
