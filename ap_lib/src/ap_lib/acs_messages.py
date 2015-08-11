@@ -354,6 +354,32 @@ class Pose(Message):
         self.vay = fields[11] / 1e02
         self.vaz = fields[12] / 1e02
 
+class VehicleIntent(Message):
+    msg_type = 0x02
+    msg_fmt = '>blll'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.swarm_behavior = None # Swarm Behavior publishing this intent
+        self.lat = None		# Decimal degrees (e.g. 35.123456)
+        self.lon = None		# Decimal degrees (e.g. -120.123456)
+        self.alt = None		# Decimal meters MSL (WGS84)
+
+    def _pack(self):
+        tupl = (int(self.swarm_behavior),
+                int(self.lat * 1e07),
+                int(self.lon * 1e07),
+                int(self.alt * 1e03))
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.swarm_behavior = int(fields[0])
+        self.lat = fields[1] / 1e07
+        self.lon = fields[2] / 1e07
+        self.alt = fields[3] / 1e03
+
 class Heartbeat(Message):
     msg_type = 0x80
     msg_fmt = '>L'
