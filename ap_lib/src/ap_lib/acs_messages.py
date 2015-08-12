@@ -924,6 +924,56 @@ class NetworkWpCmd(Message):
             self.wpMsg_list.append(_wpMsg)
             offset += type(self).msg_fmt_wp_sz
 
+#Message to request the previous N autopilot messages.
+#A second field, since_seq, is intended to signal that the 
+#requestor already has up to that sequence number.  If that
+#sequence number is arrived at before processing N autopilot
+#messages, the request doesn't want the other msgs (already has them)
+class ReqPrevNMsgsAP(Message):
+    msg_type = 0xA0
+    msg_fmt = '>LB3x'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.since_seq = 0
+        self.n = 0
+
+    def _pack(self):
+        tupl = (int(self.since_seq), int(self.n))
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.since_seq = fields[0]
+        self.n = fields[1]
+
+#ACS Message containing a previous autopilot message.
+class PrevMsgAP(Message):
+    msg_type = 0xA1
+    msg_fmt = '>LL92s'  
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.final_seq = 0  #Each message states the seq number at the 
+                            #end of the msg queue so the requestor knows
+                            #how many messages are available, even if
+                            #the requestor does not receive all messages
+                            #in a given series of responses
+        self.seq = 0
+        self.msg = ""
+
+    def _pack(self):
+        tupl = (int(self.final_seq), int(self.seq), str(self.msg))
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.final_seq = fields[0]
+        self.seq = fields[1]
+        self.msg = fields[2].decode('utf-8').strip(chr(0x0))
+
 class AutopilotReboot(Message):
     msg_type = 0xFD
 
