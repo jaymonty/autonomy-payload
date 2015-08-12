@@ -308,7 +308,7 @@ def net_swarm_behavior(message, bridge):
                            setting=message.ldg_wpt)
 
     elif type(message) == messages.SwarmSearch:
-        bridge.callService('run_swarm_search', ap_srv.SetSwarmSearchRequest, \
+        bridge.callService('run_swarm_search', ap_srv.SetSwarmSearch, \
                            masterSearcherID=message.masterSearcherID, \
                            searchAlgoEnum=message.searchAlgoEnum, lat=message.lat, lon=message.lon, \
                            searchAreaLength=message.searchAreaLength, searchAreaWidth=message.searchAreaWidth)
