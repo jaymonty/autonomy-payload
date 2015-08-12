@@ -3,7 +3,7 @@
 # Standard Python imports
 from argparse import ArgumentParser
 import os
-import sys
+import sys, time
 
 # General ROS imports
 import rospy
@@ -233,6 +233,55 @@ def net_weather_update(message, bridge):
     msg.wind_mph = message.wind_speed
     msg.wind_direction = message.wind_direction
     bridge.publish('recv_weather', msg, latched=True)
+
+def net_req_prev_n_ap_msgs(message, bridge):
+    def req_response_thread():
+        try:
+            ret = bridge.callService('ap_msg_queue_last_n',
+               pilot_srv.ReqPrevNMsgs, n=message.n,since_seq=message.since_seq)
+        except Exception as e:
+            net_req_prev_n_ap_msgs.active = False
+            raise e
+            return
+
+        final_seq = 0
+        if ret.msgs != []:
+            final_seq = ret.msgs[0].seq
+
+        response = messages.PrevMsgAP()
+        response.msg_dst = Socket.ID_BCAST_ALL
+        # Populate with default values
+        response.msg_secs = 0
+        response.msg_nsecs = 0
+
+        response.final_seq = final_seq
+    
+        for m in ret.msgs:
+            response.seq = m.seq
+            response.msg = m.text
+
+            try:
+                bridge.sendMessage(response)
+            except Exception as e:
+                net_req_prev_n_ap_msgs.active = False
+                raise e
+                return
+
+            #rate-limit this traffic
+            time.sleep(0.05)
+
+        net_req_prev_n_ap_msgs.active = False
+    def error():
+        net_req_prev_n_ap_msgs.active = False
+
+    #No need to throw exception if active, we actually expect multiple
+    #GCSs to attempt to request msgs from the same plane in the near future.
+    #Just assuming each GCS is after the same messages if the requests occur
+    #simultaneously.  The broadcast responses will get to all GCSs.
+    if net_req_prev_n_ap_msgs.active is False:
+        net_req_prev_n_ap_msgs.active = True
+        bridge.doInThread(req_response_thread, error)
+net_req_prev_n_ap_msgs.active=False
 
 def net_land(message, bridge):
     msg = std_msgs.msg.Empty()
@@ -586,6 +635,7 @@ if __name__ == '__main__':
                              log_success=False)
         bridge.addNetHandler(messages.WeatherData, net_weather_update)
         bridge.addNetHandler(messages.NetworkWpCmd, net_waypoint_command)
+        bridge.addNetHandler(messages.ReqPrevNMsgsAP, net_req_prev_n_ap_msgs)
 
         # Run the loop (shouldn't stop until node is shut down)
         print "\nStarting network bridge loop...\n"
