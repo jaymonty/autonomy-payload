@@ -31,7 +31,7 @@
 
   <!-- Core Nodes -->
 
-  <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--device $(arg ap_dev) --baudrate 1500000 --serial-relief 1024 -m acs -m file -m fpr -m slave -m wp $(arg gps_arg)" />
+  <node name="autopilot" pkg="autopilot_bridge" type="mavbridge.py" output="screen" args="--device $(arg ap_dev) --baudrate 1500000 --serial-relief 1024 -m acs -m file -m fpr -m slave -m wp -m ap_msg_queue $(arg gps_arg)" />
 
   <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" >
     <remap from="safety/heartbeat" to="autopilot/heartbeat_onboard" />
@@ -74,6 +74,7 @@
     <remap from="network/load_rally" to="autopilot/load_rally" />
     <remap from="network/load_wp" to="autopilot/load_wp" />
     <remap from="network/recv_weather" to="autopilot/weather_update" />
+    <remap from="network/ap_msg_queue_last_n" to="autopilot/ap_msg_queue_last_n" />
   </node>
 
   <node name="swarm_tracker" pkg="ap_perception" type="swarm_tracker_node.py" output="screen" args="" >
