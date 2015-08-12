@@ -135,8 +135,7 @@ class SwarmManager(nodeable.Nodeable):
                               self._process_subswarm_update)
         self.createSubscriber("status", apmsgs.Status, \
                               self._process_autopilot_status)
-        self.createSubscriber("deactivate_swarm_search", stdmsg.UInt8, \
-                              self._process_deactivate_swarm_search)
+
 
     # Establishes the publishers for the SwarmManager object.  The object
     # publishes to the set_selector_mode topic to initiate control as
@@ -152,7 +151,7 @@ class SwarmManager(nodeable.Nodeable):
         self._swarm_behavior_publisher = \
             self.createPublisher("swarm_behavior", stdmsg.UInt8, 1, True)
         self._swarm_search_publisher = \
-            self.createPublisher("swarmSearch_setup", apmsg.SwarmSearchOrderStamped, 1)
+            self.createPublisher("swarm_search_setup", apmsg.SwarmSearchOrderStamped, 1)
         self._wp_goto_publisher = \
             self.createPublisher("waypoint_goto", stdmsg.UInt16, 1, False)
 
@@ -175,7 +174,7 @@ class SwarmManager(nodeable.Nodeable):
                            self._process_set_sequence_land)
         self.createService("run_swarm_fixed_formation", apsrv.SetSwarmFormation, \
                            self._process_set_fixed_formation)
-        self.createService("run_swarm_search", apsrv.SetSwarmSearchRequest, \
+        self.createService("run_swarm_search", apsrv.SetSwarmSearch, \
                            self._process_set_swarm_search)
 
     # Establishes the service proxies for the SwarmManager object.
@@ -442,7 +441,8 @@ class SwarmManager(nodeable.Nodeable):
     def _process_set_swarm_search(self, searchSrv):
         success = self._process_set_swarm_behavior(searchSrv, \
                        behaviorID = enums.SWARM_SEARCH)
-        return apsrv.SetSwarmSearchRequestResponse(success.result)
+        return apsrv.SetSwarmSearchResponse(success.result)
+
 
     # Handle swarm behavior activation service requests.  The method can
     # activate a parameter-specified behavior (the activateSrv method
@@ -607,10 +607,6 @@ class SwarmManager(nodeable.Nodeable):
                 self.log_warn('Exception while getting  data for waypoint # ' +\
                               str(statusMsg.mis_cur) + ': ' + str(ex))
 
-    def _process_deactivate_swarm_search(self, deactivateMsg):
-        self._deactivate_swarm_searcher = apsrv.SetInteger
-        self._deactivate_swarm_searcher.setting = enums.SWARM_STANDBY
-        self._process_set_swarm_behavior(self._deactivate_swarm_searcher)
 
 #-----------------------------------------------------------------------
 # Main code
