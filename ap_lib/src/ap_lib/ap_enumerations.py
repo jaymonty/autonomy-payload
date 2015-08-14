@@ -35,6 +35,8 @@ LAND_B_WP = 18       # First WP in the west-to-east (RW10) landing sequence
 # Default Values. These get updated on startup and again on flight ready
 MIN_REL_ALT = 70.0  # Minimum relative altitude that a controller can order
 MAX_REL_ALT = 500.0 # Maximum relative altitude that a controller can order
+MAX_ABS_LAT = 60.0  # Maximum absolute value that is commandable to lat
+MAX_ABS_LON = 180.0 # Maximum absolute value that is commandable to lon
 
 # Enumeration for available swarm behaviors
 SWARM_STANDBY = 0         # No swarm behavior (set no payload control)

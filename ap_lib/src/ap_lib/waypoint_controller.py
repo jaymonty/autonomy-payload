@@ -62,10 +62,11 @@ class WaypointController(controller.Controller):
     # safe altitude.  Additional safety checks can be implemented here as required.
     # @param wp: computed waypoint (LLA)
     def publishWaypoint(self, wp):
-        if wp.alt >= enums.MIN_REL_ALT and wp.alt <= enums.MAX_REL_ALT: #verify valid altitude order
+        #verify valid LLA order
+        if wp.alt >= enums.MIN_REL_ALT and wp.alt <= enums.MAX_REL_ALT \
+           and abs(wp.lon) < enums.MAX_ABS_LON and abs(wp.lat) < enums.MAX_ABS_LAT:
             self.intent.loc = wp
             self._wpPublisher.publish(wp)
         else:
             self.set_active(False)
             self.log_warn("Altitude control mode invalid or invalid altitude order")
-
