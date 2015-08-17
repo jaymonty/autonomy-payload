@@ -200,16 +200,16 @@ class FlightStatus(Message):
         self.ok_fen = None  # Boolean: Fence verified?
         self.ok_ral = None  # Boolean: Rally verified?
         self.ok_wp = None   # Boolean: Waypoints verified?
-        # These are the remainder, starting with the first 'B'
-        # Next byte used to be was GPS sats, now 4 bits swarm_state, 4 unused
-        self.swarm_state = 0 # Value 0-6
+        # Next byte: 4 bits (swarm state), 2 bits (fence), 2 bits UNUSED
+        self.swarm_state = 0    # Swarm state (0 = preflight)
+        self.fence_state = 2    # Fence state (2 = disabled)
+        # These are the remainder, starting with the second 'B'
         self.batt_rem = None	# Battery % remaining (int, 0-100)
         self.batt_vcc = None	# Battery Voltage (int, mV)
         self.airspeed = None	# Airspeed (float, m/s)
-        self.alt_rel = None	# AGL (int, millimeters)
-        self.mis_cur = None	# Current mission (waypoint) index (0-65535)
-        # Unused byte
-        self.swarm_behavior = 0  # Swarm behavior (follow, standby, etc.)
+        self.alt_rel = None	    # AGL (int, millimeters)
+        self.mis_cur = None	    # Current mission (waypoint) index (0-65535)
+        self.swarm_behavior = 0 # Swarm behavior (follow, standby, etc.)
         self.ctl_mode = None	# Controller mode (byte, but only use 0-16)
         self.ctl_ready = [False] * (16 + 1)   # Ctlr ready flags (bit array)
                                 # (Index 1 is low bit, 16 is high bit,
@@ -232,6 +232,9 @@ class FlightStatus(Message):
                        | (0x0002 & _bool16(self.ok_ral)) \
                        | (0x0001 & _bool16(self.ok_wp)) \
                        & 0xffff  # Zeroize any unused bits
+        swarm_fence = ((self.swarm_state & 0x0F) << 4) \
+                    | ((self.fence_state & 0x03) << 2) \
+                    & 0xfc  # Zeroize any unused bits
         batt_rem = 255
         if 0 <= self.batt_rem <= 100:  # Set invalid values to max unsigned
             batt_rem = self.batt_rem
@@ -243,7 +246,7 @@ class FlightStatus(Message):
             if self.ctl_ready[bit]:
                 ctl_ready_bits |= 1<<(bit-1)
         tupl = (mode_and_flags,
-                ((self.swarm_state << 4) & 0xF0), # left 4 (0 out rt 4 for now)
+                swarm_fence,
                 int(batt_rem),
                 int(batt_vcc),
                 int(self.airspeed * 1e02),  # TODO: Are these large enough?
@@ -276,7 +279,9 @@ class FlightStatus(Message):
         self.ok_fen = bool(modeflag & 0x0004)
         self.ok_ral = bool(modeflag & 0x0002)
         self.ok_wp = bool(modeflag & 0x0001)
-        self.swarm_state = int((fields.pop(0) & 0xF0) >>4)
+        swarmfence = fields.pop(0)
+        self.swarm_state = int((swarmfence >> 4) & 0x0F)
+        self.fence_state = int((swarmfence >> 2) & 0x03)
         self.batt_rem = fields.pop(0)
         if self.batt_rem == 255:  # Account for invalid values
             self.batt_rem = -1
