@@ -41,6 +41,7 @@ def timed_status(bridge):
     message.ok_pwr = False
     message.swarm_state = timed_status.swarm_state
     message.swarm_behavior = timed_status.swarm_behavior
+    message.fence_state = 2
     message.batt_rem = 0
     message.batt_vcc = 0
     message.batt_cur = 0
@@ -71,6 +72,7 @@ def timed_status(bridge):
         message.ok_ins = timed_status.f_status.ins_ok
         message.ok_mag = timed_status.f_status.mag_ok
         message.ok_pwr = timed_status.f_status.pwr_ok
+        message.fence_state = timed_status.f_status.fence_status
         message.batt_rem = timed_status.f_status.pwr_batt_rem
         message.batt_vcc = timed_status.f_status.pwr_batt_vcc
         message.batt_cur = timed_status.f_status.pwr_batt_cur
