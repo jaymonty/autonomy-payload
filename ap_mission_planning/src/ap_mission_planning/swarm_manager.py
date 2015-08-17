@@ -83,6 +83,14 @@ class SwarmManager(nodeable.Nodeable):
     TIMING_DELAY = 2.0        # Delay time to allow things to "take"
     LAUNCH_ALT = 20000.0      # AGL (m * 1000) altitude used to detect "launch"
 
+    AIRBORNE_STATES = set()
+    AIRBORNE_STATES.add(enums.INGRESS)
+    AIRBORNE_STATES.add(enums.SWARM_READY)
+    AIRBORNE_STATES.add(enums.SWARM_ACTIVE)
+    AIRBORNE_STATES.add(enums.EGRESS)
+    AIRBORNE_STATES.add(enums.LANDING)
+    AIRBORNE_STATES.add(enums.AP_ERROR)
+
 
     # Class initializer initializes class variables.
     # This assumes that the object is already running within an initialized
@@ -588,24 +596,26 @@ class SwarmManager(nodeable.Nodeable):
 
         self._crnt_wpt_id = statusMsg.mis_cur
 
-        if (self._swarm_state == enums.LANDING):
+        # Will shift to "on deck" even if a UAV "lands" abnormally (e.g., crash)
+        if (self._swarm_state in SwarmManager.AIRBORNE_STATES):
             if (statusMsg.as_read <= 5.0):
                 self._set_swarm_state(enums.ON_DECK)
 
-        else:
-            try:
-                if not statusMsg.mis_cur in self._waypoint_types:
-                    wpt = self._wp_getrange_srv_proxy(statusMsg.mis_cur, \
-                                                      statusMsg.mis_cur).points[0]
-                    self._waypoint_types[statusMsg.mis_cur] = wpt.command
+#        else:
+        try:
+            if not statusMsg.mis_cur in self._waypoint_types:
+                wpt = self._wp_getrange_srv_proxy(statusMsg.mis_cur, \
+                                                  statusMsg.mis_cur).points[0]
+                self._waypoint_types[statusMsg.mis_cur] = wpt.command
 
-                if (self._waypoint_types[statusMsg.mis_cur] == enums.WP_TYPE_LAND) and \
-                   (self._swarm_state != enums.ON_DECK):
-                    self._set_swarm_state(enums.LANDING)
-                    self._set_subswarm(0)
-            except Exception as ex:
-                self.log_warn('Exception while getting  data for waypoint # ' +\
-                              str(statusMsg.mis_cur) + ': ' + str(ex))
+            if (self._waypoint_types[statusMsg.mis_cur] == enums.WP_TYPE_LAND) and \
+               (self._swarm_state != enums.ON_DECK) and \
+               (self._swarm_state != enums.LANDING):
+                self._set_swarm_state(enums.LANDING)
+                self._set_subswarm(0)
+        except Exception as ex:
+            self.log_warn('Exception while getting  data for waypoint # ' +\
+                          str(statusMsg.mis_cur) + ': ' + str(ex))
 
 
 #-----------------------------------------------------------------------
