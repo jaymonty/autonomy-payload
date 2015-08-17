@@ -67,7 +67,7 @@ if __name__ == '__main__':
             ready_string = ''
             for b in message.ctl_ready[1:]:
                 ready_string += "%u" % int(b)
-            print "\tNm: %s Su: %u Mo: %u Wp: %u Fl: %u%u%u%u%u%u%u%u%u%u%u%u Br: %d Bv: %d As: %f Ar: %d Sw: %u Cm: %u Cr: %s" % \
+            print "\tNm: %s Su: %u Mo: %u Wp: %u Fl: %u%u%u%u%u%u%u%u%u%u%u%u Br: %d Bv: %d As: %f Ar: %d Sw: %u Fn: %u Cm: %u Cr: %s" % \
                 (message.name, message.msg_sub, message.mode,
                  int(message.mis_cur), int(message.armed), int(message.ok_ahrs),
                  int(message.ok_as), int(message.ok_gps), int(message.ok_ins),
@@ -76,7 +76,7 @@ if __name__ == '__main__':
                  int(message.ok_ral), int(message.ok_wp),
                  message.batt_rem, message.batt_vcc,
                  message.airspeed, message.alt_rel,
-                 message.swarm_state,
+                 message.swarm_state, message.fence_state,
                  message.ctl_mode, ready_string)
 
         elif isinstance(message, messages.WeatherData):
