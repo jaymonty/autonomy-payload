@@ -69,7 +69,7 @@ LANDING = 6       # Flight crew has control for landing
 ON_DECK = 7       # Aircraft has landed
 POST_FLIGHT = 8   # Post landing checks (will probably not be seen)
 AP_ERROR = 9      # Error state (probably due to wrong autopilot mode)
-
+LAST_STATE = 15   # CANNOT EXCEED 15; network message field is a nibble
 
 # Mapping between swarm states and strings for GUI use or debugging
 STATE_STRINGS = { PRE_FLIGHT:   'Preflight', \
