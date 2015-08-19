@@ -194,7 +194,9 @@ class SwarmLandingSequencer(wp_controller.WaypointController):
             # Sequence computed, but need to send the transit waypoint
             elif self._controller_state == START_TRANSIT:
                 self.publishWaypoint(self._wp_msg)
-                self._controller_state = IN_TRANSIT 
+                self._controller_state = IN_TRANSIT
+                #tell the autopilot we're about to land
+                self._ldg_start_publisher.publish(True)
                 self.log_dbug("transit to landing stack location initiated")
                 return
 
@@ -227,6 +229,7 @@ class SwarmLandingSequencer(wp_controller.WaypointController):
                 if self._leaderID == self._ownID:
                     ldg_wp_cmd = stdmsg.UInt16()
                     ldg_wp_cmd.data = self._ldgWptIndex
+                    #make dang sure the autopilot knows we're landing
                     self._ldg_start_publisher.publish(True)
                     self._ldg_wp_publisher.publish(ldg_wp_cmd)
                     self._controller_state = ON_FINAL
