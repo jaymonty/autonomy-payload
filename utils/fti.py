@@ -266,6 +266,10 @@ class UAVListWidget(QListWidget):
         mbx.setDefaultButton(QMessageBox.No)
         return (mbx.exec_() == QMessageBox.Yes)
 
+    # Pop up a box with text entry
+    def _inputBox(self, title, text):
+        return QInputDialog.getText(self, title, text)
+
     # Repeatedly send a message (in lieu of reliability)
     def _sendMessage(self, msg):
         for i in range(self.SEND_RETRY):
@@ -923,9 +927,17 @@ class UAVListWidget(QListWidget):
 
 
     def handleConfig(self, stack, alt):
-        item = self._checkItemState([UAVListWidgetItem.STATE_READY])
+        item = self._checkItemState([UAVListWidgetItem.STATE_READY,
+                                     UAVListWidgetItem.STATE_FLYING,
+                                     UAVListWidgetItem.STATE_PROBLEM])
         if item is None:
             return
+
+        if item.getState() != UAVListWidgetItem.STATE_READY:
+            val, ok = self._inputBox('WARNING!!!',
+                'WARNING: Reconfiguring a FLYING plane. Type "yes" to continue:')
+            if not ok or val != 'yes':
+                return
 
         try:
             mc_alt = int(alt)
@@ -933,6 +945,9 @@ class UAVListWidget(QListWidget):
             if mc_alt < enums.BASE_REL_ALT:
                 raise Exception("Please supply a valid altitude above %sm"
                     % str(enums.BASE_REL_ALT - 1))
+            if mc_alt > enums.MAX_REL_ALT:
+                raise Exception("Please supply a valid altitude below %sm"
+                    % str(enums.MAX_REL_ALT + 1))
 
             mc_stack = int(stack)
             if mc_stack <= 0:
