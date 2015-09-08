@@ -40,7 +40,7 @@ class MsgTypeStat(object):
             self.roll_bins = self.roll_bins[extra_bins:]
 
     def report(self, t=time.time()):
-        return "%2X: %1u/%3.1f/%3.1f/%5u/%4.1f" % \
+        return "%2X: %2u/%4.1f/%4.1f/%6u/%4.1f" % \
                (self.msg_type,
                 self.period,
                 sum(self.roll_bins) / float(len(self.roll_bins)),
@@ -138,6 +138,7 @@ if __name__ == '__main__':
             continue
 
         # Update stats
+        #if msg.msg_src > 100 or msg.msg_type > 1: continue
         if msg.msg_src not in stats:
             stats[msg.msg_src] = MsgStats(msg.msg_src, opts.rolling)
         stats[msg.msg_src].update(msg.msg_type, t)

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from optparse import OptionParser
 import os
@@ -72,6 +72,8 @@ if __name__ == '__main__':
             if id not in swarm_stats:
                 swarm_stats[id] = VehicleStats(id, time.time())
             swarm_stats[id].update(message)
+        else:
+            time.sleep(0.1)
 
         del swarm[:]
         time_now = time.time()
@@ -88,21 +90,34 @@ if __name__ == '__main__':
             swarm.sort(key=lambda vehicle: vehicle.id)
 
             # Show summary counts
-            print ("Powered: \t %u" % len(swarm))
-            print ("Aloft: \t\t %u\n" % len([v for v in swarm if v.status.alt_rel > 25.]))
-            print ("RTL: \t\t %d" % len([v for v in swarm if v.status.mode is enums.RTL]))
-            print ("GUIDED: \t %d\n" % len([v for v in swarm if v.status.mode is enums.GUIDED]))
+            print ("TOTALS")
+            print ("Powered: \t %2u" % len(swarm))
+            print ("Ready: \t\t %2u" % len([v for v in swarm if v.status.ready]))
+            print ("Aloft: \t\t %2u" % len([v for v in swarm if v.status.alt_rel > 25.]))
+
+            print ("\nIN-AIR MODES")
+            print ("RTL: \t\t %2d" % len([v for v in swarm if v.status.mode is enums.RTL and v.status.alt_rel > 25.]))
+            print ("GUIDED: \t %2d" % len([v for v in swarm if v.status.mode is enums.GUIDED and v.status.alt_rel > 25.]))
+            print ("MANUAL: \t %2d" % len([v for v in swarm if v.status.mode is enums.MANUAL and v.status.alt_rel > 25.]))
+            print ("disarmed: \t %2d" % len([v for v in swarm if not v.status.armed and v.status.alt_rel > 25.]))
 
             # Show landing planes
-            if len([v for v in swarm if v.status.mis_cur == 17]) > 0:
-                print("LAND A")
+            swarm.sort(key=lambda vehicle: vehicle.status.alt_rel)
+            def isLanding(uav, l, h):
+                if uav is None: return False
+                if uav.status is None: return False
+                if uav.status.mis_cur is None: return False
+                if uav.status.alt_rel is None: return False
+                return bool(uav.status.alt_rel > 5.0 and l <= uav.status.mis_cur <= h)
+            if len([v for v in swarm if isLanding(v, 13, 17)]) > 0:
+                print("\nLAND A")
             [print("UAV %s, altitude: %.3f" % (uav.id, uav.status.alt_rel))
-                for uav in swarm if uav.status.alt_rel > 5 and uav.status.mis_cur == 17]
+                for uav in swarm if isLanding(uav, 13, 17)]
 
-            if len([v for v in swarm if v.status.mis_cur == 23]) > 0:
-                print("LAND A")
+            if len([v for v in swarm if isLanding(v, 19, 23)]) > 0:
+                print("\nLAND B")
             [print("Aircraft %s, altitude: %.3f" %(uav.id, uav.status.alt_rel))
-                for uav in swarm if uav.status.alt_rel > 5 and uav.status.mis_cur == 23]
+                for uav in swarm if isLanding(uav, 19, 23)]
 
             print("")
             # Show battery level info for aircraft aloft
@@ -111,7 +126,7 @@ if __name__ == '__main__':
                 if 30 <= swarm[ndx].status.batt_rem < 50:
                     print ("\033[1;33mBATT ALERT: %d for UAV %d\033[0m" % \
                         (swarm[ndx].status.batt_rem, swarm[ndx].id))
-                elif 30 > swarm[ndx].status.batt_rem > 20:
+                elif 0 < swarm[ndx].status.batt_rem < 30:
                     print ("\033[1;31mBATT ALERT: %d for UAV %d\033[0m" % \
                         (swarm[ndx].status.batt_rem, swarm[ndx].id))
 
