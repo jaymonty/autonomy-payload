@@ -535,6 +535,11 @@ def net_mission_config(message, bridge):
             # Clean up temp file
             os.remove(temp_file)
 
+        # Make sure waypoint 1 is reloaded on autopilot
+        msg = std_msgs.msg.UInt16()
+        msg.data = 1
+        bridge.publish('recv_waypoint_goto', msg, latched=True)
+
         # Reset active flag
         net_mission_config.active = False
 
