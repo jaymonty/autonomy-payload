@@ -19,6 +19,7 @@ import time
 import rospy
 
 # Import ROS message and service types
+import std_msgs
 from autopilot_bridge import msg as autopilot_msg
 from autopilot_bridge import srv as autopilot_srv
 from ap_msgs import msg as payload_msg
@@ -361,6 +362,17 @@ class VerifyConfigTask(Task):
             else:
                 rospy.logwarn("Failed to verify " + f)
                 result = False
+
+        # Make sure waypoint 1 is correctly loaded into autopilot memory
+        if rospy.get_param('ok_wp'):
+            pub = rospy.Publisher('autopilot/waypoint_goto',
+                                  std_msgs.msg.UInt16,
+                                  queue_size=1,
+                                  latch=True)
+            msg = std_msgs.msg.UInt16()
+            msg.data = 1
+            pub.publish(msg)
+
         return result
 
 #-----------------------------------------------------------------------
