@@ -37,5 +37,5 @@ if __name__ == '__main__':
         subSwarmID = int(rospy.get_param("subswarm_id"))
 
     swarm_tracker = SwarmTracker(int(args.acft), subSwarmID, NODE_BASENAME)
-    swarm_tracker.runAsNode(10.0, [], [], [])
+    swarm_tracker.runAsNode(10.0)
 
