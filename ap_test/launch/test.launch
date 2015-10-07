@@ -1,0 +1,12 @@
+<!-- Launch file for autonomy_payload test suite -->
+
+<launch>
+
+  <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" >
+    <!-- <remap from="safety/heartbeat" to="autopilot/heartbeat_onboard" /> -->
+  </node>
+
+  <test test-name="test_safety" pkg="ap_test" type="test_safety.py" time-limit="10.0" args="" />
+
+
+</launch>
