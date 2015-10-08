@@ -190,8 +190,6 @@ class NetworkBridge(object):
         except Exception as ex:
             raise ex
 
-        self.swarm_behavior = 0
-
         # Initialize subswarm ID - socket library can filter messages destined for
         # subswarms; need to keep socket synced with aircraft's subswarm ID
         try:
