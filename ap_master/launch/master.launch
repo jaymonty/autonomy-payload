@@ -35,6 +35,8 @@
 
   <node name="safety" pkg="ap_safety_monitor" type="safety.py" output="screen" >
     <remap from="safety/heartbeat" to="autopilot/heartbeat_onboard" />
+    <remap from="safety/gnd_heartbeat" to="autopilot/heartbeat_ground" />
+    <remap from="safety/ap_pose" to="autopilot/acs_pose" />
   </node>
 
   <node name="network" pkg="ap_network_bridge" type="network.py" output="screen" args="" >
