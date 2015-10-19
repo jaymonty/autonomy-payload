@@ -315,7 +315,7 @@ class FetchConfigTask(Task):
                     time.sleep(3)
                 except Exception as ex:
                     rospy.logwarn("Exception fetching %s: %s" % \
-                                  (f, str(ex.args[0])))
+                                  (f, str(ex)))
             if res != 0:
                 rospy.logwarn("Failed to fetch " + f)
                 result = False
@@ -337,7 +337,7 @@ class VerifyConfigTask(Task):
             res = srv(f_name)
             return res.ok
         except Exception as ex:
-            rospy.logwarn("Error verifying %s: %s" % (f, str(ex.args[0])))
+            rospy.logwarn("Error verifying %s: %s" % (f, str(ex)))
 
     def on_status(self):
         result = True

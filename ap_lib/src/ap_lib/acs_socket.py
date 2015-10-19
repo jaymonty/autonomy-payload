@@ -260,7 +260,7 @@ class Socket():
             else:
                 self._sock.bind(('', self._port))
         except Exception as ex:
-            raise Exception("Socket init error: %s" % ex.args[0])
+            raise Exception("Socket init error: " + str(ex))
 
     # Get and set subswarm ID in Pythonic property style
     # NOTE: Apparently must reference internally by property name,
@@ -306,7 +306,7 @@ class Socket():
 
         # Print any exception for user's awareness
         except Exception as ex:
-            print("ACS send: " + str(ex.args[0]))
+            print("ACS send: " + str(ex))
             return False
 
     # Resend any timed out messages
@@ -485,6 +485,6 @@ class Socket():
             
         # Any other unhandled conditions are printed for our awareness
         except Exception as ex:
-            print("ACS recv: " + str(ex.args[0]))
+            print("ACS recv: " + str(ex))
             return False
 

@@ -108,7 +108,7 @@ class Message(object):
             msg_type, msg_sub, msg_src, msg_dst, msg_seq, msg_ack, msg_secs, msg_msecs = \
                 struct.unpack_from(Message.hdr_fmt, data, 0)
         except Exception as ex:
-            raise Exception("bad header: %s" % ex.args[0])
+            raise Exception("bad header: " + str(ex))
 
         # Create corresponding subtype
         typelist = {sc.msg_type : sc for sc in Message.__subclasses__()}
@@ -131,7 +131,7 @@ class Message(object):
         try:
             msg._unpack(data[Message.hdr_size:])
         except Exception as ex:
-            raise Exception("bad payload: %s" % ex.args[0])
+            raise Exception("bad payload: " + str(ex))
 
         return msg
 

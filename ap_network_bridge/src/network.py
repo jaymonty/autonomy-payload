@@ -427,7 +427,7 @@ def net_calibrate(message, bridge):
             elif message.index == 2:
                 timed_status.calgyros_done = bool(res.ok)
         except Exception as ex:
-            raise Exception("net_calibrate: " + str(ex.args[0]))
+            raise Exception("net_calibrate: " + str(ex))
         finally:
             net_calibrate.active = False
     def error():
@@ -648,6 +648,6 @@ if __name__ == '__main__':
         print "\nStarting network bridge loop...\n"
         bridge.runLoop(50)
     except Exception as ex:
-        print "NETWORK BRIDGE FATAL ERROR: " + str(ex.args[0])
+        print "NETWORK BRIDGE FATAL ERROR: " + str(ex)
         # If rospy happened to get initialized before the error, log there too
-        rospy.logfatal(str(ex.args[0]))
+        rospy.logfatal(str(ex))
