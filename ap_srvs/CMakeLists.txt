@@ -8,6 +8,9 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   std_msgs
+  nav_msgs
+  sensor_msgs
+  ap_msgs
   message_generation
 )
 
@@ -15,14 +18,17 @@ add_service_files(
   FILES
   SetBoolean.srv
   SetInteger.srv
-  SetSwarmSearch.srv
-  SetSwarmFormation.srv
+  SetBehavior.srv
+  RegisterBehavior.srv
 )
 
 ## Generate added messages and services with any dependencies listed here
 generate_messages(
   DEPENDENCIES
   std_msgs
+  nav_msgs
+  sensor_msgs
+  ap_msgs
 )
 
 ###################################

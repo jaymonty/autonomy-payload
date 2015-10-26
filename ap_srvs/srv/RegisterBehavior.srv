@@ -1,0 +1,5 @@
+uint8 id          # Unique ID for this behavior
+string name       # Unique name for this service
+bool wpt_ctrl     # True if the behavior uses the infinite loiter waypoint
+---
+bool result
