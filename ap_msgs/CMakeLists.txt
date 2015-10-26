@@ -23,19 +23,14 @@ add_message_files(
   SwarmStateStamped.msg
   SwarmVehicleState.msg
   WaypointListStamped.msg
-  FormationOrder.msg
-  FormationOrderStamped.msg
-  SwarmFormationOrder.msg
-  SwarmFormationOrderStamped.msg
-  ControllerState.msg
-  ControllerGroupState.msg
-  ControllerGroupStateStamped.msg
+  BehaviorState.msg
+  BehaviorGroupState.msg
+  BehaviorGroupStateStamped.msg
+  BehaviorParameters.msg
   MsgStat.msg
   MsgStatList.msg
   SwarmSearchWaypoint.msg
   SwarmSearchWaypointList.msg
-  SwarmSearchOrder.msg
-  SwarmSearchOrderStamped.msg
 )
 
 ## Generate added messages and services with any dependencies listed here
