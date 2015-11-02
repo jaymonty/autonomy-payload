@@ -218,7 +218,7 @@ class Socket():
     # Mapping IDs to IPs: mapped_ids[id] = ip_address
     def __init__(self, my_id, udp_port, device=None, 
                  my_ip=None, bcast_ip=None, mapped_ids=None,
-                 send_only=False, promisc=False):
+                 send_only=False, promisc=False, bcast_bind=False):
         # Instance variables
         self._port = udp_port		# UDP port for send/recv
         self._id = my_id		# Local entity ID (0..255 currently)
@@ -257,6 +257,11 @@ class Socket():
                 #  an environment where we cannot bind to 0.0.0.0 (e.g. SITL)
                 # TODO: This is sure to bite us later on, but unclear where
                 self._sock.bind((self._ip, self._port))
+            elif bcast_bind:
+                # Allow socket to bind to the device broadcast address.
+                # It will hear messages destined to that address, but NOT
+                # unicast messages.
+                send._sock.bind((self._bcast, self._port))
             else:
                 self._sock.bind(('', self._port))
         except Exception as ex:
