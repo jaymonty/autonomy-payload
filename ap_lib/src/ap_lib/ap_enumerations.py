@@ -2,32 +2,12 @@
 
 # Contains enumerations and constants for use throughout the ACS Python architecture
 
-# Enumeration for available payload controller types
-NO_PAYLOAD_CTRL = 0
-WP_SEQUENCE_CTRLR = 1
-FOLLOW_CTRLR = 2
-LANDING_SEQUENCE_CTRLR = 3
-SWARM_SEARCH_CTRLR = 4
-
-# Mapping between controller modes and strings for GUI use or debugging
-CTL_MODES = { NO_PAYLOAD_CTRL:        'Autopilot', \
-              WP_SEQUENCE_CTRLR:      'Wpt Sequencer', \
-              FOLLOW_CTRLR:           'Follower', \
-              LANDING_SEQUENCE_CTRLR: 'Land Sequencer', \
-              SWARM_SEARCH_CTRLR:     'Swarm Searcher' }
-
-CTL_MODE_VALUES = { 'Autopilot':      NO_PAYLOAD_CTRL, \
-                    'Wpt Sequencer':  WP_SEQUENCE_CTRLR, \
-                    'Follower':       FOLLOW_CTRLR, \
-                    'Land Sequencer': LANDING_SEQUENCE_CTRLR, \
-                    'Swarm Searcher': SWARM_SEARCH_CTRLR }
-
 # Fixed (per convention) state-specific waypoints
 TAKEOFF_WP = 1       # Airborne
 INGRESS_LOITER_WP = 3 # Ingress loiter for time waypoint at constant 75m altitude
 INGRESS_CYLINDER_WP = 4 # Ingress loiter to altitude waypoint at calculated alt slot
 SWARM_STANDBY_WP = 5 # Available for tasking
-SWARM_EGRESS_WP = 6  # Leaving swarm for recovery
+SWARM_EGRESS_WP = 6  # Leaving swarm for recovery  NOTE:  Not used right now
 RACETRACK_WP = 7     # First racetrack waypoint
 LAND_A_WP = 12       # First WP in the east-to-west (RW27) landing sequence
 LAND_B_WP = 18       # First WP in the west-to-east (RW10) landing sequence
@@ -38,37 +18,36 @@ MAX_REL_ALT = 500.0 # Maximum relative altitude that a controller can order
 MAX_ABS_LAT = 60.0  # Maximum absolute value that is commandable to lat
 MAX_ABS_LON = 180.0 # Maximum absolute value that is commandable to lon
 
+BASE_REL_ALT = 100.0   # Base rel_alt for "stacked" behaviors
+ALT_BLOCK_SIZE = 15.0  # Altitude block size for altitude-separated behaviors
+
 # Enumeration for available swarm behaviors
-SWARM_STANDBY = 0         # No swarm behavior (set no payload control)
-SWARM_FIXED_FORMATION = 1 # Canned follow positions based on side #
-SWARM_SEARCH = 2          # Conduct a coordinated search of a specified area
-SWARM_SEQUENCE_LAND = 98  # Land in order (low-to-high UAV)
-SWARM_EGRESS = 99         # Egress the swarm for recovery
+SWARM_STANDBY = 0          # No swarm behavior (set no payload control)
+SWARM_LINEAR_FORMATION = 1 # Straight line high-to-low formation
+SWARM_SEARCH = 2           # Conduct a coordinated search of a specified area
+SWARM_SEQUENCE_LAND = 98   # Land in order (low-to-high UAV)
+SWARM_EGRESS = 99          # Egress the swarm for recovery
 
 # Mapping between swarm behaviors and strings for GUI use or debugging
-SWARM_BHVRS = {  SWARM_STANDBY:         'Standby', \
-                 SWARM_FIXED_FORMATION: 'Fixed Follow', \
-                 SWARM_SEARCH:          'Swarm Search', \
-                 SWARM_SEQUENCE_LAND:   'Sequence Land', \
-                 SWARM_EGRESS:          'Egress' }
+SWARM_BHVRS = {  SWARM_STANDBY:          'Standby', \
+                 SWARM_LINEAR_FORMATION: 'Line Formation', \
+                 SWARM_SEARCH:           'Swarm Search', \
+                 SWARM_SEQUENCE_LAND:    'Sequence Land' }
 
-SWARM_BHVR_VALUES = { 'Standby':       SWARM_STANDBY, \
-                      'Fixed Follow':  SWARM_FIXED_FORMATION, \
-                      'Swarm Search':  SWARM_SEARCH, \
-                      'Sequence Land': SWARM_SEQUENCE_LAND, \
-                      'Egress':        SWARM_EGRESS }
+SWARM_BHVR_VALUES = { 'Standby':        SWARM_STANDBY, \
+                      'Line Formation': SWARM_LINEAR_FORMATION, \
+                      'Swarm Search':   SWARM_SEARCH, \
+                      'Sequence Land':  SWARM_SEQUENCE_LAND }
 
 # Enumeration for swarming states
 PRE_FLIGHT = 0    # Powered on, going through pre-fllight checks
 FLIGHT_READY = 1  # Awaiting launch
 INGRESS = 2       # Airborne, waiting for handoff to swarm operator
-SWARM_READY = 3   # Available for swarm behavior (standby loiter)
-SWARM_ACTIVE = 4  # Executing an active swarm behavior
-EGRESS = 5        # Transit to recovery staging (still required?)
-LANDING = 6       # Flight crew has control for landing
-ON_DECK = 7       # Aircraft has landed
-POST_FLIGHT = 8   # Post landing checks (will probably not be seen)
-AP_ERROR = 9      # Error state (probably due to wrong autopilot mode)
+SWARM_READY = 3   # Available for swarm behavior
+LANDING = 4       # Flight crew has control for landing
+ON_DECK = 5       # Aircraft has landed
+POST_FLIGHT = 6   # Post landing checks (will probably not be seen)
+AP_ERROR = 7      # Error state (probably due to wrong autopilot mode)
 LAST_STATE = 15   # CANNOT EXCEED 15; network message field is a nibble
 
 # Mapping between swarm states and strings for GUI use or debugging
@@ -76,8 +55,6 @@ STATE_STRINGS = { PRE_FLIGHT:   'Preflight', \
                   FLIGHT_READY: 'Flight Ready', \
                   INGRESS:      'Ingress', \
                   SWARM_READY:  'Swarm Ready', \
-                  SWARM_ACTIVE: 'Swarm Active', \
-                  EGRESS:       'Egress', \
                   LANDING:      'Landing', \
                   ON_DECK:      'On Deck',
                   POST_FLIGHT:  'Post Flight',
@@ -87,8 +64,6 @@ STATE_VALUES = { 'Preflight':    PRE_FLIGHT, \
                  'Flight Ready': FLIGHT_READY, \
                  'Ingress':      INGRESS, \
                  'Swarm Ready':  SWARM_READY, \
-                 'Swarm Active': SWARM_ACTIVE, \
-                 'Egress':       EGRESS, \
                  'Landing':      LANDING, \
                  'On Deck':      ON_DECK, \
                  'Post Flight':  POST_FLIGHT,
@@ -141,7 +116,4 @@ WP_TYPE_LOITER_TO_ALT = 31
 WP_TYPE_LAND_SEQUENCE = 189
 WP_TYPE_ENABLE_FENCE = 207
 
-# Miscellaneous mission parameter enumerations
-BASE_REL_ALT = 100.0
-ALT_BLOCK_SIZE = 15.0
 
