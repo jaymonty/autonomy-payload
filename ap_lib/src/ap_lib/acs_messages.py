@@ -35,14 +35,6 @@ def _dec_str(e):
     finally:
         return s.strip(chr(0x0))
 
-class wpMsg(): #Struct to store swarm search waypoint variables
-    lat = None
-    lon = None
-    alt = None
-    recID = None
-    searchCellX = None
-    searchCellY = None
-
 # Bitmasks
 SUBSWARM_MASK = 0x1F  # low 5 bits (of 8)
 FL_REL_MASK = 0x80    # high bit (of 8)
@@ -197,7 +189,7 @@ class FlightStatus(Message):
     # Define message type parameters
     msg_type = 0x00
 #    msg_fmt = '>HBBHhhHxBH16s'
-    msg_fmt = '>HBBHhhHBBH16s'
+    msg_fmt = '>HBBHhhHBxH16s'
 
     def __init__(self):
         Message.__init__(self)
@@ -227,7 +219,6 @@ class FlightStatus(Message):
         self.alt_rel = None	    # AGL (int, millimeters)
         self.mis_cur = None	    # Current mission (waypoint) index (0-65535)
         self.swarm_behavior = 0 # Swarm behavior (follow, standby, etc.)
-        self.ctl_mode = None	# Controller mode (byte, but only use 0-16)
         self.ctl_ready = [False] * (16 + 1)   # Ctlr ready flags (bit array)
                                 # (Index 1 is low bit, 16 is high bit,
                                 #  skip 0 since it is the null controller)
@@ -270,7 +261,6 @@ class FlightStatus(Message):
                 int(self.alt_rel / 1e02),
                 int(self.mis_cur),
                 int(self.swarm_behavior),
-                int(self.ctl_mode),
                 ctl_ready_bits,
                 _enc_str(self.name))
 
@@ -309,7 +299,6 @@ class FlightStatus(Message):
         self.alt_rel = fields.pop(0) * 1e02
         self.mis_cur = fields.pop(0)
         self.swarm_behavior = fields.pop(0)
-        self.ctl_mode = fields.pop(0)
         ctlready = fields.pop(0)
         for bit in range(1, len(self.ctl_ready)):
             self.ctl_ready[bit] = bool(1<<(bit-1) & ctlready)
@@ -476,7 +465,7 @@ class LandAbort(Message):
     def __init__(self):
         Message.__init__(self)
 
-        self.alt = None         # Waive-off altitude (approx +/-32000)
+        self.alt = None         # Wave-off altitude (approx +/-32000)
         # 2 padding bytes = 0x0000
 
     def _pack(self):
@@ -572,117 +561,6 @@ class FlightReady(Message):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.ready = bool(fields[0])
 
-class SetSubswarm(Message):
-    msg_type = 0x89
-    msg_fmt = '>B3x'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.subswarm = None         # New subswarm ID
-        # 3 padding bytes = 0x00
-
-    def _pack(self):
-        tupl = (int(self.subswarm),)
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.subswarm = int(fields[0])
-
-# Might want to depricate this eventually (direct controller setup and
-# invocation via network message bypasses the swarm_manager node and
-# has potential race conditions that might lead to unsafe situations.
-class SetController(Message):
-    msg_type = 0x8A
-    msg_fmt = '>B3x'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.controller = None     # Numeric ID of controller type
-        # 3 padding bytes
-
-    def _pack(self):
-        tupl = (int(self.controller),)
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.controller = int(fields[0])
-
-# Might want to depricate this eventually (direct controller setup and
-# invocation via network message bypasses the swarm_manager node and
-# has potential race conditions that might lead to unsafe situations.
-class FollowerSetup(Message):
-    msg_type = 0x8B
-    msg_fmt = '>BBhhhh2x'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.leader_id = None       # ID of aircraft to follow
-        self.alt_mode = None        # 0=absolute, 1=relative
-        self.seq = None             # Task sequence number (optional but should increment)
-        self.follow_range = None    # Distance behind leader (meters)
-        self.offset_angle = None    # Relative bearing to leader (radians)
-        self.control_alt = None     # Relative or absolute altitude (meters)
-        # 2 padding bytes
-
-    def _pack(self):
-        tupl = (self.leader_id,
-                self.alt_mode,
-                self.seq,
-                int(self.follow_range),
-                int(self.offset_angle * 1e3),
-                int(self.control_alt))
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.leader_id = fields[0]
-        self.alt_mode = fields[1]
-        self.seq = fields[2]
-        self.follow_range = float(fields[3])
-        self.offset_angle = float(fields[4]) / 1e3
-        self.control_alt = float(fields[5])
-
-# Might want to depricate this eventually (direct controller setup and
-# invocation via network message bypasses the swarm_manager node and
-# has potential race conditions that might lead to unsafe situations.
-class WPSequencerSetup(Message):
-    msg_type = 0x8C
-    msg_fmt_base = '>BxH'
-    msg_fmt_base_sz = struct.calcsize(msg_fmt_base)
-    msg_fmt_wp = '>lll'
-    msg_fmt_wp_sz = struct.calcsize(msg_fmt_wp)
-
-    def __init__(self):
-        Message.__init__(self)
-
-        # 1 byte                 # Count of LLA tuples in wp_list (0-255)
-        # 1 padding byte
-        self.seq = None          # Task sequence number (optional but should increment)
-        self.wp_list = []        # List of LLA tuples (degrees, degrees, meters)
-
-    def _pack(self):
-        tupl = (len(self.wp_list), self.seq)
-        for lla in self.wp_list:
-            tupl += (int(lla[0] * 1e7),
-                     int(lla[1] * 1e7),
-                     int(lla[2] * 1e3))
-        fmt = type(self).msg_fmt_base + \
-              len(self.wp_list) * type(self).msg_fmt_wp.lstrip('>')
-        return struct.pack(fmt, *tupl)
-
-    def _unpack(self, data):
-        (wp_count, self.seq) = struct.unpack_from(type(self).msg_fmt_base, data, 0)
-        offset = type(self).msg_fmt_base_sz
-        for wp in range(wp_count):
-            lla = struct.unpack_from(type(self).msg_fmt_wp, data, offset)
-            self.wp_list.append(lla)
-            offset += type(self).msg_fmt_wp_sz
-
 class Calibrate(Message):
     msg_type = 0x8D
     msg_fmt = '>B3x'
@@ -700,149 +578,6 @@ class Calibrate(Message):
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.index = int(fields[0])
-
-class SwarmBehavior(Message):
-    msg_type = 0x8E
-    msg_fmt = '>B3x'
-
-    def __init__(self):
-        Message.__init__(self)
-        self.swarm_behavior = None  # swarm_behavior type
-
-    def _pack(self):
-        tupl = (int(self.swarm_behavior),)
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.swarm_behavior = int(fields[0])
-
-class SuspendSwarmBehavior(Message):
-    msg_type = 0x93
-
-    def __init__(self):
-        Message.__init__(self)
-        pass
-
-    def _pack(self):
-        return ''
-
-    def _unpack(self, data):
-        pass
-
-class PauseSwarmBehavior(Message):
-    msg_type = 0x98
-    msg_fmt = '>?3x'
-
-    def __init__(self):
-        Message.__init__(self)
-        self.behavior_pause = None
-
-    def _pack(self):
-        tupl = (bool(self.behavior_pause),)
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.behavior_pause = bool(fields[0])
-
-class SwarmEgress(Message):
-    msg_type = 0x94
-
-    def __init__(self):
-        Message.__init__(self)
-        pass
-
-    def _pack(self):
-        return ''
-
-    def _unpack(self, data):
-        pass
-
-class SwarmFollow(Message):
-    msg_type = 0x95
-    msg_fmt = '>bh?'
-
-    def __init__(self):
-        Message.__init__(self)
-        self.distance = None         # distance from the lead aircraft (m)
-        self.angle = None            # angle off the bow (radian angle *1000)
-        self.stack_formation = None  # True if same form for all with 1 lead
-
-    def _pack(self):
-        tupl = (int(self.distance), int(self.angle * 1000), bool(self.stack_formation))
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.distance = int(fields[0])
-        self.angle = int(fields[1]) / 1000.0
-        self.stack_formation = bool(fields[2])
-
-class SwarmSequenceLand(Message):
-    msg_type = 0x96
-    msg_fmt = '>B3x'
-
-    def __init__(self):
-        Message.__init__(self)
-        self.ldg_wpt = None  # WP ID of the landing sequence
-
-    def _pack(self):
-        tupl = (int(self.ldg_wpt),)
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.ldg_wpt = int(fields[0])
-
-class SwarmSearch(Message):
-    msg_type = 0x97
-    msg_fmt = '>llllBB2x'
-
-    def __init__(self):
-        Message.__init__(self)
-        self.searchAreaLength = None # Length (X) of search Area in metres
-        self.searchAreaWidth = None  # Width (Y) of search Area in metres
-        self.lat = None              # Bottom Left latitude of search Area in Decimal degrees (e.g. 35.123456)
-        self.lon = None              # Bottom Left lontitude of search Area in Decimal degrees (e.g. -120.123456)
-        self.masterSearcherID = None # ID of Master Searcher
-        self.searchAlgoEnum = None   # Enumeration of search Algo
-        # 2 padding bytes
-
-    def _pack(self):
-        tupl = (int(self.searchAreaLength * 1e2),
-                int(self.searchAreaWidth * 1e2),
-                int(self.lat * 1e7),
-                int(self.lon * 1e7),
-                int(self.masterSearcherID),
-                int(self.searchAlgoEnum))
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.searchAreaLength = fields[0] / 1e2
-        self.searchAreaWidth = fields[1] / 1e2
-        self.lat = fields[2] / 1e7
-        self.lon = fields[3] / 1e7
-        self.masterSearcherID = fields[4]
-        self.searchAlgoEnum = fields[5]
-
-class SwarmState(Message):
-    msg_type = 0x8F
-    msg_fmt = '>B3x'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.swarm_state = 0  # swarm_state value
-
-    def _pack(self):
-        tupl = (int(self.swarm_state),)
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.swarm_state = int(fields[0])
 
 class Demo(Message):
     msg_type = 0x90
@@ -904,47 +639,6 @@ class WeatherData(Message):
         self.temperature = fields[1]
         self.wind_speed = fields[2]
         self.wind_direction = fields[3]
-
-class NetworkWpCmd(Message):
-    msg_type = 0x99
-    msg_fmt_base = '>B3x'
-    msg_fmt_base_sz = struct.calcsize(msg_fmt_base)
-    msg_fmt_wp = '>lllBBBx'
-    msg_fmt_wp_sz = struct.calcsize(msg_fmt_wp)
-
-    def __init__(self):
-        Message.__init__(self)
-        self.wpMsg_list = []     # List of wpMsg tuples
-
-    def _pack(self):
-        tupl = (len(self.wpMsg_list),)
-        for waypointMsg in self.wpMsg_list:
-            tupl += (int(waypointMsg.waypoint.lat * 1e07), # Decimal degrees (e.g. 35.123456)
-                    int(waypointMsg.waypoint.lon * 1e07),  # Decimal degrees (e.g. -120.123456)
-                    int(waypointMsg.waypoint.alt * 1e03),  # Decimal meters MSL (WGS84)
-                    int(waypointMsg.recipientvehicle_id),  # Recipient ID (1-255 currently)
-                    int(waypointMsg.searchCell_x),         # X (0-255)
-                    int(waypointMsg.searchCell_y),)        # Y (0-255)
-                                                           # 1 padding bytes
-        fmt = type(self).msg_fmt_base + \
-              len(self.wpMsg_list) * type(self).msg_fmt_wp.lstrip('>')
-        return struct.pack(fmt, *tupl)
-
-    def _unpack(self, data):
-        base_fields = struct.unpack_from(type(self).msg_fmt_base, data, 0)
-        wpMsg_count = base_fields[0]
-        offset = type(self).msg_fmt_base_sz
-        for waypointMsg in range(wpMsg_count):
-            fields = struct.unpack_from(type(self).msg_fmt_wp, data, offset)
-            _wpMsg = wpMsg()
-            _wpMsg.lat = fields[0] / 1e07
-            _wpMsg.lon = fields[1] / 1e07
-            _wpMsg.alt = fields[2] / 1e03
-            _wpMsg.recID = fields[3]
-            _wpMsg.searchCellX = fields[4]
-            _wpMsg.searchCellY = fields[5]
-            self.wpMsg_list.append(_wpMsg)
-            offset += type(self).msg_fmt_wp_sz
 
 #Message to request the previous N autopilot messages.
 #A second field, since_seq, is intended to signal that the
@@ -1041,3 +735,133 @@ class PayloadShutdown(Message):
 
     def _unpack(self, data):
         pass
+
+# Swarm and subswarm manipulation and control messages
+
+class SetSubswarm(Message):
+    ''' Assign the recipient vehicle to a specific subswarm '''
+    msg_type = 0x70
+    msg_fmt = '>B3x'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.subswarm = None         # New subswarm ID
+        # 3 padding bytes = 0x00
+
+    def _pack(self):
+        tupl = (int(self.subswarm),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.subswarm = int(fields[0])
+
+class SwarmState(Message):
+    ''' Manually set the vehicle's swarm state '''
+    msg_type = 0x71
+    msg_fmt = '>B3x'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.swarm_state = 0  # swarm_state value
+
+    def _pack(self):
+        tupl = (int(self.swarm_state),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.swarm_state = int(fields[0])
+
+class SwarmBehavior(Message):
+    ''' Initiate execution of a specific parameterized swarm behavior '''
+    msg_type = 0x72
+    msg_fmt_base = '>BHx'
+    msg_fmt_base_sz = struct.calcsize(msg_fmt_base)
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.swarm_behavior = None
+        self.swarm_parameters = []
+
+    def _pack(self):
+        self.swarm_parameters = \
+            self.swarm_parameters + (b'\x00' * (len(self.swarm_parameters) % 4))
+        param_bytes = len(self.swarm_parameters)
+        tupl = (self.swarm_behavior, param_bytes)
+        for byte in range(0, param_bytes):
+            tupl += (self.swarm_parameters[byte],)
+        fmt = type(self).msg_fmt_base + (param_bytes * 'B')
+        return struct.pack(fmt, *tupl)
+
+    def _unpack(self, data):
+        (self.swarm_behavior, param_bytes) = \
+            struct.unpack_from(type(self).msg_fmt_base, data, 0)
+        offset = type(self).msg_fmt_base_sz
+        self.swarm_parameters = data[offset:]
+
+class SwarmBehaviorData(Message):
+    ''' Exchange behavior-specific information between vehicles '''
+    msg_type = 0x73
+    msg_fmt_base = '>BHx'
+    msg_fmt_base_sz = struct.calcsize(msg_fmt_base)
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.data_type = None  # For any required payload disambiguation
+        self.data = []         # Bitmapped byte string with message payload
+
+    def _pack(self):
+        self.data = \
+            self.data + (b'\x00' * (len(self.data) % 4))
+        data_bytes = len(self.data)
+        tupl = (self.data_type, data_bytes)
+        for byte in range(0, data_bytes):
+            # Differs from the SwarmBehavior message because of Python 2 vs 3?
+            # Encoded by the payload (Python 2) for this message
+            # Encoded by SwarmCommander (Python 3) for this message
+            tupl += (ord(self.data[byte]),)
+        fmt = type(self).msg_fmt_base + (data_bytes * 'B')
+        return struct.pack(fmt, *tupl)
+
+    def _unpack(self, data):
+        (self.data_type, data_bytes) = \
+            struct.unpack_from(type(self).msg_fmt_base, data, 0)
+        offset = type(self).msg_fmt_base_sz
+        self.data = data[offset:]
+
+class SuspendSwarmBehavior(Message):
+    ''' Terminate execution of the current swarm behavior '''
+    msg_type = 0x74
+
+    def __init__(self):
+        Message.__init__(self)
+        pass
+
+    def _pack(self):
+        return ''
+
+    def _unpack(self, data):
+        pass
+
+class PauseSwarmBehavior(Message):
+    ''' Pause or resume execution of the current swarm behavior '''
+    msg_type = 0x75
+    msg_fmt = '>?3x'
+
+    def __init__(self):
+        Message.__init__(self)
+        self.behavior_pause = None
+
+    def _pack(self):
+        tupl = (bool(self.behavior_pause),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.behavior_pause = bool(fields[0])
+
