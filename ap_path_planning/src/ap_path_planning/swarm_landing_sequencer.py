@@ -16,9 +16,10 @@ import std_msgs.msg as stdmsg
 import ap_msgs.msg as apmsg
 import ap_srvs.srv as apsrv
 import ap_lib.ap_enumerations as enums
+import ap_lib.bitmapped_bytes as bytes
 import ap_lib.nodeable as nodeable
 import ap_lib.gps_utils as gps
-import ap_lib.waypoint_controller as wp_controller
+import ap_lib.waypoint_behavior as wp_behavior
 import autopilot_bridge.srv as apbrgsrv
 import autopilot_bridge.msg as apbrgmsg
 
@@ -26,7 +27,7 @@ LAND_WP_DIST = 75.0     # Distance from landing wp to start descent
 ALT_BLOCK_CAPTURE = 3.0  # UAV within lower alt block at this alt offset
 STACK_LOITER_TIME = rospy.Duration(15.0) # Min time at stack location before descending
 
-# Enumeration for controller states
+# Enumeration for behavior states
 NEGOTIATE_ORDER = 0
 START_TRANSIT = 1
 IN_TRANSIT = 2
@@ -36,82 +37,81 @@ ON_FINAL = 5
 
 BASE_WP_LOITER_RAD = 50.0
 
-# Object that sequences and controls subswarm aircraft for landing.
-#
-# Class member variables:
-#   _ownID: this UAV's ID
-#   _subswarm_id: subswarm to which this UAV is assigned
-#   _leaderID: ID of the UAV to follow in the landing sequence
-#   _ordered_wp_id: ID of the ordered waypoint when controller initiated
-#   _ldgWptIndex: Index (ID) of the landing waypoint
-#   _alt_block: assigned altitude block relative to the base altitude
-#   _wp_msg: LLA message object for waypoint orders to be published
-#   _swarm_uav_states: dictionary object containing state of all swarm aircraft
-#   _swarm_keys: list of all aircraft IDs (keys) in the swarm dictionary
-#   _subswarm_keys: list of subswarm aircraft IDs (keys) in the swarm dictionary
-#   _ldg_wp_publisher: ROS publisher to direct the UAV to the landing waypoint
-#   _ldg_start_publisher: ROS publisher notifying autopilot of landing start or abort
-#   _wp_getrange_srv_proxy: ROS proxy for using the autopilot/wp_getrange service
-#   _fpr_param_set_srv_proxy: ROS proxy for using the autopilot/fpr_param_set service
-#   _controller_state: determines what the controller is currently doing
-#   _transit_started: set to True when the transit wpt is issued
-#   _transit_complete: set to True when the transit wpt has been reached
-#   _landing_ordered: set to True when ordered to the landing wpt
-#   _lock: prevent unsafe thread interaction (swarm summary dictionary)
-#   _stack_time: ROS time of arrival at the landing stack location
-#
-# Inherited from WaypointController
-#   _wpPublisher: publisher object for computed waypoints to be sent to the autopilot
-#
-# Inherited from Controller:
-#   controllerID: identifier (int) for this particular controller
-#   statusPublisher: publisher object for controller status
-#   statusStamp: timestamp of the last status message publication
-#   sequence: number of waypoint sequences that have been ordered
-#   is_ready: set to True when a waypoint sequence has been loaded
-#   is_active: set to True is the waypoint sequencer is running
-#
-# Inherited from Nodeable:
-#   nodeName:  Name of the node to start or node in which the object is
-#   timer: ROS rate object that controls the timing loop
-#   DBUG_PRINT: set true to force screen debug messages (default FALSE)
-#   WARN_PRINT: set false to force screen warning messages (default FALSE)
-#
-# Class member functions:
-#   _process_swarm_uav_states: callback from swarm uav state messages
-#
-class SwarmLandingSequencer(wp_controller.WaypointController):
 
-    # Class initializer initializes class variables.
-    # This assumes that the object is already running within an initialized
-    # ROS node (i.e., the object does not initialize itself as a node).
-    # This enables multiple objects to run within a single node if
-    # required.  The initializer does some parameter checking (mostly
-    # whether or not all of the required parameters are there), but does
-    # not check ranges, magnitudes, or signs.
-    # @param nodename: name of the ROS node in which this object exists
-    # @param own_id: ID (integer) of this aircraft
+class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
+    ''' Object that sequences and controls subswarm aircraft for landing.
+
+    Class member variables:
+      _ownID: this UAV's ID
+      _subswarm_id: subswarm to which this UAV is assigned
+      _leader_id: ID of the UAV to follow in the landing sequence
+      _ldg_wpt_index: Index (ID) of the landing waypoint
+      _alt_block: assigned altitude block relative to the base altitude
+      _wp_msg: LLA message object for waypoint orders to be published
+      _ldg_wp_publisher: ROS publisher to direct the UAV to the landing waypoint
+      _wp_getrange_srv_proxy: ROS proxy for using the autopilot/wp_getrange service
+      _fpr_param_set_srv_proxy: ROS proxy for using the autopilot/fpr_param_set service
+      _behavior_state: determines what the behavior is currently doing
+      _transit_started: set to True when the transit wpt is issued
+      _transit_complete: set to True when the transit wpt has been reached
+      _stack_time: ROS time of arrival at the landing stack location
+
+    Inherited from WaypointBehavior
+      _wpPublisher: publisher object for computed waypoints to be sent to the autopilot
+
+    Inherited from Behavior:
+      behaviorID: identifier (int) for this particular behavior
+      _subswarm_id: ID of the subswarm to which this UAV is assigned
+      _swarm: container for state info for all swarm UAVs
+      _swarm_keys: key values (IDs) of all swarm UAVs
+      _subswarm_keys: key values (IDs) of all subswarm UAVs
+      _ap_intent: most recently ordered autopilot waypoint
+      _lock: reentrant lock to enforce thread-safe swarm dictionary access
+      is_ready: set to True when the behavior has been initialized
+      is_active: set to True when the behavior is running 
+      is_paused: set to True when an active behavior is paused
+      _uses_wp_control: set to True if the behavior drives by waypoint
+      _statusPublisher: publisher object for behavior status
+      _statusStamp: timestamp of the last status message publication
+      _sequence: sequence number of the next status message
+
+    Inherited from Nodeable:
+      nodeName:  Name of the node to start or node in which the object is
+      timer: ROS rate object that controls the timing loop
+      DBUG_PRINT: set true to force screen debug messages (default FALSE)
+      INFO_PRINT: set true to force screen info messages (default FALSE)
+      WARN_PRINT: set false to force screen warning messages (default FALSE)
+
+    Class member functions:
+      publisherSetup: Nodeable class virtual function implementation
+      serviceProxySetup: Nodeable class virtual function implementation
+      _set_behavior: Behavior class virtual function implementation
+      _run_behavior: Behavior class virtual function implementation
+      _safety_checks: Behavior class virtual function implementation
+      _negotiate_landing_order: determines what order the UAVs will land in
+    '''
+
     def __init__(self, nodename, ctlr_id):
-        wp_controller.WaypointController.__init__(self, nodename, \
-            enums.LANDING_SEQUENCE_CTRLR)
+        ''' Class initializer initializes class variables.
+        @param nodename: name of the ROS node in which this object exists
+        @param own_id: ID (integer) of this aircraft
+        '''
+        wp_behavior.WaypointBehavior.__init__(self, nodename, \
+            enums.SWARM_SEQUENCE_LAND)
         self._ownID = rospy.get_param("aircraft_id")
-        self._ordered_wp_id = 0
-        self._leaderID = 0
-        self._subswarm_id = 0
-        self._ldgWptIndex = 0
+        self._leader_id = 0
+        self._ldg_wpt_index = 0
+        self._last_wp_id = None
         self._alt_block = 0
         self._wp_msg = apbrgmsg.LLA()
-        self._swarm_uav_states = dict()
-        self._swarm_keys = []
-        self._subswarm_keys = []
         self._ldg_wp_publisher = None
-        self._ldg_start_publisher = None
         self._wp_getrange_srv_proxy = None
         self._fpr_param_set_srv_proxy = None
-        self._controller_state = None
-        self._lock = threading.RLock()
+        self._behavior_state = None
         self._stack_time = None
+
 #        self.DBUG_PRINT = True
+#        self.INFO_PRINT = True
 #        self.WARN_PRINT = True
 
 
@@ -119,189 +119,33 @@ class SwarmLandingSequencer(wp_controller.WaypointController):
     # Implementation of parent class virtual functions
     #-------------------------------------------------
 
-    # Activates or deactivates the controller.  This method overrides the
-    # Controller class implementation so that the autopilot can be notified
-    # when a previously ordered landing has been ordered.  The parent-class
-    # function is called after the class-specific processing is complete 
-    # to ensure the rest of the safety functionality of the Controller class
-    # implementation is retained.
-    # @param activate: Boolean value to activate or deactivate the controller
-    def set_active(self, activate):
-        if not activate and self.is_active and \
-           self._controller_state == ON_FINAL:
-            self._ldg_start_publisher.publish(False)
-        return super(SwarmLandingSequencer, self).set_active(activate)
-
-
-    # Creates a publisher to send the vehicle to the appropriate waypoint ID
-    # to initiate landing once it's this aircraft's turn
-    # @param params: list or required parameters (none for now)
-    def publisherSetup(self, params=[]):
+    def publisherSetup(self):
+        ''' Creates a publisher to send the vehicle to the appropriate waypoint ID
+        to initiate landing once it's this aircraft's turn
+        '''
         self._ldg_wp_publisher = \
             self.createPublisher("waypoint_goto", stdmsg.UInt16, 1)
-        self._ldg_start_publisher = \
-            self.createPublisher("set_landing", stdmsg.Bool, 1)
 
 
-    # Establishes the callbacks for the SwarmLandingSequencer object.  The
-    # object subscribes to the swarm_uav_states and topic for own-aircraft,
-    # swarm, and subswarm states.
-    # @param params: list of required parameters (none for now)
-    def callbackSetup(self, params=[]):
-        self.createSubscriber("swarm_uav_states", apmsg.SwarmStateStamped, \
-                              self._process_swarm_uav_states)
-        self.createSubscriber("update_subswarm", stdmsg.UInt8, \
-                              self._process_upate_subswarm)
-        self.createSubscriber("status", apbrgmsg.Status, \
-                              self._process_autopilot_status)
-
-
-    # Establishes the services for the SwarmLandingSequencer object.
-    # @param params: list of required parameters (none for now)
-    def serviceSetup(self, params=[]):
-        self.createService('init_landing_sequencer', apsrv.SetInteger, \
-                           self._init_landing_sequencer)
-
-
-    # Establishes the services proxies for the SwarmLandingSequencer object.
-    # @param params: list of required parameters (none for now)
-    def serviceProxySetup(self, params=[]):
+    def serviceProxySetup(self):
+        ''' Establishes service proxies for the SwarmLandingSequencer object
+        '''
         self._wp_getrange_srv_proxy = \
             self.createServiceProxy('wp_getrange', apbrgsrv.WPGetRange)
         self._fpr_param_set_srv_proxy = \
             self.createServiceProxy('fpr_param_set', apbrgsrv.ParamSet)
 
 
-    # Runs one iteration of the controller, to include processing
-    # object-specific data and publishing required control messages
-    def runController(self):
-        with self._lock:
-
-            # Make sure the aircraft this one is following is still valid
-            # If it is not, need to figure out a new aircraft to follow
-            if ((self._leaderID not in self._subswarm_keys) and \
-                (self._controller_state != NEGOTIATE_ORDER) and \
-                (self._controller_state != ON_FINAL) and \
-                (self._swarm_uav_states[self._leaderID].swarm_state != \
-                                                      enums.LANDING)):
-                    self._negotiate_landing_order()
-
-            # Newly activated controller--determine landing sequence first
-            if self._controller_state == NEGOTIATE_ORDER:
-                self._negotiate_landing_order()
-                self._controller_state = START_TRANSIT
-
-            # Sequence computed, but need to send the transit waypoint
-            elif self._controller_state == START_TRANSIT:
-                self.publishWaypoint(self._wp_msg)
-                self._controller_state = IN_TRANSIT
-                #tell the autopilot we're about to land
-                self._ldg_start_publisher.publish(True)
-                self.log_dbug("transit to landing stack location initiated")
-                return
-
-            # Transiting to the landing stack location
-            elif self._controller_state == IN_TRANSIT:
-                state = self._swarm_uav_states[self._ownID]
-                d = gps.gps_distance(state.state.pose.pose.position.lat, \
-                                    state.state.pose.pose.position.lon, \
-                                    self._wp_msg.lat, self._wp_msg.lon)
-                if gps.gps_distance(state.state.pose.pose.position.lat, \
-                                    state.state.pose.pose.position.lon, \
-                                    self._wp_msg.lat, self._wp_msg.lon) < LAND_WP_DIST:
-                    self.log_dbug("transit to landing stack location complete")
-                    self._controller_state = STACK_ARRIVAL
-                    self._stack_time = rospy.Time.now()
-                else:
-                    return  # Not there yet
-
-            elif self._controller_state == STACK_ARRIVAL:
-                if (rospy.Time.now() - self._stack_time) > STACK_LOITER_TIME:
-                    self._controller_state = IN_STACK
-
-            # In the landing stack--descend after the leader to block 0, then land
-            elif self._controller_state == IN_STACK:
-                ldrState = self._swarm_uav_states[self._leaderID]
-                if ldrState.swarm_state == enums.LANDING:
-                    self._leaderID = self._ownID
-
-                # It's this aircraft's turn to land
-                if self._leaderID == self._ownID:
-                    ldg_wp_cmd = stdmsg.UInt16()
-                    ldg_wp_cmd.data = self._ldgWptIndex
-                    #make dang sure the autopilot knows we're landing
-                    self._ldg_start_publisher.publish(True)
-                    self._ldg_wp_publisher.publish(ldg_wp_cmd)
-                    self._controller_state = ON_FINAL
-                    self.log_dbug("landing waypoint ordered")
-                    return
-
-                # Determine what altitude block we need to be in
-                block = int((ldrState.state.pose.pose.position.rel_alt - enums.BASE_REL_ALT) + \
-                            (enums.ALT_BLOCK_SIZE - ALT_BLOCK_CAPTURE)) / int(enums.ALT_BLOCK_SIZE)
-                block = max(0, block + 1)    # Our block is leaderBlock+1
-                if block != self._alt_block: # New order only rqd on change
-                    self._wp_msg.alt = enums.BASE_REL_ALT + enums.ALT_BLOCK_SIZE * block
-                    self.log_dbug("ordered to altitude block %d (%f meters)" %(self._alt_block, self._wp_msg.alt))
-                    self._alt_block = block
-                    self.publishWaypoint(self._wp_msg)
-
-            # If landing has already been ordered, we're done
-            elif self._controller_state == ON_FINAL:
-                return
-
-            # Invalid state--should never get here
-            else:
-                self._log_warn("invalid controller state: %d" %self._controller_state)
-                self._controller_state = None
-                self.set_ready_state(False)
-
-
-    #------------------------------------
-    # Callbacks for ROS topic subscribers
-    #------------------------------------
-
-    # Handle incoming swarm_uav_states messages
-    # @param swarmMsg: message containing swarm data (SwarmStateStamped)
-    def _process_swarm_uav_states(self, swarmMsg):
-        with self._lock:
-            self._swarm_uav_states.clear()
-            del self._swarm_keys[:]
-            del self._subswarm_keys[:]
-            for vehicle in swarmMsg.swarm:
-                self._swarm_uav_states[vehicle.vehicle_id] = vehicle
-                self._swarm_keys.append(vehicle.vehicle_id)
-                if vehicle.subswarm_id == self._subswarm_id:
-                    self._subswarm_keys.append(vehicle.vehicle_id)
-
-
-    # Handle incoming update_subswarm messages
-    # @param subswarmMsg: message containing the new subswarm assignment
-    def _process_upate_subswarm(self, subswarmMsg):
-        self._subswarm_id = subswarmMsg.data
-
-
-    # Handle incoming autopilot status messages (used to get the ID
-    # of the currently ordered waypoint so that the rel_alt can be
-    # obtained when the controller is initiated)
-    # @param statusMsg:  autopilot status message
-    def _process_autopilot_status(self, statusMsg):
-        self._ordered_wp_id = statusMsg.mis_cur
-
-
-    #------------------------
-    # Object-specific methods
-    #------------------------
-
-    # Sets up the swarm sequence landing behavior.  The behavior
-    # takes no parameters, so setting it up simply requires the vehicle to 
-    # set the initial controller state (NEGOTIATE_ORDER), transit altitude,
-    # and altitude block (0).
-    # @param srvReq service request message
-    # @return Boolean value indicating behavior initiation success or failure
-    def _init_landing_sequencer(self, srvReq):
+    def set_behavior(self, params):
+        ''' Sets behavior parameters based on set service parameters
+        @param params: parameters from the set service request
+        @return True if set with valid parameters
+        '''
         try:
-            ltr_wpt = srvReq.setting
+            self.subscribe_to_swarm()
+            parser = bytes.LandingOrderParser()
+            parser.unpack(params)
+            ltr_wpt = parser.landing_wp_id
             fence_wpt = None
 
             wpt = self._wp_getrange_srv_proxy(ltr_wpt, ltr_wpt).points[0]
@@ -315,27 +159,34 @@ class SwarmLandingSequencer(wp_controller.WaypointController):
                 if wpt.command == enums.WP_TYPE_ENABLE_FENCE:
                     fence_wpt = ltr_wpt
 
-            # At landing, order to the fence enable or loiter-to-alt
-            if fence_wpt != None:
-                self._ldgWptIndex = fence_wpt
-            else:
-                self._ldgWptIndex = ltr_wpt
+            # Re-initialize only if not active or if new landing wpt specified
+            if not self.is_active or \
+               (self._ldg_wpt_index != fence_wpt and \
+                self._ldg_wpt_index != ltr_wpt):
 
-            if wpt.param2 < 0.0:
-                self._fpr_param_set_srv_proxy('WP_LOITER_RAD', -BASE_WP_LOITER_RAD)
-            else:
-                self._fpr_param_set_srv_proxy('WP_LOITER_RAD', BASE_WP_LOITER_RAD)
+                # At landing, order to the fence enable or loiter-to-alt
+                if fence_wpt != None:
+                    self._ldg_wpt_index = fence_wpt
+                else:
+                    self._ldg_wpt_index = ltr_wpt
 
-            last_wpt = self._wp_getrange_srv_proxy(self._ordered_wp_id, \
-                                                   self._ordered_wp_id).points[0]
+                if wpt.param2 < 0.0:
+                    self._fpr_param_set_srv_proxy('WP_LOITER_RAD', \
+                                                  -BASE_WP_LOITER_RAD)
+                else:
+                    self._fpr_param_set_srv_proxy('WP_LOITER_RAD', \
+                                                  BASE_WP_LOITER_RAD)
 
-            self._wp_msg.lat = wpt.x
-            self._wp_msg.lon = wpt.y
-            self._wp_msg.alt = last_wpt.z
+                self._wp_msg.lat = wpt.x
+                self._wp_msg.lon = wpt.y
+                self._wp_msg.alt = self._ap_intent.z
 
-            self._alt_block = 0
-            self._controller_state = NEGOTIATE_ORDER
-            self.set_ready_state(True)
+                self._alt_block = 0
+                self._behavior_state = NEGOTIATE_ORDER
+                self.set_ready_state(True)
+
+            self._last_wp_id = int(rospy.get_param("last_mission_wp_id"))
+
             return True
 
         except Exception as ex: 
@@ -344,31 +195,150 @@ class SwarmLandingSequencer(wp_controller.WaypointController):
             return False
 
 
-    # Computes this UAV's landing position (i.e., which UAV does it follow).
-    # When the computation is complete, the controller state is updated to
-    # start transit.  Currently, the sole determinant of sequence is altitude
-    # when initiated, so the landing order is computed in a single iteration.
-    # This method can be modified later to incorporate more deliberative (and
-    # possibly negotiated) methods of determining order.
+    def run_behavior(self):
+        ''' Runs one iteration of the behavior
+        '''
+        with self._lock:
+
+            # Make sure the aircraft this one is following is still valid
+            # If it is not, need to figure out a new aircraft to follow
+            if ((self._leader_id not in self._subswarm_keys) and \
+                (self._behavior_state != NEGOTIATE_ORDER) and \
+                (self._behavior_state != ON_FINAL) and \
+                (self._swarm[self._leader_id].swarm_state != enums.LANDING)):
+                self._negotiate_landing_order()
+
+            # Newly activated behavior--determine landing sequence first
+            if self._behavior_state == NEGOTIATE_ORDER:
+                self._negotiate_landing_order()
+                self._behavior_state = START_TRANSIT
+
+            # Sequence computed, but need to send the transit waypoint
+            elif self._behavior_state == START_TRANSIT:
+                self.publishWaypoint(self._wp_msg)
+                self._behavior_state = IN_TRANSIT
+                self.log_dbug("transit to landing stack location initiated")
+                return
+
+            # Transiting to the landing stack location
+            elif self._behavior_state == IN_TRANSIT:
+                state = self._swarm[self._ownID]
+                d = gps.gps_distance(state.state.pose.pose.position.lat, \
+                                    state.state.pose.pose.position.lon, \
+                                    self._wp_msg.lat, self._wp_msg.lon)
+                if gps.gps_distance(state.state.pose.pose.position.lat, \
+                                    state.state.pose.pose.position.lon, \
+                                    self._wp_msg.lat, self._wp_msg.lon) < LAND_WP_DIST:
+                    self.log_dbug("transit to landing stack location complete")
+                    self._behavior_state = STACK_ARRIVAL
+                    self._stack_time = rospy.Time.now()
+                else:
+                    return  # Not there yet
+
+            elif self._behavior_state == STACK_ARRIVAL:
+                if (rospy.Time.now() - self._stack_time) > STACK_LOITER_TIME:
+                    self._behavior_state = IN_STACK
+
+            # In the landing stack--descend after the leader to block 0, then land
+            elif self._behavior_state == IN_STACK:
+                ldrState = self._swarm[self._leader_id]
+                if ldrState.swarm_state == enums.LANDING:
+                    self._leader_id = self._ownID
+
+                # It's this aircraft's turn to land
+                if self._leader_id == self._ownID:
+                    ldg_wp_cmd = stdmsg.UInt16()
+                    ldg_wp_cmd.data = self._ldg_wpt_index
+                    self._behavior_state = ON_FINAL
+                    self._ldg_wp_publisher.publish(ldg_wp_cmd)
+                    self.log_info("landing waypoint ordered")
+                    return
+
+                # Determine what altitude block we need to be in
+                block = int((ldrState.state.pose.pose.position.rel_alt - enums.BASE_REL_ALT) + \
+                            (enums.ALT_BLOCK_SIZE - ALT_BLOCK_CAPTURE)) / int(enums.ALT_BLOCK_SIZE)
+                block = max(0, block + 1)    # Our block is leaderBlock+1
+                if block != self._alt_block: # New order only rqd on change
+                    self._wp_msg.alt = enums.BASE_REL_ALT + enums.ALT_BLOCK_SIZE * block
+                    self.log_dbug("ordered to altitude block %d (%f meters)"\
+                                  %(self._alt_block, self._wp_msg.alt))
+                    self._alt_block = block
+                    self.publishWaypoint(self._wp_msg)
+
+            # If landing has already been ordered, we're done
+            elif self._behavior_state == ON_FINAL:
+                return
+
+            # Invalid state--should never get here
+            else:
+                self._log_warn("invalid behavior state: %d" %self._behavior_state)
+                self._behavior_state = None
+                self.set_ready_state(False)
+
+
+    def _safety_checks(self):
+        ''' Conducts behavior-specific safety checks
+        @return True if the behavior passes all safety checks (False otherwise)
+        '''
+        lead = None
+        if self._behavior_state != NEGOTIATE_ORDER and \
+           self._behavior_state != ON_FINAL:
+            lead = self._swarm[self._leader_id]
+
+        # Make sure the UAV we're following is in the right mode
+        if lead and self._behavior_state == IN_STACK and \
+           lead.subswarm_id == self._subswarm_id and \
+           lead.swarm_behavior != enums.SWARM_SEQUENCE_LAND:
+            self.log_warn("followed UAV (%d) wrong behavior (%d)--deactivating" \
+                          %(self._leader_id, lead.swarm_behavior))
+            return False
+
+        # Make sure the UAV we're following is in the right swarm state
+        if lead and lead.swarm_state != enums.SWARM_READY and \
+           lead.swarm_state != enums.LANDING:
+            self.log_warn("followed UAV (%d) in wrong swarm state--deactivating"\
+                          %self._leader_id)
+            return False
+
+        # Make sure the waypoint we're using is correct
+        if self._behavior_state != ON_FINAL and \
+           self._ap_wp != self._last_wp_id:
+            self.log_warn("using incorrect waypoint ID--deactivating")
+            return False
+
+        return True
+
+    #------------------------
+    # Object-specific methods
+    #------------------------
+
     def _negotiate_landing_order(self):
-        low_to_high = []
+        ''' Computes UAV's landing position (i.e., which UAV does it follow)
+        When the computation is complete, the behavior state is updated to
+        start transit.  Currently, the sole determinant of sequence is altitude
+        when initiated, so the landing order is computed in a single iteration.
+        This method can be modified later to incorporate more deliberative (and
+        possibly negotiated) methods of determining order.
+        '''
+        lo_to_hi = []
         with self._lock:
             for uav in self._subswarm_keys:
-                low_to_high.append([ self._swarm_uav_states[uav].vehicle_id, \
-                                     self._swarm_uav_states[uav].state.pose.pose.position.alt])
-        low_to_high = sorted(low_to_high, key = lambda tup: tup[1])
+                lo_to_hi.append([ self._swarm[uav].vehicle_id, \
+                                     self._swarm[uav].state.pose.pose.position.alt])
+        lo_to_hi = sorted(lo_to_hi, key = lambda tup: tup[1])
+        self.log_dbug("determined low to high order: %s"%str(lo_to_hi))
 
         # Find this UAV's position in the marshal stack and who it follows
-        if low_to_high[0][0] == self._ownID:
-            self._leaderID = self._ownID   # This UAV is first to land
+        if lo_to_hi[0][0] == self._ownID:
+            self._leader_id = self._ownID   # This UAV is first to land
         else:
             thisUAV = 1
-            while low_to_high[thisUAV][0] != self._ownID:
+            while lo_to_hi[thisUAV][0] != self._ownID:
                 thisUAV += 1
-            self._leaderID = low_to_high[thisUAV - 1][0]
+            self._leader_id = lo_to_hi[thisUAV - 1][0]
 
-        self.log_dbug("landing sequence UAV %d to follow UAV %d" \
-                      %(self._ownID, self._leaderID))
+        self.log_info("landing sequence UAV %d to follow UAV %d" \
+                      %(self._ownID, self._leader_id))
 
 
 #-----------------------------------------------------------------------
@@ -380,5 +350,5 @@ if __name__ == '__main__':
 
     sequencer = SwarmLandingSequencer("swarm_landing_sequencer", ownAC)
 
-    sequencer.runAsNode(1.0, [], [], [])
+    sequencer.runAsNode(1.0)
 
