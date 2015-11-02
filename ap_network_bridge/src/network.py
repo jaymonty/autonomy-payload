@@ -49,15 +49,13 @@ def timed_status(bridge):
     message.alt_rel = 0
     message.gps_hdop = 0
     message.mis_cur = 0
-    message.ctl_mode = 0
     message.ctl_ready = [0] * 17  # TODO: Don't hardcode
 
     # If we have valid data, populate correctly
     if timed_status.c_status:
-        message.ctl_mode = timed_status.c_status.state.active_controller
-        for c in timed_status.c_status.state.controllers:
-            if c.controller_id <= len(message.ctl_ready):
-                message.ctl_ready[c.controller_id] = c.is_ready
+        for c in timed_status.c_status.state.behaviors:
+            if c.behavior_id <= len(message.ctl_ready):
+                message.ctl_ready[c.behavior_id] = c.is_ready
     if timed_status.f_status:
         message.msg_secs = timed_status.f_status.header.stamp.secs
         message.msg_nsecs = timed_status.f_status.header.stamp.nsecs
@@ -112,7 +110,7 @@ timed_status.calgyros_done = True   # Gyros calibration done?
 def sub_subswarm_id(msg, bridge):
     bridge.setSubswarmID(msg.data)
 
-def sub_controller_status(msg, bridge):
+def sub_behavior_summary(msg, bridge):
     # Just update; timed event will do the send
     timed_status.c_status = msg
 
@@ -148,18 +146,14 @@ def sub_pose(msg, bridge):
     message.vaz = msg.twist.twist.angular.z
     bridge.sendMessage(message)
 
-def sub_swarm_search_waypoint(msg, bridge):
-    message = messages.NetworkWpCmd()
+def sub_swarm_behavior_data(msg, bridge):
+    message = messages.SwarmBehaviorData()
+    t = rospy.Time.now()
     message.msg_dst = Socket.ID_BCAST_ALL
-    for waypointMsg in msg.waypoints:
-        wpMsg = ap_msg.SwarmSearchWaypoint()
-        wpMsg.waypoint.lat = waypointMsg.waypoint.lat
-        wpMsg.waypoint.lon = waypointMsg.waypoint.lon
-        wpMsg.waypoint.alt = waypointMsg.waypoint.alt
-        wpMsg.recipientvehicle_id = waypointMsg.recipientvehicle_id
-        wpMsg.searchCell_x = waypointMsg.searchCell_x
-        wpMsg.searchCell_y = waypointMsg.searchCell_y
-        message.wpMsg_list.append(wpMsg)
+    message.msg_secs = t.secs
+    message.msg_nsecs = t.nsecs
+    message.data_type = msg.id
+    message.data = msg.params
     bridge.sendMessage(message)
 
 def sub_intent(msg, bridge):
@@ -209,7 +203,6 @@ def net_auto_status(message, bridge):
     msg.subswarm_id = message.msg_sub
     msg.swarm_state = message.swarm_state
     msg.swarm_behavior = message.swarm_behavior
-    msg.active_controller = message.ctl_mode
     msg.autopilot_mode = message.mode
     bridge.publish('recv_swarm_ctl_state', msg, queue_size = 50)
 
@@ -306,20 +299,6 @@ def net_waypoint_goto(message, bridge):
     msg.data = message.index
     bridge.publish('recv_waypoint_goto', msg, latched=True)
 
-def net_waypoint_command(message, bridge):
-    msg = ap_msg.SwarmSearchWaypointList()
-    msg.header.stamp = rospy.Time(message.msg_secs, message.msg_nsecs)
-    for wpMsg in message.wpMsg_list:
-        waypointMsg = ap_msg.SwarmSearchWaypoint()
-        waypointMsg.waypoint.lat = wpMsg.lat
-        waypointMsg.waypoint.lon = wpMsg.lon
-        waypointMsg.waypoint.alt = wpMsg.alt
-        waypointMsg.recipientvehicle_id = wpMsg.recID
-        waypointMsg.searchCell_x = wpMsg.searchCellX
-        waypointMsg.searchCell_y = wpMsg.searchCellY
-        msg.waypoints.append(waypointMsg)
-    bridge.publish('recv_swarm_search_waypoint', msg, latched=True)
-
 def net_slave_setup(message, bridge):
     bridge.callService('slave_setup', pilot_srv.SlaveSetup,
                        enable=message.enable, channel=message.channel)
@@ -328,83 +307,41 @@ def net_flight_ready(message, bridge):
     bridge.setParam('flight_ready', message.ready)
 
 def net_subswarm_id(message, bridge):
-    msg = std_msgs.msg.UInt8()
-    msg.data = message.subswarm
-    bridge.publish('recv_subswarm', msg, latched=True)
+    bridge.callService('set_subswarm', ap_srv.SetInteger,
+                       setting=message.subswarm)
 
 def net_swarm_behavior(message, bridge):
 
-    # Parse & process differently based on ordered behavior type
-    # Processing typically requires a call to a "setup" service
-    # followed by a call to the set_swarm_behavior service
+    # Process differently based on ordered type (behavior, pause, suspend)
     if type(message) == messages.SuspendSwarmBehavior:
-        bridge.callService('set_swarm_behavior', ap_srv.SetInteger,
-                           setting=enums.SWARM_STANDBY)
-
-    elif type(message) == messages.PauseSwarmBehavior:
-        bridge.callService('pause_current_ctlr', ap_srv.SetBoolean,
-                           enable=message.behavior_pause)
-
-    elif type(message) == messages.SwarmEgress:
-        bridge.callService('set_swarm_behavior', ap_srv.SetInteger,
-                           setting=enums.SWARM_EGRESS)
-
-    elif type(message) == messages.SwarmFollow:
-        bridge.callService('run_swarm_fixed_formation', ap_srv.SetSwarmFormation,
-                           distance=message.distance, angle=message.angle, \
-                           stack_formation=message.stack_formation)
-
-    elif type(message) == messages.SwarmSequenceLand:
-        bridge.callService('run_swarm_sequence_land', ap_srv.SetInteger,
-                           setting=message.ldg_wpt)
-
-    elif type(message) == messages.SwarmSearch:
-        bridge.callService('run_swarm_search', ap_srv.SetSwarmSearch, \
-                           masterSearcherID=message.masterSearcherID, \
-                           searchAlgoEnum=message.searchAlgoEnum, lat=message.lat, lon=message.lon, \
-                           searchAreaLength=message.searchAreaLength, searchAreaWidth=message.searchAreaWidth)
+        behavior_msg = ap_msg.BehaviorParameters()
+        behavior_msg.id = enums.SWARM_STANDBY
+        behavior_msg.params = []
+        bridge.callService('run_behavior', ap_srv.SetBehavior,\
+                           params=behavior_msg)
 
     # This one will go away once all of the behavior-specific
     # messages are fully incorporated into SwarmCommander
     elif type(message) == messages.SwarmBehavior:
-        bridge.callService('set_swarm_behavior', ap_srv.SetInteger,
-                           setting=message.swarm_behavior)
+        behavior_msg = ap_msg.BehaviorParameters()
+        behavior_msg.id = message.swarm_behavior
+        behavior_msg.params = message.swarm_parameters
+        bridge.callService('run_behavior', ap_srv.SetBehavior,\
+                           params=behavior_msg)
+
+    elif type(message) == messages.PauseSwarmBehavior:
+        bridge.callService('pause_behavior', ap_srv.SetBoolean,
+                           enable=message.behavior_pause)
+
+def net_swarm_behavior_data(message, bridge):
+    behavior_msg = ap_msg.BehaviorParameters()
+    behavior_msg.id = message.data_type
+    behavior_msg.params = message.data
+    bridge.publish('recv_swarm_data', behavior_msg, latched=True)
 
 def net_swarm_state(message, bridge):
     bridge.callService('set_swarm_state', ap_srv.SetInteger,
                        setting=message.swarm_state)
-
-# Possible candidate for deprication
-def net_controller_mode(message, bridge):
-    bridge.callService('controller_mode', ap_srv.SetInteger,
-                       setting=message.controller)
-
-# Possible candidate for deprication
-def net_follower_set(message, bridge):
-    msg = ap_msg.FormationOrderStamped()
-    msg.header.seq = message.seq
-    msg.header.stamp = rospy.Time(message.msg_secs, message.msg_nsecs)
-    msg.header.frame_id = 'base_footprint'
-    msg.order.leader_id = message.leader_id
-    msg.order.range = message.follow_range
-    msg.order.angle = message.offset_angle
-    msg.order.alt_mode = message.alt_mode
-    msg.order.control_alt = message.control_alt
-    bridge.publish('recv_follower_set', msg, latched=True)
-
-# Possible candidate for deprication
-def net_sequencer_set(message, bridge):
-    msg = ap_msg.WaypointListStamped()
-    msg.header.seq = message.seq
-    msg.header.stamp = rospy.Time(message.msg_secs, message.msg_nsecs)
-    msg.header.frame_id = 'base_footprint'
-    for wp in message.wp_list:
-        lla = pilot_msg.LLA()
-        lla.lat = wp[0]
-        lla.lon = wp[1]
-        lla.alt = wp[2]
-        msg.waypoints.append(lla)
-    bridge.publish('recv_sequencer_set', msg, latched=True)
 
 def net_calibrate(message, bridge):
     def main():
@@ -594,19 +531,21 @@ if __name__ == '__main__':
         # NOTE: the add*Handler() methods handle ROS object creation;
         # see their definitions above for details and assumptions.
         bridge.addTimedHandler(2.0, timed_status)
-        bridge.addSubHandler('update_subswarm',
+        bridge.addSubHandler('subswarm_id',
                              std_msgs.msg.UInt8, sub_subswarm_id)
         bridge.addSubHandler('swarm_behavior',
                              std_msgs.msg.UInt8, sub_swarm_behavior)
-        bridge.addSubHandler('update_ctlr_status',
-                             ap_msg.ControllerGroupStateStamped,
-                             sub_controller_status)
+        bridge.addSubHandler('behavior_summary',
+                             ap_msg.BehaviorGroupStateStamped,
+                             sub_behavior_summary)
         bridge.addSubHandler('update_flight_status',
                              pilot_msg.Status, sub_flight_status,
                              log_success=False)
         bridge.addSubHandler('send_pose', pilot_msg.Geodometry, sub_pose)
         bridge.addSubHandler('swarm_state', std_msgs.msg.UInt8, sub_swarm_state)
-        bridge.addSubHandler('send_swarm_search_waypoint', ap_msg.SwarmSearchWaypointList, sub_swarm_search_waypoint)
+        bridge.addSubHandler('send_swarm_behavior_data', \
+                             ap_msg.BehaviorParameters, \
+                             sub_swarm_behavior_data)
         bridge.addSubHandler('payload_intent', ap_msg.VehicleIntent, sub_intent)
         bridge.addNetHandler(messages.Pose, net_pose,
                              log_success=False)
@@ -624,14 +563,8 @@ if __name__ == '__main__':
         bridge.addNetHandler(messages.SwarmBehavior, net_swarm_behavior)
         bridge.addNetHandler(messages.SuspendSwarmBehavior, net_swarm_behavior)
         bridge.addNetHandler(messages.PauseSwarmBehavior, net_swarm_behavior)
-        bridge.addNetHandler(messages.SwarmEgress, net_swarm_behavior)
-        bridge.addNetHandler(messages.SwarmFollow, net_swarm_behavior)
-        bridge.addNetHandler(messages.SwarmSequenceLand, net_swarm_behavior)
-        bridge.addNetHandler(messages.SwarmSearch, net_swarm_behavior)
+        bridge.addNetHandler(messages.SwarmBehaviorData, net_swarm_behavior_data)
         bridge.addNetHandler(messages.SwarmState, net_swarm_state)
-        bridge.addNetHandler(messages.SetController, net_controller_mode) #depricate?
-        bridge.addNetHandler(messages.FollowerSetup, net_follower_set) #depricate?
-        bridge.addNetHandler(messages.WPSequencerSetup, net_sequencer_set) #depricate?
         bridge.addNetHandler(messages.Calibrate, net_calibrate)
         bridge.addNetHandler(messages.Demo, net_demo)
         bridge.addNetHandler(messages.MissionConfig, net_mission_config)
@@ -641,7 +574,6 @@ if __name__ == '__main__':
         bridge.addNetHandler(messages.FlightStatus, net_auto_status,
                              log_success=False)
         bridge.addNetHandler(messages.WeatherData, net_weather_update)
-        bridge.addNetHandler(messages.NetworkWpCmd, net_waypoint_command)
         bridge.addNetHandler(messages.ReqPrevNMsgsAP, net_req_prev_n_ap_msgs)
 
         # Run the loop (shouldn't stop until node is shut down)
