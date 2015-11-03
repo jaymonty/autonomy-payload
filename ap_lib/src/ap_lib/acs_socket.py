@@ -261,7 +261,7 @@ class Socket():
                 # Allow socket to bind to the device broadcast address.
                 # It will hear messages destined to that address, but NOT
                 # unicast messages.
-                send._sock.bind((self._bcast, self._port))
+                self._sock.bind((self._bcast, self._port))
             else:
                 self._sock.bind(('', self._port))
         except Exception as ex:
