@@ -59,6 +59,9 @@ class Message(object):
     hdr_size = struct.calcsize(hdr_fmt)
 
     def __init__(self):
+        # Initialize message size
+        self.msg_size = self.hdr_size + struct.calcsize(self.msg_fmt)
+
         # Initialize header fields
         self.msg_fl_rel = False # Reliable flag
         self.msg_fl_syn = False # SYN flag
