@@ -336,6 +336,12 @@ class Socket():
                 self._send(relmsg.msg, *relmsg.send_params)
                 relmsg.stamp(t)
 
+    # like send() below, but no protocol and no header manipulation
+    def sendExact(self, msg):
+        if not msg or not isinstance(msg, messages.Message):
+            raise Exception("Parameter is not a Message")
+        return self._send(msg, self._bcast)
+
     # 'msg' must be a valid Message subclass
     def send(self, given_msg):
         if not given_msg or not isinstance(given_msg, messages.Message):
