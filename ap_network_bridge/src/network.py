@@ -49,13 +49,14 @@ def timed_status(bridge):
     message.alt_rel = 0
     message.gps_hdop = 0
     message.mis_cur = 0
-    message.ctl_ready = [0] * 17  # TODO: Don't hardcode
 
     # If we have valid data, populate correctly
     if timed_status.c_status:
-        for c in timed_status.c_status.state.behaviors:
-            if c.behavior_id <= len(message.ctl_ready):
-                message.ctl_ready[c.behavior_id] = c.is_ready
+        # TODO: see if there are bits we wish to include here
+        pass
+        #for c in timed_status.c_status.state.behaviors:
+        #    if c.behavior_id <= len(message.ctl_ready):
+        #        message.ctl_ready[c.behavior_id] = c.is_ready
     if timed_status.f_status:
         message.msg_secs = timed_status.f_status.header.stamp.secs
         message.msg_nsecs = timed_status.f_status.header.stamp.nsecs
@@ -250,7 +251,7 @@ def net_req_prev_n_ap_msgs(message, bridge):
         response.msg_nsecs = 0
 
         response.final_seq = final_seq
-    
+
         for m in ret.msgs:
             response.seq = m.seq
             response.msg = m.text
