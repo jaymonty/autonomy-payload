@@ -10,7 +10,7 @@ import ap_lib.acs_messages as m
 class Logger(object):
     ''' Abstract superclass for ACS network logging '''
 
-    MARKER = '50'
+    MARKER = m._enc_str('50')
     HEADER = '>2sLH'
     HEADER_SZ = struct.calcsize(HEADER)
     PARSE_MIN_SZ = HEADER_SZ + m.Message.hdr_size
@@ -29,7 +29,8 @@ class Logger(object):
         t_s = int(t)
         t_ms = int((t - t_s) * 1e3)
         hdr = struct.pack(self.HEADER, self.MARKER, t_s, t_ms)
-        return hdr + msg.serialize()
+        data = msg.serialize()
+        return hdr + data
 
     def _deserialize(self, data):
         if len(data) < self.PARSE_MIN_SZ:
@@ -41,7 +42,7 @@ class Logger(object):
             t = hdr[1] + hdr[2] / 1e3
             msg = m.Message.parse(data[self.HEADER_SZ:])
             return t, msg
-        except:
+        except Exception as ex:
             return None
 
     def __del__(self):
@@ -57,7 +58,7 @@ class LogWriter(Logger):
     ''' Write ACS network messages to a log file '''
 
     def __init__(self, filename):
-        self._file = open(filename, 'w')
+        self._file = open(filename, 'wb')
 
     def write(self, msg, t=None):
         data = self._serialize(msg, t)
@@ -68,8 +69,8 @@ class LogReader(Logger):
     ''' Read ACS network messages from a log file '''
 
     def __init__(self, filename):
-        self._file = open(filename, 'r')
-        self._buff = ''
+        self._file = open(filename, 'rb')
+        self._buff = bytes()
 
     def readNext(self):
         while True:
