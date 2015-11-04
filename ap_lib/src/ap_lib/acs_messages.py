@@ -188,8 +188,7 @@ class Example(Message):
 class FlightStatus(Message):
     # Define message type parameters
     msg_type = 0x00
-#    msg_fmt = '>HBBHhhHxBH16s'
-    msg_fmt = '>HBBHhhHBxH16s'
+    msg_fmt = '>HBBHhhHB3x16s'
 
     def __init__(self):
         Message.__init__(self)
@@ -219,9 +218,7 @@ class FlightStatus(Message):
         self.alt_rel = None	    # AGL (int, millimeters)
         self.mis_cur = None	    # Current mission (waypoint) index (0-65535)
         self.swarm_behavior = 0 # Swarm behavior (follow, standby, etc.)
-        self.ctl_ready = [False] * (16 + 1)   # Ctlr ready flags (bit array)
-                                # (Index 1 is low bit, 16 is high bit,
-                                #  skip 0 since it is the null controller)
+        # Next 3 bytes are unused
         self.name = None	# Friendly name of aircraft (16 chars max)
 
     def _pack(self):
@@ -249,10 +246,6 @@ class FlightStatus(Message):
         batt_vcc = 65535
         if self.batt_vcc >= 0:
             batt_vcc = self.batt_vcc
-        ctl_ready_bits = 0x0000
-        for bit in range(1, len(self.ctl_ready)):
-            if self.ctl_ready[bit]:
-                ctl_ready_bits |= 1<<(bit-1)
         tupl = (mode_and_flags,
                 swarm_fence,
                 int(batt_rem),
@@ -261,7 +254,6 @@ class FlightStatus(Message):
                 int(self.alt_rel / 1e02),
                 int(self.mis_cur),
                 int(self.swarm_behavior),
-                ctl_ready_bits,
                 _enc_str(self.name))
 
         # Pack into a byte string
@@ -299,9 +291,6 @@ class FlightStatus(Message):
         self.alt_rel = fields.pop(0) * 1e02
         self.mis_cur = fields.pop(0)
         self.swarm_behavior = fields.pop(0)
-        ctlready = fields.pop(0)
-        for bit in range(1, len(self.ctl_ready)):
-            self.ctl_ready[bit] = bool(1<<(bit-1) & ctlready)
         self.name = _dec_str(fields.pop(0))
 
 class Pose(Message):
@@ -888,7 +877,7 @@ class RedPose(Message):
         self.vax = None		# Angular velocity x (rad/s * 100)
         self.vay = None		# Angular velocity y (rad/s * 100)
         self.vaz = None		# Angular velocity z (rad/s * 100)
-        
+
     def _pack(self):
         # Convert message elements into pack-able fields and form tuple
         tupl = (self.uav_id,
@@ -908,7 +897,7 @@ class RedPose(Message):
 
         # Pack into a byte string
         return struct.pack(type(self).msg_fmt, *tupl)
-        
+
     def _unpack(self, data):
         # Unpack payload into fields
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
@@ -928,4 +917,3 @@ class RedPose(Message):
         self.vax = fields[11] / 1e02
         self.vay = fields[12] / 1e02
         self.vaz = fields[13] / 1e02
-
