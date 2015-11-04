@@ -21,6 +21,20 @@ def _bool16(val):
         return 0xffff
     return 0x0000
 
+# Python2/3 string/bytes compatibility
+def _enc_str(s):
+    try:
+        return s.encode('utf-8')  # Python 3
+    except:
+        return str(s)  # Python 2
+def _dec_str(e):
+    try:
+        s = e.decode('utf-8')
+    except:
+        s = str(e)
+    finally:
+        return s.strip(chr(0x0))
+
 class wpMsg(): #Struct to store swarm search waypoint variables
     lat = None
     lon = None
@@ -158,7 +172,7 @@ class Example(Message):
         self.foo = None         # Decimal foo's (e.g., 123.456)
         self.bar = None		# Integer bar's (e.g., 789)
         self.baz = None		# Variable-length string
-        
+
     def _pack(self):
         # Convert message elements into pack-able fields and form tuple
         tupl = (int(self.foo * 1e03),
@@ -167,12 +181,12 @@ class Example(Message):
 
         # Pack into a byte string
         return struct.pack(type(self).msg_fmt, *tupl)
-        
+
     def _unpack(self, data):
         # Unpack message contents (can do this incrementally for
         #  variable-length messages)
         tupl = struct.unpack_from(type(self).msg_fmt, data)
-        
+
         # Place unpacked but unconverted fields into message elements
         self.foo = tupl[0] / 1e03
         self.bar = tupl[1]
@@ -218,7 +232,7 @@ class FlightStatus(Message):
                                 # (Index 1 is low bit, 16 is high bit,
                                 #  skip 0 since it is the null controller)
         self.name = None	# Friendly name of aircraft (16 chars max)
-        
+
     def _pack(self):
         # Convert message elements into pack-able fields and form tuple
         mode_and_flags = self.mode << 12 \
@@ -258,11 +272,11 @@ class FlightStatus(Message):
                 int(self.swarm_behavior),
                 int(self.ctl_mode),
                 ctl_ready_bits,
-                self.name)
+                _enc_str(self.name))
 
         # Pack into a byte string
         return struct.pack(type(self).msg_fmt, *tupl)
-        
+
     def _unpack(self, data):
         # Unpack payload into fields
         fields = list(struct.unpack_from(type(self).msg_fmt, data, 0))
@@ -299,7 +313,7 @@ class FlightStatus(Message):
         ctlready = fields.pop(0)
         for bit in range(1, len(self.ctl_ready)):
             self.ctl_ready[bit] = bool(1<<(bit-1) & ctlready)
-        self.name = str(fields.pop(0)).strip(chr(0x0))
+        self.name = _dec_str(fields.pop(0))
 
 class Pose(Message):
     # Define message type parameters
@@ -323,7 +337,7 @@ class Pose(Message):
         self.vax = None		# Angular velocity x (rad/s * 100)
         self.vay = None		# Angular velocity y (rad/s * 100)
         self.vaz = None		# Angular velocity z (rad/s * 100)
-        
+
     def _pack(self):
         # Convert message elements into pack-able fields and form tuple
         tupl = (int(self.lat * 1e07),
@@ -342,7 +356,7 @@ class Pose(Message):
 
         # Pack into a byte string
         return struct.pack(type(self).msg_fmt, *tupl)
-        
+
     def _unpack(self, data):
         # Unpack payload into fields
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
@@ -414,11 +428,11 @@ class Arm(Message):
 
         self.enable = None         # Boolean
         # 3 padding bytes = 0x00
-        
+
     def _pack(self):
         tupl = (int(self.enable),)
         return struct.pack(type(self).msg_fmt, *tupl)
-        
+
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.enable = bool(fields[0])
@@ -532,13 +546,13 @@ class SlaveSetup(Message):
             channel = str(self.channel)  # Python2
 
         tupl = (int(self.enable),
-                channel)
+                _enc_str(channel))
         return struct.pack(type(self).msg_fmt, *tupl)
 
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.enable = bool(fields[0])
-        self.channel = str(fields[1])
+        self.channel = _dec_str(fields[1])
 
 class FlightReady(Message):
     msg_type = 0x88
@@ -771,7 +785,7 @@ class SwarmSequenceLand(Message):
 
     def __init__(self):
         Message.__init__(self)
-        self.ldg_wpt = None  # WP ID of the landing sequence 
+        self.ldg_wpt = None  # WP ID of the landing sequence
 
     def _pack(self):
         tupl = (int(self.ldg_wpt),)
@@ -888,8 +902,8 @@ class WeatherData(Message):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.baro = fields[0]
         self.temperature = fields[1]
-        self.wind_speed = fields[2] 
-        self.wind_direction = fields[3] 
+        self.wind_speed = fields[2]
+        self.wind_direction = fields[3]
 
 class NetworkWpCmd(Message):
     msg_type = 0x99
@@ -933,7 +947,7 @@ class NetworkWpCmd(Message):
             offset += type(self).msg_fmt_wp_sz
 
 #Message to request the previous N autopilot messages.
-#A second field, since_seq, is intended to signal that the 
+#A second field, since_seq, is intended to signal that the
 #requestor already has up to that sequence number.  If that
 #sequence number is arrived at before processing N autopilot
 #messages, the request doesn't want the other msgs (already has them)
@@ -959,12 +973,12 @@ class ReqPrevNMsgsAP(Message):
 #ACS Message containing a previous autopilot message.
 class PrevMsgAP(Message):
     msg_type = 0xA1
-    msg_fmt = '>LL92s'  
+    msg_fmt = '>LL92s'
 
     def __init__(self):
         Message.__init__(self)
 
-        self.final_seq = 0  #Each message states the seq number at the 
+        self.final_seq = 0  #Each message states the seq number at the
                             #end of the msg queue so the requestor knows
                             #how many messages are available, even if
                             #the requestor does not receive all messages
@@ -973,14 +987,14 @@ class PrevMsgAP(Message):
         self.msg = ""
 
     def _pack(self):
-        tupl = (int(self.final_seq), int(self.seq), str(self.msg))
+        tupl = (int(self.final_seq), int(self.seq), _enc_str(self.msg))
         return struct.pack(type(self).msg_fmt, *tupl)
 
     def _unpack(self, data):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.final_seq = fields[0]
         self.seq = fields[1]
-        self.msg = fields[2].decode('utf-8').strip(chr(0x0))
+        self.msg = _dec_str(fields[2])
 
 class AutopilotReboot(Message):
     msg_type = 0xFD
@@ -1027,4 +1041,3 @@ class PayloadShutdown(Message):
 
     def _unpack(self, data):
         pass
-
