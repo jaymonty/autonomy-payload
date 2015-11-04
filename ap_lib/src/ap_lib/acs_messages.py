@@ -865,3 +865,67 @@ class PauseSwarmBehavior(Message):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.behavior_pause = bool(fields[0])
 
+class RedPose(Message):
+    ''' Pose data for a "red" UAV '''
+    msg_type = 0x76
+    msg_fmt = '>B3xlllllllhhhhhh'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        # Define message fields (setting to None helps raise Exceptions later)
+        self.uav_id = None      # ID (int) of the red UAV
+        self.lat = None		# Decimal degrees (e.g. 35.123456)
+        self.lon = None		# Decimal degrees (e.g. -120.123456)
+        self.alt = None		# Decimal meters MSL (WGS84)
+        self.q_x = None		# Quaternion X
+        self.q_y = None		# Quaternion Y
+        self.q_z = None		# Quaternion Z
+        self.q_w = None		# Quaternion W
+        self.vlx = None		# Linear velocity x (cm/s)
+        self.vly = None		# Linear velocity y (cm/s)
+        self.vlz = None		# Linear velocity z (cm/s)
+        self.vax = None		# Angular velocity x (rad/s * 100)
+        self.vay = None		# Angular velocity y (rad/s * 100)
+        self.vaz = None		# Angular velocity z (rad/s * 100)
+        
+    def _pack(self):
+        # Convert message elements into pack-able fields and form tuple
+        tupl = (self.uav_id,
+                int(self.lat * 1e07),
+                int(self.lon * 1e07),
+                int(self.alt * 1e03),
+                int(self.q_x * 1e09),
+                int(self.q_y * 1e09),
+                int(self.q_z * 1e09),
+                int(self.q_w * 1e09),
+                int(self.vlx * 1e02),
+                int(self.vly * 1e02),
+                int(self.vlz * 1e02),
+                int(self.vax * 1e02),
+                int(self.vay * 1e02),
+                int(self.vaz * 1e02))
+
+        # Pack into a byte string
+        return struct.pack(type(self).msg_fmt, *tupl)
+        
+    def _unpack(self, data):
+        # Unpack payload into fields
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+
+        # Place unpacked but unconverted fields into message elements
+        self.uav_id = fields[0]
+        self.lat = fields[1] / 1e07
+        self.lon = fields[2] / 1e07
+        self.alt = fields[3] / 1e03
+        self.q_x = fields[4] / 1e09
+        self.q_y = fields[5] / 1e09
+        self.q_z = fields[6] / 1e09
+        self.q_w = fields[7] / 1e09
+        self.vlx = fields[8] / 1e02
+        self.vly = fields[9] / 1e02
+        self.vlz = fields[10] / 1e02
+        self.vax = fields[11] / 1e02
+        self.vay = fields[12] / 1e02
+        self.vaz = fields[13] / 1e02
+
