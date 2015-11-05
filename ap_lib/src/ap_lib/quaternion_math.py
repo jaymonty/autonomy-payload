@@ -67,4 +67,13 @@ def multiply_quaternion(q1, q2):
 def scalar_multiply_quaternion(q, s):
     return [ q[0]*s, q[1]*s, q[2]*s, q[3]*s ]
 
+# @param q: quaternion (list) of the form [ x, y, z, w ]
+# @return (list) euler angles [ roll, pitch, yaw ] in RADIANS
+def quat_to_euler(q):
+    # NOTE: Code based on ArduPilot's AP_Math/quaternion.cpp
+    (q2, q3, q4, q1) = (q[0], q[1], q[2], q[3])
+    roll = math.atan2(2.0*(q1*q2 + q3*q4), 1 - 2.0*(q2*q2 + q3*q3))
+    pitch = math.asin(2.0*(q1*q3 - q4*q2))
+    yaw = math.atan2(2.0*(q1*q4 + q2*q3), 1 - 2.0*(q3*q3 + q4*q4))
 
+    return [ roll, pitch, yaw ]

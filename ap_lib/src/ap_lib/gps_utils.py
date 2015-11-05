@@ -3,6 +3,8 @@
 # Utility functions for working with GPS data
 # Most functions were copied directly from MAVProxy's mp_util.y
 
+from ap_lib import quaternion_math as qmath
+
 import math
 import os
 
@@ -89,3 +91,62 @@ def normalize_angle(angle, radians = True):
 
     if radians: return angle
     return math.degrees(angle)
+
+#Returns True if a target position is "hit-able" by weapons at lat,lon,alt
+#Returns False otherwise
+#
+#FOV_width and FOV_height specified in degrees.
+def hitable(lat, lon, alt, pose_quat, max_range, FOV_width, FOV_height,
+            targ_lat, targ_lon, targ_alt):
+    # Compute lateral distance to leader (using lat/lon tools)
+    distance = gps_distance( lat, lon, targ_lat, targ_lon )
+
+    if (distance > max_range or distance <= 0):
+        return False
+
+    # Compute altitude difference to target
+    #  - negative sign to indicate FROM me TO target
+    alt_diff = -(alt - targ_alt)
+    #with this implemenation: alt_diff / distance must be within the domain
+    #of the arcsin function [-1, 1]:
+    if (math.fabs(alt_diff) > distance):
+        return False
+
+    # Compute planar bearing from target
+    # - measured in bearing angle (NED), radians
+    abs_bearing = gps_bearing(lat, lon, targ_lat, targ_lon )
+
+    rpy = qmath.quat_to_euler(pose_quat)
+    yaw = rpy[2]
+
+    #transform yaw to desired coord space
+    if yaw < math.radians(180.0):
+        yaw += math.radians(360.0)
+
+    # Transform to account for current heading
+    bearing = abs_bearing - yaw
+
+    # Check if meets FOV conditions
+    #  -- within azimuthal scope (+/-FOV_half_width degrees)
+    #  -- within elevation scope (+/-FOV_half_width degrees)
+    FOV_half_width = math.radians(FOV_width / 2.0)
+    if math.fabs(bearing) > FOV_half_width:
+        return False
+
+    # Compute and compare elevation
+    FOV_half_height = math.radians(FOV_height / 2.0)
+    phi = math.asin(alt_diff / distance)
+    pitch = rpy[1]
+    
+    # Account for my pitch
+    if alt_diff > 0.0:
+        phi -= pitch
+    else:
+        phi += pitch
+
+    if math.fabs(phi) > FOV_half_height:
+        return False
+
+    #all checks passed, target is 'shootable'
+    return True
+
