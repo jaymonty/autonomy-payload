@@ -125,6 +125,8 @@ def hitable(lat, lon, alt, pose_quat, max_range, FOV_width, FOV_height,
 
     # Transform to account for current heading
     bearing = abs_bearing - yaw
+    if bearing < 0.0:
+        bearing += math.radians(360.0)
 
     # Check if meets FOV conditions
     #  -- within azimuthal scope (+/-FOV_half_width degrees)
