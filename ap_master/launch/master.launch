@@ -83,6 +83,11 @@
     <remap from="swarm_tracker/subswarm_id" to="swarm_control/subswarm_id" />
   </node>
 
+  <node name="red_tracker" pkg="ap_perception" type="red_tracker.py" output="screen" args="" >
+    <remap from="red_tracker/acs_pose" to="autopilot/acs_pose" />
+    <remap from="red_tracker/recv_red_pose" to="network/recv_red_pose" />
+  </node>
+
   <node name="task_runner" pkg="ap_tasks" type="task_runner.py" output="screen" args="" />
 
   <node name="recv_pose_rate" pkg="ap_logging" type="recv_pose_rate.py" output="screen" args="" />
@@ -112,5 +117,12 @@
     <remap from="swarm_searcher/send_swarm_behavior_data" to="network/send_swarm_behavior_data" />
     <remap from="swarm_searcher/acs_pose" to="autopilot/acs_pose" />
   </node>
+
+  <node name="greedy_shooter" pkg="ap_path_planning" type="greedy_shooter.py" output="screen" args="">
+    <remap from="greedy_shooter/send_swarm_behavior_data" to="network/send_swarm_behavior_data" />
+    <remap from="greedy_shooter/acs_pose" to="autopilot/acs_pose" />
+    <remap from="greedy_shooter/firing_reports" to="air_to_air/firing_reports" />
+  </node>
+
 
 </launch>
