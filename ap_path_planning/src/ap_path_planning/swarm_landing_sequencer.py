@@ -47,7 +47,6 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
       _leader_id: ID of the UAV to follow in the landing sequence
       _ldg_wpt_index: Index (ID) of the landing waypoint
       _alt_block: assigned altitude block relative to the base altitude
-      _wp_msg: LLA message object for waypoint orders to be published
       _ldg_wp_publisher: ROS publisher to direct the UAV to the landing waypoint
       _wp_getrange_srv_proxy: ROS proxy for using the autopilot/wp_getrange service
       _fpr_param_set_srv_proxy: ROS proxy for using the autopilot/fpr_param_set service
@@ -57,7 +56,9 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
       _stack_time: ROS time of arrival at the landing stack location
 
     Inherited from WaypointBehavior
+      wp_msg: LLA message object for waypoint orders to be published
       _wpPublisher: publisher object for computed waypoints to be sent to the autopilot
+      _last_wp_id: Index (ID) of the last (infinite loiter) waypoint
 
     Inherited from Behavior:
       behaviorID: identifier (int) for this particular behavior
@@ -66,7 +67,7 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
       _swarm_keys: key values (IDs) of all swarm UAVs
       _subswarm_keys: key values (IDs) of all subswarm UAVs
       _ap_intent: most recently ordered autopilot waypoint
-      _lock: reentrant lock to enforce thread-safe swarm dictionary access
+      _swarm_lock: reentrant lock to enforce thread-safe swarm dictionary access
       is_ready: set to True when the behavior has been initialized
       is_active: set to True when the behavior is running 
       is_paused: set to True when an active behavior is paused
@@ -103,7 +104,6 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
         self._ldg_wpt_index = 0
         self._last_wp_id = None
         self._alt_block = 0
-        self._wp_msg = apbrgmsg.LLA()
         self._ldg_wp_publisher = None
         self._wp_getrange_srv_proxy = None
         self._fpr_param_set_srv_proxy = None
@@ -177,9 +177,9 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
                     self._fpr_param_set_srv_proxy('WP_LOITER_RAD', \
                                                   BASE_WP_LOITER_RAD)
 
-                self._wp_msg.lat = wpt.x
-                self._wp_msg.lon = wpt.y
-                self._wp_msg.alt = self._ap_intent.z
+                self.wp_msg.lat = wpt.x
+                self.wp_msg.lon = wpt.y
+                self.wp_msg.alt = self._ap_intent.z
 
                 self._alt_block = 0
                 self._behavior_state = NEGOTIATE_ORDER
@@ -198,7 +198,7 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
     def run_behavior(self):
         ''' Runs one iteration of the behavior
         '''
-        with self._lock:
+        with self._swarm_lock:
 
             # Make sure the aircraft this one is following is still valid
             # If it is not, need to figure out a new aircraft to follow
@@ -215,7 +215,7 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
 
             # Sequence computed, but need to send the transit waypoint
             elif self._behavior_state == START_TRANSIT:
-                self.publishWaypoint(self._wp_msg)
+                self.publishWaypoint(self.wp_msg)
                 self._behavior_state = IN_TRANSIT
                 self.log_dbug("transit to landing stack location initiated")
                 return
@@ -225,10 +225,10 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
                 state = self._swarm[self._ownID]
                 d = gps.gps_distance(state.state.pose.pose.position.lat, \
                                     state.state.pose.pose.position.lon, \
-                                    self._wp_msg.lat, self._wp_msg.lon)
+                                    self.wp_msg.lat, self.wp_msg.lon)
                 if gps.gps_distance(state.state.pose.pose.position.lat, \
                                     state.state.pose.pose.position.lon, \
-                                    self._wp_msg.lat, self._wp_msg.lon) < LAND_WP_DIST:
+                                    self.wp_msg.lat, self.wp_msg.lon) < LAND_WP_DIST:
                     self.log_dbug("transit to landing stack location complete")
                     self._behavior_state = STACK_ARRIVAL
                     self._stack_time = rospy.Time.now()
@@ -259,11 +259,11 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
                             (enums.ALT_BLOCK_SIZE - ALT_BLOCK_CAPTURE)) / int(enums.ALT_BLOCK_SIZE)
                 block = max(0, block + 1)    # Our block is leaderBlock+1
                 if block != self._alt_block: # New order only rqd on change
-                    self._wp_msg.alt = enums.BASE_REL_ALT + enums.ALT_BLOCK_SIZE * block
+                    self.wp_msg.alt = enums.BASE_REL_ALT + enums.ALT_BLOCK_SIZE * block
                     self.log_dbug("ordered to altitude block %d (%f meters)"\
-                                  %(self._alt_block, self._wp_msg.alt))
+                                  %(self._alt_block, self.wp_msg.alt))
                     self._alt_block = block
-                    self.publishWaypoint(self._wp_msg)
+                    self.publishWaypoint(self.wp_msg)
 
             # If landing has already been ordered, we're done
             elif self._behavior_state == ON_FINAL:
@@ -321,7 +321,7 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
         possibly negotiated) methods of determining order.
         '''
         lo_to_hi = []
-        with self._lock:
+        with self._swarm_lock:
             for uav in self._subswarm_keys:
                 lo_to_hi.append([ self._swarm[uav].vehicle_id, \
                                      self._swarm[uav].state.pose.pose.position.alt])
@@ -345,7 +345,6 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
 # Main code
 
 if __name__ == '__main__':
-    args = rospy.myargv(argv=sys.argv)
     ownAC = int(rospy.get_param("aircraft_id"))
 
     sequencer = SwarmLandingSequencer("swarm_landing_sequencer", ownAC)

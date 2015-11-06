@@ -38,6 +38,8 @@ class LinearFormation(WaypointBehavior):
 
     Inherited from WaypointBehavior
       _wpPublisher: publisher object for publishing waypoint commands
+      wp_msg: LLA object containing waypoint order
+      _last_wp_id: Index (ID) of the last (infinite loiter) waypoint
 
     Inherited from Behavior
       behaviorID: identifier (int) for this particular behavior
@@ -86,10 +88,9 @@ class LinearFormation(WaypointBehavior):
         self._angle = 0.0
         self._stacked = False
         self._is_lead = False
-        self._last_wp_id = 0
         self._behavior_state = LinearFormation.SETUP
         self._wpt_calc = \
-            pputils.FormCalculator(self, self._own_uav_id, self._swarm)
+            pputils.InterceptCalculator(self, self._own_uav_id, self._swarm)
         self._wp_goto_publisher = None
         self._activate_time = None
 
@@ -149,7 +150,8 @@ class LinearFormation(WaypointBehavior):
             self._behavior_state = LinearFormation.FLY
             
         elif not self._is_lead:
-            wpt = self._wpt_calc.compute_intercept_waypoint()
+            with self._swarm_lock:
+                wpt = self._wpt_calc.compute_intercept_waypoint(self.wp_msg)
             if wpt:
                 self.publishWaypoint(wpt)
             else:
@@ -165,14 +167,13 @@ class LinearFormation(WaypointBehavior):
         '''
         if not self.is_active: return
         if pause:
-            lla = brgmsg.LLA()
-            lla.lat = \
+            self.wp_msg.lat = \
                 self._swarm[self._own_uav_id].state.pose.pose.position.lat
-            lla.lon = \
+            self.wp_msg.lon = \
                 self._swarm[self._own_uav_id].state.pose.pose.position.lon
-            lla.alt = \
+            self.wp_msg.alt = \
                 self._swarm[self._own_uav_id].state.pose.pose.position.rel_alt
-            self.publishWaypoint(lla)
+            self.publishWaypoint(self.wp_msg)
 
         return super(LinearFormation, self).set_pause(pause)
 
@@ -185,7 +186,6 @@ class LinearFormation(WaypointBehavior):
 
             # Checks if this UAV is not the formation lead
             if not self._is_lead:
-
                 ldr_rec = self._swarm[self._wpt_calc.leader()]
 
                 # Make sure the UAV we're following is in the right mode
@@ -223,11 +223,12 @@ class LinearFormation(WaypointBehavior):
         @return True if the formation was successfully set up
         '''
         hi_to_lo = []
-        for uav_id in self._subswarm_keys:
-            if uav_id == self._own_uav_id:
-                hi_to_lo.append((uav_id, self._ap_intent.z))
-            else:
-                hi_to_lo.append((uav_id, self._swarm[uav_id].state.pose.pose.position.rel_alt))
+        with self._swarm_lock:
+            for uav_id in self._subswarm_keys:
+                if uav_id == self._own_uav_id:
+                    hi_to_lo.append((uav_id, self._ap_intent.z))
+                else:
+                    hi_to_lo.append((uav_id, self._swarm[uav_id].state.pose.pose.position.rel_alt))
         hi_to_lo = sorted(hi_to_lo, key = lambda tup: -tup[1])
         self.log_dbug("determined high to low order: %s"%str(hi_to_lo))
 
@@ -241,7 +242,7 @@ class LinearFormation(WaypointBehavior):
             self._is_lead = False
             if self._wpt_calc.set_params(hi_to_lo[0][0], self._distance, \
                                          self._angle, self._ap_intent.z, \
-                                         pputils.FormCalculator.BASE_ALT_MODE):
+                                         pputils.InterceptCalculator.BASE_ALT_MODE):
                 result = True
                 self.log_info("initialized line formation to follow UAV ID: %d"
                               %self._wpt_calc.leader())
@@ -251,7 +252,7 @@ class LinearFormation(WaypointBehavior):
             while hi_to_lo[step][0] != self._own_uav_id:  step += 1
             if self._wpt_calc.set_params(hi_to_lo[step-1][0], self._distance, \
                                          self._angle, self._ap_intent.z, \
-                                         pputils.FormCalculator.BASE_ALT_MODE):
+                                         pputils.InterceptCalculator.BASE_ALT_MODE):
                 result = True
                 self.log_info("initialized line formation to follow UAV ID: %d"
                               %self._wpt_calc.leader())

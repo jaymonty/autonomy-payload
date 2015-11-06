@@ -312,12 +312,11 @@ class SwarmSearcher(wp_behavior.WaypointBehavior):
                            self.searchUAVMap[vehicle].status == SEARCH_ACTIVE:
                             self.searchUAVMap[vehicle].status = SEARCH_EGRESS
                             self.searchUAVMap[vehicle].assignedTime = rospy.Time.now()
-                            lla = apbrgmsg.LLA()
-                            lla.lat = self.searchUAVMap[vehicle].originalLLA[0]
-                            lla.lon = self.searchUAVMap[vehicle].originalLLA[1]
-                            lla.alt = self.searchUAVMap[vehicle].assignedAltitude
+                            self.wp_msg.lat = self.searchUAVMap[vehicle].originalLLA[0]
+                            self.wp_msg.lon = self.searchUAVMap[vehicle].originalLLA[1]
+                            self.wp_msg.alt = self.searchUAVMap[vehicle].assignedAltitude
                             if vehicle == self.search_master_searcher_id:
-                                self.publishWaypoint(lla)
+                                self.publishWaypoint(self.wp_msg)
 
             elif self.SEARCH_STATUS == SEARCH_EGRESS:
                 # check if all search slaves has reach originalLLA and set status to search ready
@@ -352,7 +351,7 @@ class SwarmSearcher(wp_behavior.WaypointBehavior):
 
             if self.wpmsgQueued == True: #A new network waypoint cmd is triggered this tick
                 msg = apmsg.BehaviorParameters()
-                msg.id = bytes.SearchWaypointParser.SEARCH_WP
+                msg.id = bytes.SEARCH_WP
                 msg.params = self._wps_to_send.pack()
                 self._swarmSearchPublisher.publish(msg)
                 self._wps_to_send.wp_list = []
@@ -438,11 +437,10 @@ class SwarmSearcher(wp_behavior.WaypointBehavior):
                                  self.centerofSearchGridLLA[1])
                 self.searchUAVMap[vehicle].timeoutTime = rospy.Time.now()
                 if vehicle == self.search_master_searcher_id:
-                    lla = apbrgmsg.LLA()
-                    lla.lat = self.centerofSearchGridLLA[0]
-                    lla.lon = self.centerofSearchGridLLA[1]
-                    lla.alt = self.searchUAVMap[vehicle].assignedAltitude
-                    self.publishWaypoint(lla)
+                    self.wp_msg.lat = self.centerofSearchGridLLA[0]
+                    self.wp_msg.lon = self.centerofSearchGridLLA[1]
+                    self.wp_msg.alt = self.searchUAVMap[vehicle].assignedAltitude
+                    self.publishWaypoint(self.wp_msg)
 
                 else:
                     wp = ( self.centerofSearchGridLLA[0], self.centerofSearchGridLLA[1], \
@@ -522,11 +520,10 @@ class SwarmSearcher(wp_behavior.WaypointBehavior):
                                 self.searchUAVMap[vehicle].timeoutTime = currentTime
                                 #assign UAV to tgt_cell
                                 if vehicle == self.search_master_searcher_id:
-                                    lla = apbrgmsg.LLA()
-                                    lla.lat = tgt_cell[0]
-                                    lla.lon = tgt_cell[1]
-                                    lla.alt = self.searchUAVMap[vehicle].assignedAltitude
-                                    self.publishWaypoint(lla)
+                                    self.wp_msg.lat = tgt_cell[0]
+                                    self.wp_msg.lon = tgt_cell[1]
+                                    self.wp_msg.alt = self.searchUAVMap[vehicle].assignedAltitude
+                                    self.publishWaypoint(self.wp_msg)
 
                                 else:
                                     rec = self.searchUAVMap[vehicle]
@@ -595,11 +592,10 @@ class SwarmSearcher(wp_behavior.WaypointBehavior):
                                       str(self.searchUAVMap[vehicle].assignedCell))
 
                         if vehicle == self.search_master_searcher_id:
-                            lla = apbrgmsg.LLA()
-                            lla.lat = self.searchGrid[result[1]][result[2]].LLA[0]
-                            lla.lon = self.searchGrid[result[1]][result[2]].LLA[1]
-                            lla.alt = self.searchUAVMap[vehicle].assignedAltitude
-                            self.publishWaypoint(lla)
+                            self.wp_msg.lat = self.searchGrid[result[1]][result[2]].LLA[0]
+                            self.wp_msg.lon = self.searchGrid[result[1]][result[2]].LLA[1]
+                            self.wp_msg.alt = self.searchUAVMap[vehicle].assignedAltitude
+                            self.publishWaypoint(self.wp_msg)
 
                         else:
                             grid = self.searchGrid[result[1]][result[2]]
@@ -624,11 +620,10 @@ class SwarmSearcher(wp_behavior.WaypointBehavior):
                                       str(vehicle) + "] returning home")
 
                         if vehicle == self.search_master_searcher_id:
-                            lla = apbrgmsg.LLA()
-                            lla.lat = self.searchUAVMap[vehicle].originalLLA[0]
-                            lla.lon = self.searchUAVMap[vehicle].originalLLA[1]
-                            lla.alt = self.searchUAVMap[vehicle].assignedAltitude
-                            self.publishWaypoint(lla)
+                            self.wp_msg.lat = self.searchUAVMap[vehicle].originalLLA[0]
+                            self.wp_msg.lon = self.searchUAVMap[vehicle].originalLLA[1]
+                            self.wp_msg.alt = self.searchUAVMap[vehicle].assignedAltitude
+                            self.publishWaypoint(self.wp_msg)
 
                         else:
                             rec = self.searchUAVMap[vehicle]
@@ -731,11 +726,10 @@ class SwarmSearcher(wp_behavior.WaypointBehavior):
                             self.searchUAVMap[vehicle].timeoutTime = currentTime
 
                             if vehicle == self.search_master_searcher_id:
-                                lla = apbrgmsg.LLA()
-                                lla.lat = self.searchUAVMap[vehicle].assignedLLA[0]
-                                lla.lon = self.searchUAVMap[vehicle].assignedLLA[1]
-                                lla.alt = self.searchUAVMap[vehicle].assignedAltitude
-                                self.publishWaypoint(lla)
+                                self.wp_msg.lat = self.searchUAVMap[vehicle].assignedLLA[0]
+                                self.wp_msg.lon = self.searchUAVMap[vehicle].assignedLLA[1]
+                                self.wp_msg.alt = self.searchUAVMap[vehicle].assignedAltitude
+                                self.publishWaypoint(self.wp_msg)
 
                             else:
                                 rec = self.searchUAVMap[vehicle]
@@ -791,11 +785,10 @@ class SwarmSearcher(wp_behavior.WaypointBehavior):
                                                       str(self.searchUAVMap[vehicle].assignedCell))
 
                                         if egressUAVID == self.search_master_searcher_id:
-                                            lla = apbrgmsg.LLA()
-                                            lla.lat = self.searchUAVMap[egressUAVID].assignedLLA[0]
-                                            lla.lon = self.searchUAVMap[egressUAVID].assignedLLA[1]
-                                            lla.alt = self.searchUAVMap[egressUAVID].assignedAltitude
-                                            self.publishWaypoint(lla)
+                                            self.wp_msg.lat = self.searchUAVMap[egressUAVID].assignedLLA[0]
+                                            self.wp_msg.lon = self.searchUAVMap[egressUAVID].assignedLLA[1]
+                                            self.wp_msg.alt = self.searchUAVMap[egressUAVID].assignedAltitude
+                                            self.publishWaypoint(self.wp_msg)
 
                                         else:
                                             rec = self.searchUAVMap[egressUAVID]
@@ -910,7 +903,7 @@ class SwarmSearcher(wp_behavior.WaypointBehavior):
     def _process_swarm_data_msg(self, swarmData):
         # Only processes waypoint messages and only if active
         if not self.is_active or \
-               swarmData.id != bytes.SearchWaypointParser.SEARCH_WP:
+               swarmData.id != bytes.SEARCH_WP:
             return
 
         parser = bytes.SearchWaypointParser()
@@ -925,11 +918,10 @@ class SwarmSearcher(wp_behavior.WaypointBehavior):
                                   "] proceeding to deactivate")
 
                 else:
-                    lla = apbrgmsg.LLA()
-                    lla.lat = wp[0]
-                    lla.lon = wp[1]
-                    lla.alt = self.searchUAVMap[self.ownID].assignedAltitude
-                    self.publishWaypoint(lla)
+                    self.wp_msg.lat = wp[0]
+                    self.wp_msg.lon = wp[1]
+                    self.wp_msg.alt = self.searchUAVMap[self.ownID].assignedAltitude
+                    self.publishWaypoint(self.wp_msg)
                     self.log_dbug("Swarm Searcher " + str(self.ownID) + \
                                   "] proceeding to assigned cell [" + \
                                   str(wp[4]) + ", " + str(wp[5]) + "]")
