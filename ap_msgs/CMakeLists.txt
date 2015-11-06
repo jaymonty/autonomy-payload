@@ -27,8 +27,12 @@ add_message_files(
   BehaviorGroupState.msg
   BehaviorGroupStateStamped.msg
   BehaviorParameters.msg
+  FiringReport.msg
+  FiringReportStamped.msg
   MsgStat.msg
   MsgStatList.msg
+  RedVehicleState.msg
+  RedSwarmStateStamped.msg
   SwarmSearchWaypoint.msg
   SwarmSearchWaypointList.msg
 )

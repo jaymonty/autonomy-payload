@@ -1,0 +1,2 @@
+uint16 vehicle_id
+autopilot_bridge/Geodometry state
