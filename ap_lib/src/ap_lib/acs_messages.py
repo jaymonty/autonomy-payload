@@ -444,6 +444,7 @@ class Mode(Message):
 
 class Land(Message):
     msg_type = 0x83
+    msg_fmt = ''
 
     def __init__(self):
         Message.__init__(self)
@@ -690,6 +691,7 @@ class PrevMsgAP(Message):
 
 class AutopilotReboot(Message):
     msg_type = 0xFD
+    msg_fmt = ''
 
     def __init__(self):
         Message.__init__(self)
@@ -722,6 +724,7 @@ class PayloadHeartbeat(Message):
 
 class PayloadShutdown(Message):
     msg_type = 0xFF
+    msg_fmt = ''
 
     def __init__(self):
         Message.__init__(self)
@@ -776,14 +779,14 @@ class SwarmState(Message):
 class SwarmBehavior(Message):
     ''' Initiate execution of a specific parameterized swarm behavior '''
     msg_type = 0x72
-    msg_fmt_base = '>BHx'
-    msg_fmt_base_sz = struct.calcsize(msg_fmt_base)
+    msg_fmt = '>BHx'
+    msg_fmt_base_sz = struct.calcsize(msg_fmt)
 
     def __init__(self):
         Message.__init__(self)
 
         self.swarm_behavior = None
-        self.swarm_parameters = []
+        self.swarm_parameters = b''
 
     def _pack(self):
         self.swarm_parameters = \
@@ -792,20 +795,22 @@ class SwarmBehavior(Message):
         tupl = (self.swarm_behavior, param_bytes)
         for byte in range(0, param_bytes):
             tupl += (self.swarm_parameters[byte],)
-        fmt = type(self).msg_fmt_base + (param_bytes * 'B')
+        fmt = type(self).msg_fmt + (param_bytes * 'B')
+        self.msg_size = self.hdr_size + struct.calcsize(fmt) # Variable size--must recompute this
         return struct.pack(fmt, *tupl)
 
     def _unpack(self, data):
+        self.msg_size = self.hdr_size + len(data)
         (self.swarm_behavior, param_bytes) = \
-            struct.unpack_from(type(self).msg_fmt_base, data, 0)
+            struct.unpack_from(type(self).msg_fmt, data, 0)
         offset = type(self).msg_fmt_base_sz
         self.swarm_parameters = data[offset:]
 
 class SwarmBehaviorData(Message):
     ''' Exchange behavior-specific information between vehicles '''
     msg_type = 0x73
-    msg_fmt_base = '>BHx'
-    msg_fmt_base_sz = struct.calcsize(msg_fmt_base)
+    msg_fmt = '>BHx'
+    msg_fmt_base_sz = struct.calcsize(msg_fmt)
 
     def __init__(self):
         Message.__init__(self)
@@ -823,18 +828,21 @@ class SwarmBehaviorData(Message):
             # Encoded by the payload (Python 2) for this message
             # Encoded by SwarmCommander (Python 3) for this message
             tupl += (ord(self.data[byte]),)
-        fmt = type(self).msg_fmt_base + (data_bytes * 'B')
+        fmt = type(self).msg_fmt + (data_bytes * 'B')
+        self.msg_size = self.hdr_size + struct.calcsize(fmt) # Variable size--must recompute this
         return struct.pack(fmt, *tupl)
 
     def _unpack(self, data):
+        self.msg_size = self.hdr_size + len(data)
         (self.data_type, data_bytes) = \
-            struct.unpack_from(type(self).msg_fmt_base, data, 0)
+            struct.unpack_from(type(self).msg_fmt, data, 0)
         offset = type(self).msg_fmt_base_sz
         self.data = data[offset:]
 
 class SuspendSwarmBehavior(Message):
     ''' Terminate execution of the current swarm behavior '''
     msg_type = 0x74
+    msg_fmt = ''
 
     def __init__(self):
         Message.__init__(self)
