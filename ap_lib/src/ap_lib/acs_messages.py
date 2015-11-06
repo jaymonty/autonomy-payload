@@ -193,6 +193,10 @@ class Example(Message):
         self.bar = tupl[1]
         self.baz = tupl[2]
 '''
+#----------------------------------------------
+# Autopilot manipulation and reporting messages
+# Range 0x00 to 0x2F
+#----------------------------------------------
 
 class FlightStatus(Message):
     # Define message type parameters
@@ -302,9 +306,326 @@ class FlightStatus(Message):
         self.swarm_behavior = fields.pop(0)
         self.name = _dec_str(fields.pop(0))
 
+class AutopilotReboot(Message):
+    msg_type = 0x01
+    msg_fmt = ''
+
+    def __init__(self):
+        Message.__init__(self)
+
+        pass
+
+    def _pack(self):
+        return ''
+
+    def _unpack(self, data):
+        pass
+
+class Arm(Message):
+    msg_type = 0x02
+    msg_fmt = '>B3x'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.enable = None         # Boolean
+        # 3 padding bytes = 0x00
+
+    def _pack(self):
+        tupl = (int(self.enable),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.enable = bool(fields[0])
+
+class Mode(Message):
+    msg_type = 0x03
+    msg_fmt = '>B3x'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.mode = None         # Mode ID (0-15)
+        # 3 padding bytes = 0x00
+
+    def _pack(self):
+        tupl = (int(self.mode),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.mode = int(fields[0])
+
+
+#Message to request the previous N autopilot messages.
+#A second field, since_seq, is intended to signal that the
+#requestor already has up to that sequence number.  If that
+#sequence number is arrived at before processing N autopilot
+#messages, the request doesn't want the other msgs (already has them)
+class ReqPrevNMsgsAP(Message):
+    msg_type = 0x04
+    msg_fmt = '>LB3x'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.since_seq = 0
+        self.n = 0
+
+    def _pack(self):
+        tupl = (int(self.since_seq), int(self.n))
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.since_seq = fields[0]
+        self.n = fields[1]
+
+#ACS Message containing a previous autopilot message.
+class PrevMsgAP(Message):
+    msg_type = 0x05
+    msg_fmt = '>LL92s'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.final_seq = 0  #Each message states the seq number at the
+                            #end of the msg queue so the requestor knows
+                            #how many messages are available, even if
+                            #the requestor does not receive all messages
+                            #in a given series of responses
+        self.seq = 0
+        self.msg = ""
+
+    def _pack(self):
+        tupl = (int(self.final_seq), int(self.seq), _enc_str(self.msg))
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.final_seq = fields[0]
+        self.seq = fields[1]
+        self.msg = _dec_str(fields[2])
+
+
+#---------------------------------------------------
+# Ground/Air communication and connectivity messages
+# Range 0x30 to 0x3F
+#---------------------------------------------------
+
+class Heartbeat(Message):
+    msg_type = 0x30
+    msg_fmt = '>L'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.counter = None         # User-definable counter (UInt32)
+
+    def _pack(self):
+        tupl = (int(self.counter),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.counter = int(fields[0])
+
+class SlaveSetup(Message):
+    msg_type = 0x31
+    msg_fmt = '>B100p'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.enable = None         # Boolean
+        self.channel = None        # Pascal String
+
+    def _pack(self):
+        # TODO Get rid of this ugly hack
+        try:
+            channel = bytes(self.channel, 'utf-8')  # Python3
+        except:
+            channel = str(self.channel)  # Python2
+
+        tupl = (int(self.enable),
+                _enc_str(channel))
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.enable = bool(fields[0])
+        self.channel = _dec_str(fields[1])
+
+
+#---------------------------------------------
+# UAV configuration reporting and manipulation
+# Range 0x40 to 0x5F
+#---------------------------------------------
+
+class FlightReady(Message):
+    msg_type = 0x40
+    msg_fmt = '>B3x'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.ready = None         # Boolean
+        # 3 padding bytes = 0x00
+
+    def _pack(self):
+        tupl = (int(self.ready),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.ready = bool(fields[0])
+
+class MissionConfig(Message):
+    msg_type = 0x41
+    msg_fmt = '>HBx'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.std_alt = None     # Standard (RELATIVE) altitude (m)
+        self.stack_num = None   # Index of stack (of pancakes) to be in
+        # 1 padding byte
+
+    def _pack(self):
+        tupl = (int(self.std_alt), int(self.stack_num))
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.std_alt = int(fields[0])
+        self.stack_num = int(fields[1])
+
+class Calibrate(Message):
+    msg_type = 0x42
+    msg_fmt = '>B3x'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.index = None   # Numeric ID of calibration
+        # 3 bytes of padding
+
+    def _pack(self):
+        tupl = (int(self.index),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.index = int(fields[0])
+
+class Demo(Message):
+    msg_type = 0x43
+    msg_fmt = '>B3x'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.demo = None     # Numeric ID of demo
+        # 3 padding bytes
+
+    def _pack(self):
+        tupl = (int(self.demo),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.demo = int(fields[0])
+
+
+#-------------------------------
+# Direct flight control messages
+# Range 0x60 to 0x7F
+#-------------------------------
+
+class GuidedGoto(Message):
+    msg_type = 0x60
+    msg_fmt = '>lll'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.lat = None		# Decimal degrees (e.g. 35.123456)
+        self.lon = None		# Decimal degrees (e.g. -120.123456)
+        self.alt = None		# Decimal meters MSL (WGS84)
+
+    def _pack(self):
+        tupl = (int(self.lat * 1e07),
+                int(self.lon * 1e07),
+                int(self.alt * 1e03))
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.lat = fields[0] / 1e07
+        self.lon = fields[1] / 1e07
+        self.alt = fields[2] / 1e03
+
+class WaypointGoto(Message):
+    msg_type = 0x61
+    msg_fmt = '>H2x'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.index = None         # Waypoint index (0-65535)
+        # 2 padding bytes = 0x0000
+
+    def _pack(self):
+        tupl = (int(self.index),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.index = int(fields[0])
+
+class Land(Message):
+    msg_type = 0x62
+    msg_fmt = ''
+
+    def __init__(self):
+        Message.__init__(self)
+
+        pass
+
+    def _pack(self):
+        return ''
+
+    def _unpack(self, data):
+        pass
+
+class LandAbort(Message):
+    msg_type = 0x63
+    msg_fmt = '>h2x'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.alt = None         # Wave-off altitude (approx +/-32000)
+        # 2 padding bytes = 0x0000
+
+    def _pack(self):
+        tupl = (int(self.alt),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.alt = int(fields[0])
+
+
+#--------------------------------------
+# UAV position/state reporting messages
+# Range 0x80 to 0x9F
+#--------------------------------------
+
 class Pose(Message):
     # Define message type parameters
-    msg_type = 0x01
+    msg_type = 0x80
     msg_fmt = '>lllllllhhhhhh'
 
     def __init__(self):
@@ -363,517 +684,9 @@ class Pose(Message):
         self.vay = fields[11] / 1e02
         self.vaz = fields[12] / 1e02
 
-class VehicleIntent(Message):
-    msg_type = 0x02
-    msg_fmt = '>blll'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.swarm_behavior = None # Swarm Behavior publishing this intent
-        self.lat = None		# Decimal degrees (e.g. 35.123456)
-        self.lon = None		# Decimal degrees (e.g. -120.123456)
-        self.alt = None		# Decimal meters MSL (WGS84)
-
-    def _pack(self):
-        tupl = (int(self.swarm_behavior),
-                int(self.lat * 1e07),
-                int(self.lon * 1e07),
-                int(self.alt * 1e03))
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.swarm_behavior = int(fields[0])
-        self.lat = fields[1] / 1e07
-        self.lon = fields[2] / 1e07
-        self.alt = fields[3] / 1e03
-
-class Heartbeat(Message):
-    msg_type = 0x80
-    msg_fmt = '>L'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.counter = None         # User-definable counter (UInt32)
-
-    def _pack(self):
-        tupl = (int(self.counter),)
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.counter = int(fields[0])
-
-class Arm(Message):
-    msg_type = 0x81
-    msg_fmt = '>B3x'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.enable = None         # Boolean
-        # 3 padding bytes = 0x00
-
-    def _pack(self):
-        tupl = (int(self.enable),)
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.enable = bool(fields[0])
-
-class Mode(Message):
-    msg_type = 0x82
-    msg_fmt = '>B3x'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.mode = None         # Mode ID (0-15)
-        # 3 padding bytes = 0x00
-
-    def _pack(self):
-        tupl = (int(self.mode),)
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.mode = int(fields[0])
-
-class Land(Message):
-    msg_type = 0x83
-    msg_fmt = ''
-
-    def __init__(self):
-        Message.__init__(self)
-
-        pass
-
-    def _pack(self):
-        return ''
-
-    def _unpack(self, data):
-        pass
-
-class LandAbort(Message):
-    msg_type = 0x84
-    msg_fmt = '>h2x'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.alt = None         # Wave-off altitude (approx +/-32000)
-        # 2 padding bytes = 0x0000
-
-    def _pack(self):
-        tupl = (int(self.alt),)
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.alt = int(fields[0])
-
-class GuidedGoto(Message):
-    msg_type = 0x85
-    msg_fmt = '>lll'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.lat = None		# Decimal degrees (e.g. 35.123456)
-        self.lon = None		# Decimal degrees (e.g. -120.123456)
-        self.alt = None		# Decimal meters MSL (WGS84)
-
-    def _pack(self):
-        tupl = (int(self.lat * 1e07),
-                int(self.lon * 1e07),
-                int(self.alt * 1e03))
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.lat = fields[0] / 1e07
-        self.lon = fields[1] / 1e07
-        self.alt = fields[2] / 1e03
-
-class WaypointGoto(Message):
-    msg_type = 0x86
-    msg_fmt = '>H2x'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.index = None         # Waypoint index (0-65535)
-        # 2 padding bytes = 0x0000
-
-    def _pack(self):
-        tupl = (int(self.index),)
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.index = int(fields[0])
-
-class SlaveSetup(Message):
-    msg_type = 0x87
-    msg_fmt = '>B100p'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.enable = None         # Boolean
-        self.channel = None        # Pascal String
-
-    def _pack(self):
-        # TODO Get rid of this ugly hack
-        try:
-            channel = bytes(self.channel, 'utf-8')  # Python3
-        except:
-            channel = str(self.channel)  # Python2
-
-        tupl = (int(self.enable),
-                _enc_str(channel))
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.enable = bool(fields[0])
-        self.channel = _dec_str(fields[1])
-
-class FlightReady(Message):
-    msg_type = 0x88
-    msg_fmt = '>B3x'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.ready = None         # Boolean
-        # 3 padding bytes = 0x00
-
-    def _pack(self):
-        tupl = (int(self.ready),)
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.ready = bool(fields[0])
-
-class Calibrate(Message):
-    msg_type = 0x8D
-    msg_fmt = '>B3x'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.index = None   # Numeric ID of calibration
-        # 3 bytes of padding
-
-    def _pack(self):
-        tupl = (int(self.index),)
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.index = int(fields[0])
-
-class Demo(Message):
-    msg_type = 0x90
-    msg_fmt = '>B3x'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.demo = None     # Numeric ID of demo
-        # 3 padding bytes
-
-    def _pack(self):
-        tupl = (int(self.demo),)
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.demo = int(fields[0])
-
-class MissionConfig(Message):
-    msg_type = 0x91
-    msg_fmt = '>HBx'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.std_alt = None     # Standard (RELATIVE) altitude (m)
-        self.stack_num = None   # Index of stack (of pancakes) to be in
-        # 1 padding byte
-
-    def _pack(self):
-        tupl = (int(self.std_alt), int(self.stack_num))
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.std_alt = int(fields[0])
-        self.stack_num = int(fields[1])
-
-class WeatherData(Message):
-    msg_type = 0x92
-    msg_fmt = '>ffff'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.baro = 0.0           # barametric pressure (millibars)
-        self.temperature = 0.0    # temperature (degrees C)
-        self.wind_speed = 0.0     # miles per hour (need to convert)
-        self.wind_direction = 0.0 # direction from (degrees)
-
-    def _pack(self):
-        tupl = (float(self.baro), float(self.temperature), float(self.wind_speed), float(self.wind_direction))
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.baro = fields[0]
-        self.temperature = fields[1]
-        self.wind_speed = fields[2]
-        self.wind_direction = fields[3]
-
-#Message to request the previous N autopilot messages.
-#A second field, since_seq, is intended to signal that the
-#requestor already has up to that sequence number.  If that
-#sequence number is arrived at before processing N autopilot
-#messages, the request doesn't want the other msgs (already has them)
-class ReqPrevNMsgsAP(Message):
-    msg_type = 0xA0
-    msg_fmt = '>LB3x'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.since_seq = 0
-        self.n = 0
-
-    def _pack(self):
-        tupl = (int(self.since_seq), int(self.n))
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.since_seq = fields[0]
-        self.n = fields[1]
-
-#ACS Message containing a previous autopilot message.
-class PrevMsgAP(Message):
-    msg_type = 0xA1
-    msg_fmt = '>LL92s'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.final_seq = 0  #Each message states the seq number at the
-                            #end of the msg queue so the requestor knows
-                            #how many messages are available, even if
-                            #the requestor does not receive all messages
-                            #in a given series of responses
-        self.seq = 0
-        self.msg = ""
-
-    def _pack(self):
-        tupl = (int(self.final_seq), int(self.seq), _enc_str(self.msg))
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.final_seq = fields[0]
-        self.seq = fields[1]
-        self.msg = _dec_str(fields[2])
-
-class AutopilotReboot(Message):
-    msg_type = 0xFD
-    msg_fmt = ''
-
-    def __init__(self):
-        Message.__init__(self)
-
-        pass
-
-    def _pack(self):
-        return ''
-
-    def _unpack(self, data):
-        pass
-
-class PayloadHeartbeat(Message):
-    msg_type = 0xFE
-    msg_fmt = '>B3x'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.enable = None         # Boolean
-        # 3 padding bytes = 0x00
-
-    def _pack(self):
-        tupl = (int(self.enable),)
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.enable = bool(fields[0])
-
-class PayloadShutdown(Message):
-    msg_type = 0xFF
-    msg_fmt = ''
-
-    def __init__(self):
-        Message.__init__(self)
-
-        pass
-
-    def _pack(self):
-        return ''
-
-    def _unpack(self, data):
-        pass
-
-# Swarm and subswarm manipulation and control messages
-
-class SetSubswarm(Message):
-    ''' Assign the recipient vehicle to a specific subswarm '''
-    msg_type = 0x70
-    msg_fmt = '>B3x'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.subswarm = None         # New subswarm ID
-        # 3 padding bytes = 0x00
-
-    def _pack(self):
-        tupl = (int(self.subswarm),)
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.subswarm = int(fields[0])
-
-class SwarmState(Message):
-    ''' Manually set the vehicle's swarm state '''
-    msg_type = 0x71
-    msg_fmt = '>B3x'
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.swarm_state = 0  # swarm_state value
-
-    def _pack(self):
-        tupl = (int(self.swarm_state),)
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.swarm_state = int(fields[0])
-
-class SwarmBehavior(Message):
-    ''' Initiate execution of a specific parameterized swarm behavior '''
-    msg_type = 0x72
-    msg_fmt = '>BHx'
-    msg_fmt_base_sz = struct.calcsize(msg_fmt)
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.swarm_behavior = None
-        self.swarm_parameters = b''
-
-    def _pack(self):
-        self.swarm_parameters = \
-            self.swarm_parameters + (b'\x00' * (len(self.swarm_parameters) % 4))
-        param_bytes = len(self.swarm_parameters)
-        tupl = (self.swarm_behavior, param_bytes)
-        for byte in range(0, param_bytes):
-            tupl += (self.swarm_parameters[byte],)
-        fmt = type(self).msg_fmt + (param_bytes * 'B')
-        self.msg_size = self.hdr_size + struct.calcsize(fmt) # Variable size--must recompute this
-        return struct.pack(fmt, *tupl)
-
-    def _unpack(self, data):
-        self.msg_size = self.hdr_size + len(data)
-        (self.swarm_behavior, param_bytes) = \
-            struct.unpack_from(type(self).msg_fmt, data, 0)
-        offset = type(self).msg_fmt_base_sz
-        self.swarm_parameters = data[offset:]
-
-class SwarmBehaviorData(Message):
-    ''' Exchange behavior-specific information between vehicles '''
-    msg_type = 0x73
-    msg_fmt = '>BHx'
-    msg_fmt_base_sz = struct.calcsize(msg_fmt)
-
-    def __init__(self):
-        Message.__init__(self)
-
-        self.data_type = None  # For any required payload disambiguation
-        self.data = []         # Bitmapped byte string with message payload
-
-    def _pack(self):
-        self.data = \
-            self.data + (b'\x00' * (len(self.data) % 4))
-        data_bytes = len(self.data)
-        tupl = (self.data_type, data_bytes)
-        for byte in range(0, data_bytes):
-            # Differs from the SwarmBehavior message because of Python 2 vs 3?
-            # Encoded by the payload (Python 2) for this message
-            # Encoded by SwarmCommander (Python 3) for this message
-            tupl += (ord(self.data[byte]),)
-        fmt = type(self).msg_fmt + (data_bytes * 'B')
-        self.msg_size = self.hdr_size + struct.calcsize(fmt) # Variable size--must recompute this
-        return struct.pack(fmt, *tupl)
-
-    def _unpack(self, data):
-        self.msg_size = self.hdr_size + len(data)
-        (self.data_type, data_bytes) = \
-            struct.unpack_from(type(self).msg_fmt, data, 0)
-        offset = type(self).msg_fmt_base_sz
-        self.data = data[offset:]
-
-class SuspendSwarmBehavior(Message):
-    ''' Terminate execution of the current swarm behavior '''
-    msg_type = 0x74
-    msg_fmt = ''
-
-    def __init__(self):
-        Message.__init__(self)
-        pass
-
-    def _pack(self):
-        return ''
-
-    def _unpack(self, data):
-        pass
-
-class PauseSwarmBehavior(Message):
-    ''' Pause or resume execution of the current swarm behavior '''
-    msg_type = 0x75
-    msg_fmt = '>?3x'
-
-    def __init__(self):
-        Message.__init__(self)
-        self.behavior_pause = None
-
-    def _pack(self):
-        tupl = (bool(self.behavior_pause),)
-        return struct.pack(type(self).msg_fmt, *tupl)
-
-    def _unpack(self, data):
-        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
-        self.behavior_pause = bool(fields[0])
-
 class RedPose(Message):
     ''' Pose data for a "red" UAV '''
-    msg_type = 0x76
+    msg_type = 0x81
     msg_fmt = '>B3xlllllllhhhhhh'
 
     def __init__(self):
@@ -934,3 +747,236 @@ class RedPose(Message):
         self.vax = fields[11] / 1e02
         self.vay = fields[12] / 1e02
         self.vaz = fields[13] / 1e02
+
+class VehicleIntent(Message):
+    msg_type = 0x82
+    msg_fmt = '>blll'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.swarm_behavior = None # Swarm Behavior publishing this intent
+        self.lat = None		# Decimal degrees (e.g. 35.123456)
+        self.lon = None		# Decimal degrees (e.g. -120.123456)
+        self.alt = None		# Decimal meters MSL (WGS84)
+
+    def _pack(self):
+        tupl = (int(self.swarm_behavior),
+                int(self.lat * 1e07),
+                int(self.lon * 1e07),
+                int(self.alt * 1e03))
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.swarm_behavior = int(fields[0])
+        self.lat = fields[1] / 1e07
+        self.lon = fields[2] / 1e07
+        self.alt = fields[3] / 1e03
+
+
+#--------------------------------------------
+# Payload reporting and manipulation messages
+# Range 0xA0 to 0xBF
+#--------------------------------------------
+
+class PayloadHeartbeat(Message):
+    msg_type = 0xA0
+    msg_fmt = '>B3x'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.enable = None         # Boolean
+        # 3 padding bytes = 0x00
+
+    def _pack(self):
+        tupl = (int(self.enable),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.enable = bool(fields[0])
+
+class PayloadShutdown(Message):
+    msg_type = 0xA1
+    msg_fmt = ''
+
+    def __init__(self):
+        Message.__init__(self)
+
+        pass
+
+    def _pack(self):
+        return ''
+
+    def _unpack(self, data):
+        pass
+
+
+#-----------------------------------------------------
+# Swarm and subswarm manipulation and control messages
+# Range 0xC0 to 0xDF
+#-----------------------------------------------------
+
+class SetSubswarm(Message):
+    ''' Assign the recipient vehicle to a specific subswarm '''
+    msg_type = 0xC0
+    msg_fmt = '>B3x'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.subswarm = None         # New subswarm ID
+        # 3 padding bytes = 0x00
+
+    def _pack(self):
+        tupl = (int(self.subswarm),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.subswarm = int(fields[0])
+
+class SwarmState(Message):
+    ''' Manually set the vehicle's swarm state '''
+    msg_type = 0xC1
+    msg_fmt = '>B3x'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.swarm_state = 0  # swarm_state value
+
+    def _pack(self):
+        tupl = (int(self.swarm_state),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.swarm_state = int(fields[0])
+
+class SwarmBehavior(Message):
+    ''' Initiate execution of a specific parameterized swarm behavior '''
+    msg_type = 0xC2
+    msg_fmt = '>BHx'
+    msg_fmt_base_sz = struct.calcsize(msg_fmt)
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.swarm_behavior = None
+        self.swarm_parameters = b''
+
+    def _pack(self):
+        self.swarm_parameters = \
+            self.swarm_parameters + (b'\x00' * (len(self.swarm_parameters) % 4))
+        param_bytes = len(self.swarm_parameters)
+        tupl = (self.swarm_behavior, param_bytes)
+        for byte in range(0, param_bytes):
+            tupl += (self.swarm_parameters[byte],)
+        fmt = type(self).msg_fmt + (param_bytes * 'B')
+        self.msg_size = self.hdr_size + struct.calcsize(fmt) # Variable size--must recompute this
+        return struct.pack(fmt, *tupl)
+
+    def _unpack(self, data):
+        self.msg_size = self.hdr_size + len(data)
+        (self.swarm_behavior, param_bytes) = \
+            struct.unpack_from(type(self).msg_fmt, data, 0)
+        offset = type(self).msg_fmt_base_sz
+        self.swarm_parameters = data[offset:]
+
+class SwarmBehaviorData(Message):
+    ''' Exchange behavior-specific information between vehicles '''
+    msg_type = 0xC3
+    msg_fmt = '>BHx'
+    msg_fmt_base_sz = struct.calcsize(msg_fmt)
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.data_type = None  # For any required payload disambiguation
+        self.data = []         # Bitmapped byte string with message payload
+
+    def _pack(self):
+        self.data = \
+            self.data + (b'\x00' * (len(self.data) % 4))
+        data_bytes = len(self.data)
+        tupl = (self.data_type, data_bytes)
+        for byte in range(0, data_bytes):
+            # Differs from the SwarmBehavior message because of Python 2 vs 3?
+            # Encoded by the payload (Python 2) for this message
+            # Encoded by SwarmCommander (Python 3) for this message
+            tupl += (ord(self.data[byte]),)
+        fmt = type(self).msg_fmt + (data_bytes * 'B')
+        self.msg_size = self.hdr_size + struct.calcsize(fmt) # Variable size--must recompute this
+        return struct.pack(fmt, *tupl)
+
+    def _unpack(self, data):
+        self.msg_size = self.hdr_size + len(data)
+        (self.data_type, data_bytes) = \
+            struct.unpack_from(type(self).msg_fmt, data, 0)
+        offset = type(self).msg_fmt_base_sz
+        self.data = data[offset:]
+
+class SuspendSwarmBehavior(Message):
+    ''' Terminate execution of the current swarm behavior '''
+    msg_type = 0xC4
+    msg_fmt = ''
+
+    def __init__(self):
+        Message.__init__(self)
+        pass
+
+    def _pack(self):
+        return ''
+
+    def _unpack(self, data):
+        pass
+
+class PauseSwarmBehavior(Message):
+    ''' Pause or resume execution of the current swarm behavior '''
+    msg_type = 0xC5
+    msg_fmt = '>?3x'
+
+    def __init__(self):
+        Message.__init__(self)
+        self.behavior_pause = None
+
+    def _pack(self):
+        tupl = (bool(self.behavior_pause),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.behavior_pause = bool(fields[0])
+
+
+#----------------------------
+# Environmental data messages
+# Range 0xE0 to 0xFF
+#----------------------------
+
+class WeatherData(Message):
+    msg_type = 0xE0
+    msg_fmt = '>ffff'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.baro = 0.0           # barametric pressure (millibars)
+        self.temperature = 0.0    # temperature (degrees C)
+        self.wind_speed = 0.0     # miles per hour (need to convert)
+        self.wind_direction = 0.0 # direction from (degrees)
+
+    def _pack(self):
+        tupl = (float(self.baro), float(self.temperature), float(self.wind_speed), float(self.wind_direction))
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.baro = fields[0]
+        self.temperature = fields[1]
+        self.wind_speed = fields[2]
+        self.wind_direction = fields[3]
+
