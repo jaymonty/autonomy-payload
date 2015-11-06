@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
 #-----------------------------------------------------------------------
-# Swarm Tracker
-# Duane Davis, 2014
+# Red Tracker
+# Duane Davis, 2015
 #
-# Defines an object that keeps track of all aircraft in a "swarm"
+# Defines an object that keeps track of all "red" UAVs
 #-----------------------------------------------------------------------
 
 #----------------------------
@@ -31,7 +31,7 @@ from ap_lib.nodeable import *
 
 
 # Base name for node topics and services
-NODE_BASENAME = 'swarm_tracker'
+NODE_BASENAME = 'red_tracker'
 
 # Some constants to make functions more "reusable"
 CURRENT_POSE = 0
@@ -40,9 +40,10 @@ DR_POSE = 1
 MAX_DR_TIME = rospy.Duration(5.0)  # Max time for a DR position update
 
 
-class SwarmElement(object):
-    ''' Data wrapper for a single swarm element object
-    Object for maintaining data about a single swarm member.  Uses a ROS
+class RedRecord(object):
+    ''' Data wrapper for a single red UAVt object
+
+    Object for maintaining data about a single "red" UAV.  Uses a ROS
     Geodometry object to represent vehicle pose and velocity.
     Provides some functionality within the class, but access to individual
     data members is still largely through direct access as opposed to member
@@ -51,14 +52,11 @@ class SwarmElement(object):
     so that the object can be used as part of a Kalman Filter (or EKF).
 
     Class member variables:
-      ID:  aircraft ID (integer) of the particular swarm member
-      subSwarmID: subswarm to which this SwarmElement is assigned
-      swarmState: the current swarm state for this vehicle
-      swarmBehavior: the currently active swarm behavior for this vehicle
+      ID:  aircraft ID (integer) of the particular red UAV
       isActive: indicates that the vehicle is active (recent update)
       state: aircraft pose and  (Geodometry)
       drPose: computed (DR) position for a future time (Geodometry)
-      _stateMsg: container for the swarm state message (SwarmVehicleState)
+      _stateMsg: container for the red UAV state message (RedVehicleState)
 
     Class member functions
       updateState: update the state information with new data
@@ -69,18 +67,13 @@ class SwarmElement(object):
       setPoseFromEulerAngles: sets the quaternion orientation
     '''
 
-    def __init__(self, ownID, subswarm, initState, baseAlt = 0.0):
+    def __init__(self, uavID, initState, baseAlt = 0.0):
         ''' Class initializer sets initial values for member variables
-        @param ownID: ID of the aircraft for this state vector
-        @param subswarm: ID of the subswarm to which this aircraft belongs
+        @param uavID: ID of the aircraft for this state vector
         @param initState: Geodometry object with the initial state information
-        @param swarmState
         @param baseAlt: MSL altitude from which rel_alt is calculated
         '''
-        self.ID = ownID
-        self.subSwarmID = subswarm
-        self.swarmState = 0
-        self.swarmBehavior = 0
+        self.ID = uavID
         self.isActive = True
         self.state = initState
         self.state.header.seq = 0
@@ -96,39 +89,28 @@ class SwarmElement(object):
         self.drPose.pose.pose.orientation.w = 1.0
         self.drPose.pose.pose.position.using_alt = True
         self.drPose.pose.pose.position.using_rel_alt = True
-        self._stateMsg = SwarmVehicleState()
+        self._stateMsg = RedVehicleState()
         self._stateMsg.vehicle_id = self.ID
-        self._stateMsg.subswarm_id = self.subSwarmID
         self._stateMsg.state.pose.pose.position.using_alt = True
         self._stateMsg.state.pose.pose.position.using_rel_alt = True
 
 
-    def updateState(self, newState, subswarm, swarmState, swarmBehavior):
+    def updateState(self, newState):
         ''' Updates the object to contain new state information
          Displacement values are (x, y, z).  Orientation values are a
          quaternion (x, y, z, w).  Linear velocity data is earth-fixed
          meters per second (vx, vy, vz).  Angular velocity is body-fixed
          radians per second (p, q, r)
          @param newState: Geodometry object with the new state information
-         @param subswarm: ID of the subswarm to which this swarm member belongs
-         @param swarmState: Updated vehicle's current swarm state
-         @param swarmBehavior: Updated vehicle's currently active swarm behavior
         '''
         self.isActive = True
-        self.subSwarmID = subswarm
-        self.swarmState = swarmState
-        self.swarmBehavior = swarmBehavior
         self.state = newState
         self.state.header.frame_id = 'base_footprint'
-        self._stateMsg.subswarm_id = subswarm
-        self._stateMsg.swarm_state = swarmState
-        self._stateMsg.swarm_behavior = swarmBehavior
 
 
     def computeDRPose(self, drTime):
         ''' Computes a dead reckoned position from the last reported position
         @param drTime time (rospy.rostime.Time object) for the DR computation
-
         TODO: implement covariance growth functionality
         '''
         poseTimeFloat = float(self.state.header.stamp.secs) +\
@@ -256,22 +238,18 @@ class SwarmElement(object):
 
 ###############################################################################
 
-class SwarmTracker(Nodeable):
-    ''' Object that maintains the status of all known swarm UAVs
-    Currently, this object maintains the position, velocity, subswarm ID,
-    swarm state, and waypoint intent for each swarm UAV as it is received
-    from the network.  Data for each element is maintained in a dictionary 
-    object with 1 record for each swarm member.
+class RedTracker(Nodeable):
+    ''' Object that maintains the status of all known red UAVs
+    Currently, this object maintains the position and velocity for each known
+    red UAV as it is received from the network.  Data is maintained in a
+    dictionary object with 1 record for each red UAV.
 
     Class member variables:
       ownID:  ID (integer) of this particular aircraft
-      subSwarmID:  ID (integer) of the subswarm this vehicle is a part of
-      swarmState:  current swarm state of this vehicle (int)
-      swarmBehavior:  currently active swarm behavior for this vehicle (int)
       _baseAlt: Altitude from which rel_alt values are calculated for all AC
-      _swarm: Dictionary of records for individual aircraft in the swarm
-      _swarmPublisher: Object for publishing swarm state
-      _swarmMessage: Container for swarm states to be published
+      _reds: Dictionary of records for individual aircraft in the swarm
+      _redsPublisher: Object for publishing red swarm state
+      _redsMessage: Container for red swarm states to be published
       _lock: Prevents the callback thread modifications at a bad time
 
     Inherited from Nodeable:
@@ -284,15 +262,11 @@ class SwarmTracker(Nodeable):
       callbackSetup: sets up subscriptions
       publisherSetup: sets up publishers
       executeTimedLoop: executes one loop iteration
-      _updateOwnPose: callback for updated own pose receipt
-      _updateSwarmPose: callback for updated swarm UAV pose receipt
-      _updateSwarmControlState: callback for updated swarm control state receipt
-      _setSubSwarm: updates this UAV's subswarm assignment
-      _setSwarmState: updates this UAV's swarm state
-      _setSwarmBehavior: updates this UAV's current swarm behavior
+      _receivedOwnPose: callback for updated own pose receipt
+      _updateRedPose: callback for updated red UAV pose receipt
     '''
 
-    def __init__(self, ownID, subswarm = 0, nodeName=NODE_BASENAME):
+    def __init__(self, ownID, nodeName=NODE_BASENAME):
         ''' Initializes variables, subscribes to required ROS topics, and
         creates required ros publishers.  Initializer assumes that the object
         is already running within an initialized ROS node (i.e., the object 
@@ -300,21 +274,16 @@ class SwarmTracker(Nodeable):
         to run within a single node if rqd.
         @param ownID: ID (integer) of this particular aircraft
         @param nodeName: name of the ROS node for this object
-        @param subswarm: ID (int) of the "subswarm" to which this vehicle belongs
         '''
         Nodeable.__init__(self, nodeName)
         self.ownID = ownID
-        self.subSwarmID = subswarm
-        self.swarmState = 0
-        self.swarmBehavior = 0
         self._baseAlt = 0.0
-        self._swarm = dict()
-        self._swarmPublisher = None
-        self._swarmMessage = SwarmStateStamped()
-        self._swarmMessage.header.seq = 0
-        self._swarmMessage.header.frame_id = "base_footprint"
+        self._reds = dict()
+        self._redsPublisher = None
+        self._redsMessage = RedSwarmStateStamped()
+        self._redsMessage.header.seq = 0
+        self._redsMessage.header.frame_id = "base_footprint"
         self._lock = RLock()
-        rospy.set_param('subswarm_id', self.subSwarmID)
 
 #        self.DBUG_PRINT = True
 #        self.INFO_PRINT = True
@@ -326,95 +295,66 @@ class SwarmTracker(Nodeable):
     #-------------------------------------------------
 
     def callbackSetup(self):
-        ''' Establishes the callbacks for the SwarmTracker object.
-        @param params: list as follows: [] (no required parameters)
+        ''' Establishes the callbacks for the RedTracker object.
         '''
         self.createSubscriber("acs_pose", apbrg.Geodometry, \
-                              self._updateOwnPose)
-        self.createSubscriber("recv_pose", SwarmVehicleState, \
-                              self._updateSwarmPose)
-        self.createSubscriber("recv_swarm_ctl_state", SwarmControlState, \
-                              self._updateSwarmControlState)
-        self.createSubscriber("subswarm_id", std_msgs.msg.UInt8, \
-                              self._setSubSwarm)
-        self.createSubscriber("swarm_state", std_msgs.msg.UInt8, \
-                              self._setSwarmState)
-        self.createSubscriber("swarm_behavior", std_msgs.msg.UInt8, \
-                              self._setSwarmBehavior)
+                              self.receivedOwnPose)
+        self.createSubscriber("recv_red_pose", RedVehicleState, \
+                              self._updateRedPose)
 
 
     def publisherSetup(self):
-        ''' Sets up publishers for the SwarmTracker object.
-        @param params: list as follows: [] (no required parameters)
+        ''' Sets up publishers for the RedTracker object.
         '''
-        self._swarmPublisher = \
-            self.createPublisher("swarm_uav_states", SwarmStateStamped, 1)
+        self._redsPublisher = \
+            self.createPublisher("red_uav_states", RedSwarmStateStamped, 1)
 
 
     def executeTimedLoop(self):
-        ''' Executes one timed-loop iteration for the SwarmTracker object
-        The loop computes a DR position for the current time for each UAV
-        in the swarm and publishes a SwarmState message to the ROS topic.
+        ''' Executes one timed-loop iteration for the RedTracker object
+        The loop computes a DR position for the current time for each red UAV
+        and publishes a RedSwarmState message to the ROS topic.
         '''
-        self._lock.acquire()
-        self._swarmMessage.header.stamp = rospy.Time.now()
-        del self._swarmMessage.swarm[:]    # Clear current message contents
+        with self._lock:
+            self._redsMessage.header.stamp = rospy.Time.now()
+            del self._redsMessage.reds[:]    # Clear current message contents
 
-        vKeys = self._swarm.keys()
-        for vID in vKeys:
-            vehicle = self._swarm[vID]
-            timeDiff = self._swarmMessage.header.stamp - \
-                       vehicle.state.header.stamp
-            if ((self._swarm[vID].isActive) and (timeDiff > MAX_DR_TIME)):
-               self._swarm[vID].isActive = False    # Remove vehicle if last report is old
-               self.log_warn("Vehicle ID " + str(vID) +\
-                             ": no updates for " + str(MAX_DR_TIME/1e9) +\
-                             " seconds--use with caution")
+            vKeys = self._reds.keys()
+            for vID in vKeys:
+                vehicle = self._reds[vID]
+                timeDiff = self._redsMessage.header.stamp - \
+                           vehicle.state.header.stamp
+                if ((self._reds[vID].isActive) and (timeDiff > MAX_DR_TIME)):
+                   self._reds[vID].isActive = False 
+                   self.log_warn("UAV ID %d: no updates for %s seconds--use with caution"\
+                                 %(vID, str(MAX_DR_TIME/1e9)))
 
-            vehicle.computeDRPose(self._swarmMessage.header.stamp)
-            vehicle._stateMsg.state.header.stamp = vehicle.state.header.stamp
-            vehicle._stateMsg.state.pose = vehicle.drPose.pose
-            vehicle._stateMsg.state.twist = vehicle.state.twist
-            self._swarmMessage.swarm.append(vehicle._stateMsg)
+                vehicle.computeDRPose(self._redsMessage.header.stamp)
+                vehicle._stateMsg.state.header.stamp = \
+                    vehicle.state.header.stamp
+                vehicle._stateMsg.state.pose = vehicle.drPose.pose
+                vehicle._stateMsg.state.twist = vehicle.state.twist
+                self._redsMessage.reds.append(vehicle._stateMsg)
 
-        self._swarmPublisher.publish(self._swarmMessage)
-        self._lock.release()
+            self._redsPublisher.publish(self._redsMessage)
 
 
     #-----------------------------------------
     # ROS Subscriber callbacks for this object
     #-----------------------------------------
 
-    def _updateOwnPose(self, stateMsg):
-        ''' Updates swarm info for this UAV when a new pose is published
-        @param poseMsg: Geodometry object with the new pose
-        TODO: add covariances when they are added to the msg
+    def receivedOwnPose(self, stateMsg):
+        ''' Uses the acs_pose message to update the base altitude
+        @param stateMsg: Geodometry object with the new pose
         '''
-        try:
-            if not self.ownID in self._swarm:
-                try:
-                    self._lock.acquire()
-                    self._swarm[self.ownID] = \
-                        SwarmElement(self.ownID, self.subSwarmID, apbrg.Geodometry())
-                except Exception as ex:
-                    self.log_warn("Self update callback error: " + str(ex))
-                finally:
-                    self._lock.release()
-            element = self._swarm[self.ownID]
-            element.updateState(stateMsg, self.subSwarmID, self.swarmState, \
-                                self.swarmBehavior)
-            element.subSwarmID = self.subSwarmID
-            newBaseAlt = element.state.pose.pose.position.alt - \
-                         element.state.pose.pose.position.rel_alt
-            if abs(newBaseAlt - self._baseAlt) > 0.001:
-                self._baseAlt = newBaseAlt
-
-        except Exception as ex:
-            self.log_warn("Self update callback error: " + str(ex))
+        newBaseAlt = stateMsg.pose.pose.position.alt - \
+                     stateMsg.pose.pose.position.rel_alt
+        if abs(newBaseAlt - self._baseAlt) > 0.001:
+            self._baseAlt = newBaseAlt
 
 
-    def _updateSwarmPose(self, poseMsg):
-        ''' Updates swarm info for swarm UAVs when new poses are received
+    def _updateRedPose(self, poseMsg):
+        ''' Updates info for red UAVs when new poses are received
         @param poseMsg: Geodometry object with the new pose
         TODO: add covariances when they are added to the msg
         '''
@@ -423,74 +363,39 @@ class SwarmTracker(Nodeable):
             newTime = poseMsg.state.header.stamp
             poseTime = newTime.secs + (newTime.nsecs / float(1e9))
             # Update an existing element if it's already in the dictionary
-            if poseMsg.vehicle_id in self._swarm:
-                updateElement = self._swarm[poseMsg.vehicle_id]
-                elTime = float(updateElement.state.header.stamp.secs) +\
-                         float(updateElement.state.header.stamp.nsecs) / float(1e9)
+            if poseMsg.vehicle_id in self._reds:
+                update_record = self._reds[poseMsg.vehicle_id]
+                elTime = \
+                    float(update_record.state.header.stamp.secs) +\
+                    float(update_record.state.header.stamp.nsecs) / float(1e9)
                 if poseTime < elTime: return # older than latest data
-                # Don't update the swarm state stuff--it's not in this msg
-                if not updateElement.isActive:
-                    self.log_warn("received update from previously inactive UAV " +\
-                                  str(poseMsg.vehicle_id))
-                updateElement.updateState(poseMsg.state, poseMsg.subswarm_id, \
-                                          updateElement.swarmState, \
-                                          updateElement.swarmBehavior)
-                updateElement.state.pose.pose.position.rel_alt = \
-                    updateElement.state.pose.pose.position.alt - self._baseAlt
+                if not update_record.isActive:
+                    self.log_warn("received update from previously inactive red UAV %d"\
+                                  %poseMsg.vehicle_id)
+                update_record.updateState(poseMsg.state)
+                update_record.state.pose.pose.position.rel_alt = \
+                    update_record.state.pose.pose.position.alt - self._baseAlt
 
-            else: # Create & initialize new element if this is the first report
-                newElement = \
-                    SwarmElement(poseMsg.vehicle_id, poseMsg.subswarm_id, \
-                                 poseMsg.state, self._baseAlt)
-                self._swarm[poseMsg.vehicle_id] = newElement
-                self.log_dbug("new aircraft id=" + str(poseMsg.vehicle_id) + \
-                              " added to swarm")
+            else: # Create & initialize new record if this is the first report
+                new_record = \
+                    RedRecord(poseMsg.vehicle_id, poseMsg.state, self._baseAlt)
+                self._reds[poseMsg.vehicle_id] = new_record
+                self.log_dbug("new aircraft id=%d added to red tracker"\
+                              %poseMsg.vehicle_id)
 
-            element = self._swarm[poseMsg.vehicle_id]
-            element.subSwarmID = poseMsg.subswarm_id
+            element = self._reds[poseMsg.vehicle_id]
         except Exception as ex:
-            self.log_warn("Swarm update callback error: " + str(ex))
+            self.log_warn("Red pose update callback error: %s" %str(ex))
         finally:
             self._lock.release()
 
 
-    def _updateSwarmControlState(self, ctlMsg):
-        ''' Updates swarm control state of a swarming aircraft (not this one)
-        @param ctlMsg: SwarmControlState message with the new control info
-        '''
-        try:
-            self._lock.acquire()
-            if ctlMsg.vehicle_id in self._swarm:
-                updateElement = self._swarm[ctlMsg.vehicle_id]
-                updateElement.swarmState = ctlMsg.swarm_state
-                updateElement.swarmBehavior = ctlMsg.swarm_behavior
-        except Exception as ex:
-            self.log_warn("Swarm control update callback error: " + str(ex))
-        finally:
-            self._lock.release()
+#-----------------------------------------------------------------------
+# Main code
 
+if __name__ == '__main__':
+    ownAC = int(rospy.get_param("aircraft_id"))
+    red_tracker = RedTracker(ownAC, NODE_BASENAME)
+    red_tracker.runAsNode(10.0)
 
-    def _setSubSwarm(self, swarmMsg):
-        ''' Updates the "subswarm" in which this vehicle is participating
-        @param swarmMsg: message (UInt8) containing the updated swarm ID
-        '''
-        self.subSwarmID = swarmMsg.data
-        rospy.set_param('subswarm_id', self.subSwarmID)
-        self.log_dbug("subswarm set to %d"%swarmMsg.data)
-
-
-    def _setSwarmState(self, swarmMsg):
-        ''' Updates the "swarm state" for this vehicle
-        @param swarmMsg: message (UInt8) containing the updated swarm behavior
-        '''
-        self.swarmState = swarmMsg.data
-        self.log_dbug("swarm behavior set to %d"%swarmMsg.data)
-
-
-    def _setSwarmBehavior(self, swarmMsg):
-        ''' Updates the "swarm behavior" currently active for this vehicle
-        @param swarmMsg: message (UInt8) containing the updated swarm state
-        '''
-        self.swarmBehavior = swarmMsg.data
-        self.log_dbug("swarm state set to %d"%swarmMsg.data)
 
