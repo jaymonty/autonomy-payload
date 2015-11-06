@@ -196,7 +196,33 @@ def net_pose(message, bridge):
     msg.state.twist.twist.angular.z = message.vaz
     # msg.state.twist.covariance is not used
     # NOTE: adjust queue_size as necessary
-    bridge.publish('recv_pose', msg, queue_size=50)
+    bridge.publish('recv_pose', msg, queue_size=100)
+
+def net_red_pose(message, bridge):
+    msg = ap_msg.RedVehicleState()
+    msg.vehicle_id = message.uav_id
+    msg.state.header.stamp = rospy.Time.now()
+    msg.state.header.seq = 0
+    msg.state.pose.pose.position.lat = message.lat
+    msg.state.pose.pose.position.lon = message.lon
+    msg.state.pose.pose.position.alt = message.alt
+    msg.state.pose.pose.position.rel_alt = 0
+    msg.state.pose.pose.position.using_alt = True
+    msg.state.pose.pose.position.using_rel_alt = False
+    msg.state.pose.pose.orientation.x = message.q_x
+    msg.state.pose.pose.orientation.y = message.q_y
+    msg.state.pose.pose.orientation.z = message.q_z
+    msg.state.pose.pose.orientation.w = message.q_w
+    # msg.state.pose.covariance is not used
+    msg.state.twist.twist.linear.x = message.vlx
+    msg.state.twist.twist.linear.y = message.vly
+    msg.state.twist.twist.linear.z = message.vlz
+    msg.state.twist.twist.angular.x = message.vax
+    msg.state.twist.twist.angular.y = message.vay
+    msg.state.twist.twist.angular.z = message.vaz
+    # msg.state.twist.covariance is not used
+    # NOTE: adjust queue_size as necessary
+    bridge.publish('recv_red_pose', msg, queue_size=50)
 
 def net_auto_status(message, bridge):
     msg = ap_msg.SwarmControlState()
@@ -549,6 +575,8 @@ if __name__ == '__main__':
                              sub_swarm_behavior_data)
         bridge.addSubHandler('payload_intent', ap_msg.VehicleIntent, sub_intent)
         bridge.addNetHandler(messages.Pose, net_pose,
+                             log_success=False)
+        bridge.addNetHandler(messages.RedPose, net_red_pose,
                              log_success=False)
         bridge.addNetHandler(messages.Heartbeat, net_heartbeat,
                              log_success=False)
