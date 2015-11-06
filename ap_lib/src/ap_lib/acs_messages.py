@@ -35,6 +35,15 @@ def _dec_str(e):
     finally:
         return s.strip(chr(0x0))
 
+# Time functions
+def time_to_float(msg):
+    return msg.msg_secs + msg.msg_nsecs / 1e9
+def float_to_time(time, msg):
+    msg.msg_secs = int(time)
+    msg.msg_nsecs = int((time - int(time)) * 1e9)
+def time_gt(msg_a, msg_b):
+    return bool(time_to_float(msg_a) > time_to_float(msg_b))
+
 # Bitmasks
 SUBSWARM_MASK = 0x1F  # low 5 bits (of 8)
 FL_REL_MASK = 0x80    # high bit (of 8)
