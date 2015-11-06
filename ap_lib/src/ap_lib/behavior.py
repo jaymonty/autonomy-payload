@@ -32,11 +32,15 @@ class Behavior(nodeable.Nodeable):
       behaviorID: identifier (int) for this particular behavior
       _subswarm_id: ID of the subswarm to which this UAV is assigned
       _swarm: container for state info for all swarm UAVs
+      _reds: container for state infor for all red UAVs
       _swarm_keys: key values (IDs) of all swarm UAVs
       _subswarm_keys: key values (IDs) of all subswarm UAVs
+      _swarm_subscriber: subscriber object for swarm_tracker reports
+      _red_subscriber: subscriber object for red_tracker reports
       _ap_wp: current autopilot waypoint ID
       _ap_intent: most recently ordered autopilot waypoint
-      _lock: reentrant lock to enforce thread-safe swarm dictionary access
+      _swarm_lock: reentrant lock enforcing thread-safe swarm dictionary access
+      _reds_lock: reentrant lock enforcing thread-safe reds dictionary access
       is_ready: set to True when the behavior has been initialized
       is_active: set to True when the behavior is running 
       is_paused: set to True when an active behavior is paused
@@ -60,11 +64,13 @@ class Behavior(nodeable.Nodeable):
       _set_srv: handler for the behavior's set service
       _activate_srv: handler for the behavior's run service
       _pause_srv: handler for the behavior's pause service
-      _process_swarm_uav_states: callback from swarm uav state messages
+      _process_swarm_uav_states: callback for swarm uav state messages
+      _process_red_uav_states: callback for red uav state messages
       _process_upate_subswarm: callback for the update_subswarm topic
       _process_autopilot_status: callback for autopilot status messages
       _process_ap_intent: callback for autopilot intent messages
-      subscribe_to_swarm: subscribes to the swarm_uav_info topic
+      subscribe_to_swarm: subscribes to the swarm_uav_states topic
+      subscribe_to_reds: subscribes to the red_uav_states topic
 
     Virtual methods for inheriting class implementation
       run_behavior: implements 1 iteration of the behavior's control loop
@@ -87,6 +93,7 @@ class Behavior(nodeable.Nodeable):
         self._swarm = dict()
         self._swarm_keys = set()
         self._subswarm_keys = set()
+        self._reds = dict()
         self._ap_wp = 0
         self._ap_intent = None
         self._uses_wp_control = False
@@ -95,7 +102,8 @@ class Behavior(nodeable.Nodeable):
         self.is_paused = False
         self._statusStamp = None
         self._sequence = 0
-        self._lock = threading.RLock()
+        self._swarm_lock = threading.RLock()
+        self._reds_lock = threading.RLock()
         rospy.Subscriber("autopilot/status", bridgemsg.Status, \
             self._process_ap_status)
         rospy.Subscriber("swarm_control/subswarm_id", stdmsg.UInt8,
@@ -105,6 +113,7 @@ class Behavior(nodeable.Nodeable):
         rospy.Subscriber("network/recv_swarm_data", apmsg.BehaviorParameters, \
                          self._process_swarm_data_msg)
         self._swarm_subscriber = None
+        self._red_subscriber = None
         self._statusPublisher = \
             rospy.Publisher("swarm_control/behavior_status", \
                             apmsg.BehaviorState, tcp_nodelay=True, \
@@ -289,7 +298,9 @@ class Behavior(nodeable.Nodeable):
             self.is_ready = False
             self.is_active = False
             if self._swarm_subscriber: self._swarm_subscriber.unregister()
+            if self._red_subscriber: self._red_subscriber.unregister()
             self._swarm_subscriber = None
+            self._red_subscriber = None
             self._send_status_message()
             self.log_info("%s ready state and active state set to 'False'"\
                           %self.nodeName)
@@ -356,6 +367,21 @@ class Behavior(nodeable.Nodeable):
         time.sleep(0.5)  # Give it a little time to get at least one update
 
 
+    def subscribe_to_red_states(self):
+        ''' Establishes the subscription to the red UAV information
+        The red_uav_states topic is not subscribed to when the behavior is
+        inactive in order to minimize the communication requirement.
+        NOTE:  This method must be called by an implementing behavior's
+               set_behavior method in order to have access to the red UAV data.
+        '''
+        if self._red_subscriber == None:
+            self._red_subscriber = \
+                rospy.Subscriber("red_tracker/red_uav_states", \
+                                 apmsg.RedSwarmStateStamped, \
+                                 self._process_red_uav_states)
+        time.sleep(0.5)  # Give it a little time to get at least one update
+
+
     #---------------------------------
     # ROS topic subscription callbacks
     #---------------------------------
@@ -364,7 +390,7 @@ class Behavior(nodeable.Nodeable):
         ''' Handle incoming swarm_uav_states messages
         @param swarmMsg: message containing swarm data (SwarmStateStamped)
         '''
-        with self._lock:
+        with self._swarm_lock:
             self._swarm.clear()
             self._swarm_keys.clear()
             self._subswarm_keys.clear()
@@ -373,6 +399,16 @@ class Behavior(nodeable.Nodeable):
                 self._swarm_keys.add(vehicle.vehicle_id)
                 if vehicle.subswarm_id == self._subswarm_id:
                     self._subswarm_keys.add(vehicle.vehicle_id)
+
+
+    def _process_red_uav_states(self, redsMsg):
+        ''' Handle incoming red_uav_states messages
+        @param redsMsg: message containing swarm data (RedSwarmStateStamped)
+        '''
+        with self._reds_lock:
+            self._reds.clear()
+            for uav in redsMsg.reds:
+                self._reds[uav.vehicle_id] = uav
 
 
     def _process_upate_subswarm(self, subswarmMsg):

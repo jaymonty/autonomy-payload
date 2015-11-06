@@ -25,6 +25,7 @@ ALT_BLOCK_SIZE = 15.0  # Altitude block size for altitude-separated behaviors
 SWARM_STANDBY = 0          # No swarm behavior (set no payload control)
 SWARM_LINEAR_FORMATION = 1 # Straight line high-to-low formation
 SWARM_SEARCH = 2           # Conduct a coordinated search of a specified area
+GREEDY_SHOOTER = 3         # Track and shoot the closest red UAVs
 SWARM_SEQUENCE_LAND = 98   # Land in order (low-to-high UAV)
 SWARM_EGRESS = 99          # Egress the swarm for recovery
 
@@ -32,11 +33,13 @@ SWARM_EGRESS = 99          # Egress the swarm for recovery
 SWARM_BHVRS = {  SWARM_STANDBY:          'Standby', \
                  SWARM_LINEAR_FORMATION: 'Line Formation', \
                  SWARM_SEARCH:           'Swarm Search', \
+                 GREEDY_SHOOTER:         'Greedy Shooter', \
                  SWARM_SEQUENCE_LAND:    'Sequence Land' }
 
 SWARM_BHVR_VALUES = { 'Standby':        SWARM_STANDBY, \
                       'Line Formation': SWARM_LINEAR_FORMATION, \
                       'Swarm Search':   SWARM_SEARCH, \
+                      'Greedy Shooter': GREEDY_SHOOTER, \
                       'Sequence Land':  SWARM_SEQUENCE_LAND }
 
 # Enumeration for swarming states

@@ -28,6 +28,7 @@ class WaypointBehavior(behavior.Behavior):
 
     Class member variables:
       _wpPublisher: publisher object for publishing waypoint commands
+      wp_msg: LLA object containing waypoint order
       _last_wp_id: Index (ID) of the last (infinite loiter) waypoint
 
     Inherited from Behavior
@@ -65,6 +66,7 @@ class WaypointBehavior(behavior.Behavior):
         behavior.Behavior.__init__(self, nodename, ctrlrID)
         self._uses_wp_control = True
         self._last_wp_id = 0
+        self.wp_msg = LLA()
         self._wpPublisher = \
             rospy.Publisher("autopilot/payload_waypoint", LLA, \
                             tcp_nodelay=True, latch=True, queue_size=1)

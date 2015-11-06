@@ -11,6 +11,11 @@
 import struct
 import ap_lib.acs_messages as acsmsg
 
+# Enumeration for use in identifying message subtypes
+SEARCH_WP = 0     # Data field represents a series of waypoints
+FIRING_REPORT = 1 # Data field represents an air-to-air firing report
+
+
 class BitmappedBytes(object):
     ''' Abstract class template for customized parsing of byte arrays
     Implementing classes should add member variables as required and implement
@@ -93,7 +98,6 @@ class SearchWaypointParser(BitmappedBytes):
     fmt_wp = '>lllBBBx'
     fmt_wp_size = struct.calcsize(fmt_wp)
 
-    SEARCH_WP = 0   # Enumeration for use in specifying message type
 
     def __init__(self):
         ''' Initializes parameters with default values
@@ -185,4 +189,61 @@ class LinearFormationOrderParser(BitmappedBytes):
         '''
         self.distance, self.angle, self.stack_formation = \
             struct.unpack_from(type(self).fmt, bytes, 0)
+
+
+class FiringReportParser(BitmappedBytes):
+    ''' Parser for firing report messages orders
+    '''
+    fmt = ">lllllhBxlll"
+
+    def __init__(self):
+        ''' Initializes parameters with default values
+        '''
+        self.time_secs = 0
+        self.time_nsecs = 0
+        self.lat = 0.0         # 7-decimal precision degrees
+        self.lon = 0.0         # 7-decimal precision degrees
+        self.alt = 0.0         # 2-decimal precision meters MSL
+        self.heading = 0.0     # 3-decimal precision radians
+        self.target_id = 0     # 0-255
+        self.target_lat = 0.0  # 7-decimal precision degrees
+        self.target_lon = 0.0  # 7-decimal precision degrees
+        self.target_alt = 0.0  # 2-decimal precision meters MSL
+
+
+    def pack(self):
+        ''' Serializes parameter values into a bitmapped byte array
+        @return bitmapped bytes as a string
+        '''
+        tupl = (self.time_secs, self.time_nsecs, \
+                int(self.lat * 1e07), \
+                int(self.lon * 1e07), \
+                int(self.alt * 1e02), \
+                int(self.heading * 1e03), \
+                self.target_id, \
+                int(self.target_lat * 1e07), \
+                int(self.target_lon * 1e07), \
+                int(self.target_alt * 1e02))
+
+        return struct.pack(type(self).fmt, *tupl)
+
+
+    def unpack(self, bytes):
+        ''' Sets parameter values from a bitmapped byte array
+        @param bytes: bitmapped byte array
+        '''
+        fields = struct.unpack_from(type(self).fmt, bytes, 0)
+
+        # Place unpacked but unconverted fields into message elements
+        self.time_secs = fields[0]
+        self.time_nsecs = fields[1]
+        self.lat = fields[2] / 1e07
+        self.lon = fields[3] / 1e07
+        self.alt = fields[4] / 1e02
+        self.heading = fields[5] / 1e03
+        self.target_id = fields[6]
+        self.target_lat = fields[7] / 1e07
+        self.target_lon = fields[8] / 1e07
+        self.target_alt = fields[9] / 1e02
+
 
