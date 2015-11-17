@@ -903,13 +903,16 @@ class SwarmBehaviorData(Message):
             self.data + (b'\x00' * (len(self.data) % 4))
         data_bytes = len(self.data)
         tupl = (self.data_type, data_bytes)
-        for byte in range(0, data_bytes):
-            # Differs from the SwarmBehavior message because of Python 2 vs 3?
-            # Encoded by the payload (Python 2) for this message
-            # Encoded by SwarmCommander (Python 3) for this message
-            tupl += (ord(self.data[byte]),)
+
+        # Hack to account for Python2 vs Python3 treatment of the byte array
+        if type(self.data) == str:
+            for byte in range(0, data_bytes):
+                tupl += (ord(self.data[byte]),)
+        else:
+            for byte in range(0, data_bytes):
+                tupl += (self.data[byte],)
         fmt = type(self).msg_fmt + (data_bytes * 'B')
-        self.msg_size = self.hdr_size + struct.calcsize(fmt) # Variable size--must recompute this
+        self.msg_size = self.hdr_size + struct.calcsize(fmt) # Variable size--must recompute
         return struct.pack(fmt, *tupl)
 
     def _unpack(self, data):
