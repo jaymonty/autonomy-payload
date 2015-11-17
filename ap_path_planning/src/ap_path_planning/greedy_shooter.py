@@ -42,6 +42,7 @@ class GreedyShooter(WaypointBehavior):
       _target_alt: altitude (meters MSL) of the targeted UAV
       _wp_calc: intercept waypoint calculator
       _envelope_counter: iterations that a target is in the firing envelope
+      _firing_report_number: sequence number of the firing report
       _firing_report_publisher: publishes ROS firing report messages
       _behavior_data_publisher: publishes swarm data messages (network firing reports)
 
@@ -128,6 +129,7 @@ class GreedyShooter(WaypointBehavior):
             pputils.InterceptCalculator(self, self._own_uav_id, self._reds)
         self._wp_calc.max_time_late = GreedyShooter.MAX_TIME_LATE
         self._wp_calc.lookahead = 0.0
+        self._firing_report_number = 0
         self._firing_report_publisher = None
         self._behavior_data_publisher = None
 
@@ -358,7 +360,9 @@ class GreedyShooter(WaypointBehavior):
         report_msg.report.target_alt = self._target_alt
         self._firing_report_publisher.publish(report_msg)
 
+        self._firing_report_number += 1
         parser = bytes.FiringReportParser()
+        parser.report_num = self._firing_report_number
         parser.time_secs = self._shot_time.secs
         parser.time_nsecs = self._shot_time.nsecs
         parser.lat = self._own_pose.pose.pose.position.lat
@@ -373,7 +377,8 @@ class GreedyShooter(WaypointBehavior):
         net_msg = apmsg.BehaviorParameters()
         net_msg.id = bytes.FIRING_REPORT
         net_msg.params = data
-        self._behavior_data_publisher.publish(net_msg)
+        for rep in range(0, 4): # Hope to get at least one through
+            self._behavior_data_publisher.publish(net_msg)
 
         self.log_info("Greedy shooter fired at UAV %d: (%f, %f, %f)" \
                       %(self._target_id, self._target_lat, self._target_lon, \
