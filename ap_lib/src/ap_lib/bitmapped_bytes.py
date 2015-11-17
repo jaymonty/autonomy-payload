@@ -194,11 +194,12 @@ class LinearFormationOrderParser(BitmappedBytes):
 class FiringReportParser(BitmappedBytes):
     ''' Parser for firing report messages orders
     '''
-    fmt = ">lllllhBxlll"
+    fmt = ">BlllllhBlll"
 
     def __init__(self):
         ''' Initializes parameters with default values
         '''
+        self.report_num = 0
         self.time_secs = 0
         self.time_nsecs = 0
         self.lat = 0.0         # 7-decimal precision degrees
@@ -215,7 +216,7 @@ class FiringReportParser(BitmappedBytes):
         ''' Serializes parameter values into a bitmapped byte array
         @return bitmapped bytes as a string
         '''
-        tupl = (self.time_secs, self.time_nsecs, \
+        tupl = (self.report_num, self.time_secs, self.time_nsecs, \
                 int(self.lat * 1e07), \
                 int(self.lon * 1e07), \
                 int(self.alt * 1e02), \
@@ -235,15 +236,16 @@ class FiringReportParser(BitmappedBytes):
         fields = struct.unpack_from(type(self).fmt, bytes, 0)
 
         # Place unpacked but unconverted fields into message elements
-        self.time_secs = fields[0]
-        self.time_nsecs = fields[1]
-        self.lat = fields[2] / 1e07
-        self.lon = fields[3] / 1e07
-        self.alt = fields[4] / 1e02
-        self.heading = fields[5] / 1e03
-        self.target_id = fields[6]
-        self.target_lat = fields[7] / 1e07
-        self.target_lon = fields[8] / 1e07
-        self.target_alt = fields[9] / 1e02
+        self.report_num = fields[0]
+        self.time_secs = fields[1]
+        self.time_nsecs = fields[2]
+        self.lat = fields[3] / 1e07
+        self.lon = fields[4] / 1e07
+        self.alt = fields[5] / 1e02
+        self.heading = fields[6] / 1e03
+        self.target_id = fields[7]
+        self.target_lat = fields[8] / 1e07
+        self.target_lon = fields[9] / 1e07
+        self.target_alt = fields[10] / 1e02
 
 
