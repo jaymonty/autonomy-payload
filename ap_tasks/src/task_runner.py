@@ -189,11 +189,14 @@ class RosbagTask(Task):
         Task.__init__(self, "Rosbag")
         self._folder = os.path.expanduser("~/bags/")
         self._excl_list = ['swarm_tracker/swarm_uav_states',
+                           'red_tracker/red_uav_states',
                            'network/recv_pose',
+                           'network/recv_red_pose',
                            'network/recv_swarm_ctl_state',
                            'autopilot/gps',
                            'autopilot/gps_odom',
-                           'autopilot/imu']
+                           'autopilot/imu'
+                           'swarm_control/behavior_status']
         # Derived and internal attributes
         self._prefix = "%s%u" % (self._folder, self._acid)
         self._excl = '"(.*)(' + '|'.join(self._excl_list) + ')"'
