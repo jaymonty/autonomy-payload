@@ -161,7 +161,7 @@ class NetworkBridge(object):
 
     def __init__(self, ac_id=None, ac_name=None,
                  net_port=None, net_dev=None,
-                 ros_basename=None):
+                 ros_basename=None, bcast_bind=True):
 
         # Initialize ROS first
         if not ros_basename:
@@ -186,7 +186,7 @@ class NetworkBridge(object):
                 + "\n  port:\t\t\t" + str(self.net_port)
 
             self.sock = Socket(self.ac_id, self.net_port, self.net_dev,
-                               local_ip, remote_ip)
+                               local_ip, remote_ip, bcast_bind=bcast_bind)
         except Exception as ex:
             raise ex
 
