@@ -37,7 +37,7 @@ NODE_BASENAME = 'swarm_tracker'
 CURRENT_POSE = 0
 DR_POSE = 1
 
-MAX_DR_TIME = rospy.Duration(5.0)  # Max time for a DR position update
+DEFAULT_CRASH_TIME = rospy.Duration(3.0)  # Default time for "crash detection"
 
 
 class SwarmElement(object):
@@ -55,7 +55,6 @@ class SwarmElement(object):
       subSwarmID: subswarm to which this SwarmElement is assigned
       swarmState: the current swarm state for this vehicle
       swarmBehavior: the currently active swarm behavior for this vehicle
-      isActive: indicates that the vehicle is active (recent update)
       state: aircraft pose and  (Geodometry)
       drPose: computed (DR) position for a future time (Geodometry)
       _stateMsg: container for the swarm state message (SwarmVehicleState)
@@ -81,7 +80,6 @@ class SwarmElement(object):
         self.subSwarmID = subswarm
         self.swarmState = 0
         self.swarmBehavior = 0
-        self.isActive = True
         self.state = initState
         self.state.header.seq = 0
         self.state.header.frame_id = 'base_footprint'
@@ -114,7 +112,6 @@ class SwarmElement(object):
          @param swarmState: Updated vehicle's current swarm state
          @param swarmBehavior: Updated vehicle's currently active swarm behavior
         '''
-        self.isActive = True
         self.subSwarmID = subswarm
         self.swarmState = swarmState
         self.swarmBehavior = swarmBehavior
@@ -268,6 +265,8 @@ class SwarmTracker(Nodeable):
       subSwarmID:  ID (integer) of the subswarm this vehicle is a part of
       swarmState:  current swarm state of this vehicle (int)
       swarmBehavior:  currently active swarm behavior for this vehicle (int)
+      _possible_crash: set of swarm UAVs suspected of crashing (no reports)
+      _crash_timeout: max non-reporting time before a UAV is considered crashed
       _baseAlt: Altitude from which rel_alt values are calculated for all AC
       _swarm: Dictionary of records for individual aircraft in the swarm
       _swarmPublisher: Object for publishing swarm state
@@ -309,6 +308,8 @@ class SwarmTracker(Nodeable):
         self.swarmBehavior = 0
         self._baseAlt = 0.0
         self._swarm = dict()
+        self._possible_crash = set()
+        self._crash_timeout = DEFAULT_CRASH_TIME
         self._swarmPublisher = None
         self._swarmMessage = SwarmStateStamped()
         self._swarmMessage.header.seq = 0
@@ -358,6 +359,7 @@ class SwarmTracker(Nodeable):
         '''
         self._lock.acquire()
         self._swarmMessage.header.stamp = rospy.Time.now()
+        self._swarmMessage.crashed_list = list(self._possible_crash)
         del self._swarmMessage.swarm[:]    # Clear current message contents
 
         vKeys = self._swarm.keys()
@@ -365,11 +367,14 @@ class SwarmTracker(Nodeable):
             vehicle = self._swarm[vID]
             timeDiff = self._swarmMessage.header.stamp - \
                        vehicle.state.header.stamp
-            if ((self._swarm[vID].isActive) and (timeDiff > MAX_DR_TIME)):
-               self._swarm[vID].isActive = False    # Remove vehicle if last report is old
-               self.log_warn("Vehicle ID " + str(vID) +\
-                             ": no updates for " + str(MAX_DR_TIME/1e9) +\
-                             " seconds--use with caution")
+
+            # Half of an Eventually Reliable Crash Detector (ERCD)
+            # (i.e., if a UAV dies, we'll eventually realize it reliably)
+            if (vID not in self._possible_crash) and \
+               (timeDiff > self._crash_timeout):
+                self._possible_crash.add(vID)
+                self.log_warn("UAV %d possible crash: no updates for %f secs" \
+                              %(vID, (float(str(self._crash_timeout))/1e9)))
 
             vehicle.computeDRPose(self._swarmMessage.header.stamp)
             vehicle._stateMsg.state.header.stamp = vehicle.state.header.stamp
@@ -420,18 +425,23 @@ class SwarmTracker(Nodeable):
         '''
         try:
             self._lock.acquire()
-            newTime = poseMsg.state.header.stamp
-            poseTime = newTime.secs + (newTime.nsecs / float(1e9))
+            poseTime = poseMsg.state.header.stamp
             # Update an existing element if it's already in the dictionary
             if poseMsg.vehicle_id in self._swarm:
                 updateElement = self._swarm[poseMsg.vehicle_id]
-                elTime = float(updateElement.state.header.stamp.secs) +\
-                         float(updateElement.state.header.stamp.nsecs) / float(1e9)
+                elTime = updateElement.state.header.stamp
                 if poseTime < elTime: return # older than latest data
-                # Don't update the swarm state stuff--it's not in this msg
-                if not updateElement.isActive:
-                    self.log_warn("received update from previously inactive UAV " +\
-                                  str(poseMsg.vehicle_id))
+
+                # Half of an Eventually Reliable Crash Detector (ERCD)
+                # (i.e., if a UAV dies, we'll eventually realize it reliably)
+                if poseMsg.vehicle_id in self._possible_crash:
+                    t = rospy.Time.now()
+                    if (t - elTime) > self._crash_timeout:
+                        self._crash_timeout = t - elTime
+                    self._possible_crash.remove(poseMsg.vehicle_id)
+                    self.log_info("Received update to possibly crashed UAV %d"\
+                                  %poseMsg.vehicle_id)
+
                 updateElement.updateState(poseMsg.state, poseMsg.subswarm_id, \
                                           updateElement.swarmState, \
                                           updateElement.swarmBehavior)
