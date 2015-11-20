@@ -97,13 +97,9 @@ class GreedyShooter(WaypointBehavior):
     MAX_TIME_LATE = rospy.Duration(3.0) # Max no-report time to still chase
     RQD_IN_ENVELOPE = 3   # The number of target tests in the envelope to shoot
 
-    # Target envelope parameters
-    MAX_RANGE = 200.0
-    FOV_WIDTH = 40.0   # 40 degree horizontal cutout in front of UAV
-    FOV_HEIGHT = 80.0  # 80 degree vertical cutout in front of UAV
 
-    def __init__(self, nodename, own_id, max_range=MAX_RANGE, \
-                 fov_width=FOV_WIDTH, fov_height=FOV_HEIGHT):
+    def __init__(self, nodename, own_id, max_range=enums.MAX_RANGE, \
+                 fov_width=enums.FOV_WIDTH, fov_height=enums.FOV_HEIGHT):
         ''' Class initializer initializes class variables.
         @param nodename: name of the ROS node in which this object exists
         @param own_id: ID (int) of this aircraft
