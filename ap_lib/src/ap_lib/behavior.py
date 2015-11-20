@@ -35,6 +35,7 @@ class Behavior(nodeable.Nodeable):
       _reds: container for state infor for all red UAVs
       _swarm_keys: key values (IDs) of all swarm UAVs
       _subswarm_keys: key values (IDs) of all subswarm UAVs
+      _crashed_keys: key values (IDs) of swarm UAVs suspected of crashing
       _swarm_subscriber: subscriber object for swarm_tracker reports
       _red_subscriber: subscriber object for red_tracker reports
       _ap_wp: current autopilot waypoint ID
@@ -394,6 +395,8 @@ class Behavior(nodeable.Nodeable):
             self._swarm.clear()
             self._swarm_keys.clear()
             self._subswarm_keys.clear()
+            self._crashed_keys.clear()
+            self._crashed_keys.update(swarmMsg.crashed_list)
             for vehicle in swarmMsg.swarm:
                 self._swarm[vehicle.vehicle_id] = vehicle
                 self._swarm_keys.add(vehicle.vehicle_id)
