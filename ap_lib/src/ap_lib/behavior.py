@@ -94,6 +94,7 @@ class Behavior(nodeable.Nodeable):
         self._swarm = dict()
         self._swarm_keys = set()
         self._subswarm_keys = set()
+        self._crashed_keys = set()
         self._reds = dict()
         self._ap_wp = 0
         self._ap_intent = None
