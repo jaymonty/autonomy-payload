@@ -92,10 +92,9 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
       _negotiate_landing_order: determines what order the UAVs will land in
     '''
 
-    def __init__(self, nodename, ctlr_id):
+    def __init__(self, nodename):
         ''' Class initializer initializes class variables.
         @param nodename: name of the ROS node in which this object exists
-        @param own_id: ID (integer) of this aircraft
         '''
         wp_behavior.WaypointBehavior.__init__(self, nodename, \
             enums.SWARM_SEQUENCE_LAND)
@@ -202,7 +201,8 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
 
             # Make sure the aircraft this one is following is still valid
             # If it is not, need to figure out a new aircraft to follow
-            if ((self._leader_id not in self._subswarm_keys) and \
+            if (((self._leader_id not in self._subswarm_keys) or \
+                 (self._leader_id in self._crashed_keys)) and \
                 (self._behavior_state != NEGOTIATE_ORDER) and \
                 (self._behavior_state != ON_FINAL) and \
                 (self._swarm[self._leader_id].swarm_state != enums.LANDING)):
@@ -323,8 +323,13 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
         lo_to_hi = []
         with self._swarm_lock:
             for uav in self._subswarm_keys:
-                lo_to_hi.append([ self._swarm[uav].vehicle_id, \
-                                     self._swarm[uav].state.pose.pose.position.alt])
+                if uav == self._ownID:
+                    lo_to_hi.append((uav, self._ap_intent.z))
+#                elif uav not in self._crashed_keys:  TODO: test & add this
+                else:
+                    lo_to_hi.append(( self._swarm[uav].vehicle_id, \
+                                      self._swarm[uav].\
+                                           state.pose.pose.position.rel_alt ))
         lo_to_hi = sorted(lo_to_hi, key = lambda tup: tup[1])
         self.log_dbug("determined low to high order: %s"%str(lo_to_hi))
 
@@ -345,9 +350,7 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
 # Main code
 
 if __name__ == '__main__':
-    ownAC = int(rospy.get_param("aircraft_id"))
-
-    sequencer = SwarmLandingSequencer("swarm_landing_sequencer", ownAC)
-
+    rospy.init_node("swarm_landing_sequencer")
+    sequencer = SwarmLandingSequencer("swarm_landing_sequencer")
     sequencer.runAsNode(1.0)
 

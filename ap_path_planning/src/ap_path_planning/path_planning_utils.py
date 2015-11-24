@@ -93,7 +93,7 @@ class InterceptCalculator(object):
             self._alt = alt
             self._alt_mode = alt_mode
             self._is_set = True
-            self._owner.log_info("Parameters set: Leader=%d, distance=%f, angle=%f, alt=%f, alt_mode=%d"\
+            self._owner.log_dbug("Parameters set: Leader=%d, distance=%f, angle=%f, alt=%f, alt_mode=%d"\
                                  %(self._lead_uav_id, self._follow_distance, \
                                    self._follow_angle, self._alt, self._alt_mode))
         return self._is_set

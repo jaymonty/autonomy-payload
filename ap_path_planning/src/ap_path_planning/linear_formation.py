@@ -77,13 +77,12 @@ class LinearFormation(WaypointBehavior):
     SETUP = 0
     FLY = 1
 
-    def __init__(self, nodename, own_id):
+    def __init__(self, nodename):
         ''' Class initializer initializes class variables.
         @param nodename: name of the ROS node in which this object exists
-        @param own_id: ID (int) of this aircraft
         '''
         WaypointBehavior.__init__(self, nodename, enums.SWARM_LINEAR_FORMATION)
-        self._own_uav_id = own_id
+        self._own_uav_id = rospy.get_param("aircraft_id")
         self._distance = 0.0
         self._angle = 0.0
         self._stacked = False
@@ -186,7 +185,8 @@ class LinearFormation(WaypointBehavior):
 
             # Checks if this UAV is not the formation lead
             if not self._is_lead:
-                ldr_rec = self._swarm[self._wpt_calc.leader()]
+                ldr_id = self._wpt_calc.leader()
+                ldr_rec = self._swarm[ldr_id]
 
                 # Make sure the UAV we're following is in the right mode
                 if ldr_rec.swarm_behavior != enums.SWARM_LINEAR_FORMATION and \
@@ -194,6 +194,11 @@ class LinearFormation(WaypointBehavior):
                        Behavior.MAX_ACTIVATE_T:
                     self.log_warn("leader in wrong behavior--deactivating")
                     return False
+
+                # Make sure the leader isn't suspected of crashing
+                if ldr_id in self._crashed_keys:
+                    self.log_warn("no update received from leader (crash?)")
+                    return false
 
                 # Make sure the UAV we're following is still in same subswarm
                 if ldr_rec.subswarm_id != self._subswarm_id:
@@ -227,8 +232,11 @@ class LinearFormation(WaypointBehavior):
             for uav_id in self._subswarm_keys:
                 if uav_id == self._own_uav_id:
                     hi_to_lo.append((uav_id, self._ap_intent.z))
+#                elif uav_id not in self._crashed_keys:    TODO: test & add this
                 else:
-                    hi_to_lo.append((uav_id, self._swarm[uav_id].state.pose.pose.position.rel_alt))
+                    hi_to_lo.append((uav_id, self._swarm[uav_id].\
+                                                  state.pose.pose.\
+                                                  position.rel_alt))
         hi_to_lo = sorted(hi_to_lo, key = lambda tup: -tup[1])
         self.log_dbug("determined high to low order: %s"%str(hi_to_lo))
 
@@ -269,11 +277,7 @@ class LinearFormation(WaypointBehavior):
 #----------------------------------------------
 
 if __name__ == '__main__':
-
-    ownAC = int(rospy.get_param("aircraft_id"))
-
-    # Initialize ROS node
     rospy.init_node("linear_formation")
-    follower = LinearFormation("linear_formation", ownAC)
+    follower = LinearFormation("linear_formation")
     follower.runAsNode(10.0)
 
