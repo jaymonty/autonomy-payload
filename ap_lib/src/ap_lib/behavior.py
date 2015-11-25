@@ -47,6 +47,7 @@ class Behavior(nodeable.Nodeable):
       is_paused: set to True when an active behavior is paused
       _uses_wp_control: set to True if the behavior drives by waypoint
       _statusPublisher: publisher object for behavior status
+      _behaviorDataPublisher: publisher object for behavior data (network) msgs
       _statusStamp: timestamp of the last status message publication
       _sequence: sequence number of the next status message
 
@@ -120,6 +121,10 @@ class Behavior(nodeable.Nodeable):
             rospy.Publisher("swarm_control/behavior_status", \
                             apmsg.BehaviorState, tcp_nodelay=True, \
                             latch=False, queue_size=1)
+        self._behaviorDataPublisher = \
+            rospy.Publisher("network/send_swarm_behavior_data", \
+                            apmsg.BehaviorParameters, tcp_nodelay=True, \
+                            latch=False, queue_size=5)
         self.createService("set", apsrv.SetBehavior, self._set_srv)
         self.createService("run", apsrv.SetBoolean, self._run_srv)
         self.createService("pause", apsrv.SetBoolean, self._pause_srv)

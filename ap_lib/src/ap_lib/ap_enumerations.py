@@ -26,6 +26,8 @@ SWARM_STANDBY = 0          # No swarm behavior (set no payload control)
 SWARM_LINEAR_FORMATION = 1 # Straight line high-to-low formation
 SWARM_SEARCH = 2           # Conduct a coordinated search of a specified area
 GREEDY_SHOOTER = 3         # Track and shoot the closest red UAVs
+ALTITUDE_SORT = 4          # Consensus algorithm to sort UAVs by rel_alt
+LAZY_ALTITUDE_SORT = 5     # Lazy consensus algorithm to sort UAVs by rel_alt
 SWARM_SEQUENCE_LAND = 98   # Land in order (low-to-high UAV)
 SWARM_EGRESS = 99          # Egress the swarm for recovery
 
@@ -34,12 +36,16 @@ SWARM_BHVRS = {  SWARM_STANDBY:          'Standby', \
                  SWARM_LINEAR_FORMATION: 'Line Formation', \
                  SWARM_SEARCH:           'Swarm Search', \
                  GREEDY_SHOOTER:         'Greedy Shooter', \
+                 ALTITUDE_SORT:          'Altitude Sort', \
+                 LAZY_ALTITUDE_SORT:     'Lazy Alt Sort', \
                  SWARM_SEQUENCE_LAND:    'Sequence Land' }
 
 SWARM_BHVR_VALUES = { 'Standby':        SWARM_STANDBY, \
                       'Line Formation': SWARM_LINEAR_FORMATION, \
                       'Swarm Search':   SWARM_SEARCH, \
                       'Greedy Shooter': GREEDY_SHOOTER, \
+                      'Altitude Sort':  ALTITUDE_SORT, \
+                      'Lazy Alt Sort':  LAZY_ALTITUDE_SORT, \
                       'Sequence Land':  SWARM_SEQUENCE_LAND }
 
 # Enumeration for swarming states
