@@ -592,7 +592,8 @@ if __name__ == '__main__':
         bridge.addNetHandler(messages.SwarmBehavior, net_swarm_behavior)
         bridge.addNetHandler(messages.SuspendSwarmBehavior, net_swarm_behavior)
         bridge.addNetHandler(messages.PauseSwarmBehavior, net_swarm_behavior)
-        bridge.addNetHandler(messages.SwarmBehaviorData, net_swarm_behavior_data)
+        bridge.addNetHandler(messages.SwarmBehaviorData, \
+                             net_swarm_behavior_data, log_success=False)
         bridge.addNetHandler(messages.SwarmState, net_swarm_state)
         bridge.addNetHandler(messages.Calibrate, net_calibrate)
         bridge.addNetHandler(messages.Demo, net_demo)
