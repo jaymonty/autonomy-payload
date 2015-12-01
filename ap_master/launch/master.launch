@@ -124,5 +124,8 @@
     <remap from="greedy_shooter/firing_reports" to="air_to_air/firing_reports" />
   </node>
 
+  <node name="altitude_sort" pkg="ap_path_planning" type="altitude_sort.py" output="screen" args=""/>
+
+  <node name="lazy_altitude_sort" pkg="ap_path_planning" type="lazy_altitude_sort.py" output="screen" args=""/>
 
 </launch>
