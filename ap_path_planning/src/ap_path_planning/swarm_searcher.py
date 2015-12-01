@@ -162,7 +162,7 @@ class SwarmSearcher(wp_behavior.WaypointBehavior):
         self.wpmsgQueued = False
 
         self._getWpSrvProxy = None
-        self._swarmSearchPublisher = None
+#        self.behaviorDataPublisher = None
         self._wps_to_send = bytes.SearchWaypointParser()
 
 #        self.DBUG_PRINT = True
@@ -174,9 +174,9 @@ class SwarmSearcher(wp_behavior.WaypointBehavior):
     # Implementation of parent class virtual functions
     #-------------------------------------------------
 
-    def publisherSetup(self):
-        self._swarmSearchPublisher = \
-            self.createPublisher("send_swarm_behavior_data", apmsg.BehaviorParameters, 1)
+#    def publisherSetup(self):
+#        self.behaviorDataPublisher = \
+#            self.createPublisher("send_swarm_behavior_data", apmsg.BehaviorParameters, 1)
 
 
     def serviceProxySetup(self):
@@ -353,7 +353,7 @@ class SwarmSearcher(wp_behavior.WaypointBehavior):
                 msg = apmsg.BehaviorParameters()
                 msg.id = bytes.SEARCH_WP
                 msg.params = self._wps_to_send.pack()
-                self._swarmSearchPublisher.publish(msg)
+                self._behaviorDataPublisher.publish(msg)
                 self._wps_to_send.wp_list = []
 
 

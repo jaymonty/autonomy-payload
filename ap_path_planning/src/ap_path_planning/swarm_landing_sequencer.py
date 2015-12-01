@@ -20,6 +20,7 @@ import ap_lib.bitmapped_bytes as bytes
 import ap_lib.nodeable as nodeable
 import ap_lib.gps_utils as gps
 import ap_lib.waypoint_behavior as wp_behavior
+import ap_lib.distributed_algorithms as dist
 import autopilot_bridge.srv as apbrgsrv
 import autopilot_bridge.msg as apbrgmsg
 
@@ -54,6 +55,7 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
       _transit_started: set to True when the transit wpt is issued
       _transit_complete: set to True when the transit wpt has been reached
       _stack_time: ROS time of arrival at the landing stack location
+      _sorter: implements a distributed sort algorithm for formation position
 
     Inherited from WaypointBehavior
       wp_msg: LLA message object for waypoint orders to be published
@@ -73,6 +75,7 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
       is_paused: set to True when an active behavior is paused
       _uses_wp_control: set to True if the behavior drives by waypoint
       _statusPublisher: publisher object for behavior status
+      _behaviorDataPublisher: publisher object for behavior data (network) msgs
       _statusStamp: timestamp of the last status message publication
       _sequence: sequence number of the next status message
 
@@ -100,6 +103,7 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
             enums.SWARM_SEQUENCE_LAND)
         self._ownID = rospy.get_param("aircraft_id")
         self._leader_id = 0
+        self._leader_ok = False
         self._ldg_wpt_index = 0
         self._last_wp_id = None
         self._alt_block = 0
@@ -108,6 +112,10 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
         self._fpr_param_set_srv_proxy = None
         self._behavior_state = None
         self._stack_time = None
+        self._sorter = dist.LazyConsensusSort(self._subswarm_keys, \
+                                              self._crashed_keys, \
+                                              self._behaviorDataPublisher, \
+                                              self._swarm_lock)
 
 #        self.DBUG_PRINT = True
 #        self.INFO_PRINT = True
@@ -133,6 +141,14 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
             self.createServiceProxy('wp_getrange', apbrgsrv.WPGetRange)
         self._fpr_param_set_srv_proxy = \
             self.createServiceProxy('fpr_param_set', apbrgsrv.ParamSet)
+
+
+    def _process_swarm_data_msg(self, dataMsg):
+        ''' Processes swarm data messages received over the network
+        @param dataMsg: message containing received behavior data
+        '''
+        if self.is_active:
+            self._sorter.process_message(dataMsg)
 
 
     def set_behavior(self, params):
@@ -180,8 +196,10 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
                 self.wp_msg.lon = wpt.y
                 self.wp_msg.alt = self._ap_intent.z
 
+                self._sorter.reset(self._ap_intent.z)
                 self._alt_block = 0
                 self._behavior_state = NEGOTIATE_ORDER
+                self._leader_ok = False
                 self.set_ready_state(True)
 
             self._last_wp_id = int(rospy.get_param("last_mission_wp_id"))
@@ -197,6 +215,7 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
     def run_behavior(self):
         ''' Runs one iteration of the behavior
         '''
+        self._sorter.send_requested()
         with self._swarm_lock:
 
             # Make sure the aircraft this one is following is still valid
@@ -210,8 +229,8 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
 
             # Newly activated behavior--determine landing sequence first
             if self._behavior_state == NEGOTIATE_ORDER:
-                self._negotiate_landing_order()
-                self._behavior_state = START_TRANSIT
+                if self._negotiate_landing_order():
+                    self._behavior_state = START_TRANSIT
 
             # Sequence computed, but need to send the transit waypoint
             elif self._behavior_state == START_TRANSIT:
@@ -284,11 +303,14 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
         if self._behavior_state != NEGOTIATE_ORDER and \
            self._behavior_state != ON_FINAL:
             lead = self._swarm[self._leader_id]
+            if lead.swarm_behavior == enums.SWARM_SEQUENCE_LAND:
+                self._leader_ok = True
 
         # Make sure the UAV we're following is in the right mode
-        if lead and self._behavior_state == IN_STACK and \
+        if lead and self._leader_ok and self._behavior_state == IN_STACK and \
            lead.subswarm_id == self._subswarm_id and \
-           lead.swarm_behavior != enums.SWARM_SEQUENCE_LAND:
+           lead.swarm_behavior != enums.SWARM_SEQUENCE_LAND and \
+           lead.swarm_state != enums.LANDING:
             self.log_warn("followed UAV (%d) wrong behavior (%d)--deactivating" \
                           %(self._leader_id, lead.swarm_behavior))
             return False
@@ -320,18 +342,9 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
         This method can be modified later to incorporate more deliberative (and
         possibly negotiated) methods of determining order.
         '''
-        lo_to_hi = []
-        with self._swarm_lock:
-            for uav in self._subswarm_keys:
-                if uav == self._ownID:
-                    lo_to_hi.append((uav, self._ap_intent.z))
-#                elif uav not in self._crashed_keys:  TODO: test & add this
-                else:
-                    lo_to_hi.append(( self._swarm[uav].vehicle_id, \
-                                      self._swarm[uav].\
-                                           state.pose.pose.position.rel_alt ))
-        lo_to_hi = sorted(lo_to_hi, key = lambda tup: tup[1])
-        self.log_dbug("determined low to high order: %s"%str(lo_to_hi))
+        lo_to_hi = self._sorter.decide_sort()
+        if not lo_to_hi: return False
+        self.log_info("determined low to high order: %s"%str(lo_to_hi))
 
         # Find this UAV's position in the marshal stack and who it follows
         if lo_to_hi[0][0] == self._ownID:
@@ -344,7 +357,7 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
 
         self.log_info("landing sequence UAV %d to follow UAV %d" \
                       %(self._ownID, self._leader_id))
-
+        return True
 
 #-----------------------------------------------------------------------
 # Main code

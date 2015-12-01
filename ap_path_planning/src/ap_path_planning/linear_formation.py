@@ -15,6 +15,7 @@ import autopilot_bridge.srv as brgsrv
 import ap_msgs.msg as apmsg
 import ap_lib.ap_enumerations as enums
 import ap_lib.bitmapped_bytes as bytes
+import ap_lib.distributed_algorithms as dist
 from ap_lib.behavior import *
 from ap_lib.waypoint_behavior import *
 import ap_path_planning.path_planning_utils as pputils
@@ -34,6 +35,7 @@ class LinearFormation(WaypointBehavior):
       _angle: angle-off-the-bow of the formation line
       _stacked: True if all followers take the same position from the lead
       _wpt_calc: calculator for determining formation waypoints
+      _sorter: implements a distributed sort algorithm for formation position
       _wp_goto_publisher: directs the UAV to specific waypoint IDs
 
     Inherited from WaypointBehavior
@@ -55,6 +57,7 @@ class LinearFormation(WaypointBehavior):
       _activate_time: ROS time that the behavior was activated
       _uses_wp_control: set to True if the behavior drives by waypoint
       _statusPublisher: publisher object for behavior status
+      _behaviorDataPublisher: publisher object for behavior data (network) msgs
       _statusStamp: timestamp of the last status message publication
       _sequence: sequence number of the next status message
 
@@ -90,6 +93,10 @@ class LinearFormation(WaypointBehavior):
         self._behavior_state = LinearFormation.SETUP
         self._wpt_calc = \
             pputils.InterceptCalculator(self, self._own_uav_id, self._swarm)
+        self._sorter = dist.LazyConsensusSort(self._subswarm_keys, \
+                                              self._crashed_keys, \
+                                              self._behaviorDataPublisher, \
+                                              self._swarm_lock)
         self._wp_goto_publisher = None
         self._activate_time = None
 
@@ -125,6 +132,7 @@ class LinearFormation(WaypointBehavior):
         self._behavior_state = LinearFormation.SETUP
         self._is_lead = False
         self._last_wp_id = int(rospy.get_param("last_mission_wp_id"))
+        self._sorter.reset(self._ap_intent.z)
         self.set_ready_state(True)
         self.log_info("initializing line formation behavior: d=%f, angle=%f, stacked=%s"
                       %(self._distance, self._angle, self._stacked))
@@ -136,11 +144,9 @@ class LinearFormation(WaypointBehavior):
         First state is order determination.  After the order has been determined
         intercept waypoints will be generated for each iteration
         '''
+        self._sorter.send_requested()
         if self._behavior_state == LinearFormation.SETUP:
-            if not self._setup_formation():
-                self.log_warn("Could not set up formation sequence--disabling")
-                self.set_ready_state(False)
-                return
+            if not self._setup_formation():  return
 
             if self._is_lead:
                 self._wp_goto_publisher.publish(stdmsg.UInt16(enums.RACETRACK_WP))
@@ -175,6 +181,14 @@ class LinearFormation(WaypointBehavior):
             self.publishWaypoint(self.wp_msg)
 
         return super(LinearFormation, self).set_pause(pause)
+
+
+    def _process_swarm_data_msg(self, dataMsg):
+        ''' Processes swarm data messages received over the network
+        @param dataMsg: message containing received behavior data
+        '''
+        if self.is_active:
+            self._sorter.process_message(dataMsg)
 
 
     def _safety_checks(self):
@@ -227,19 +241,10 @@ class LinearFormation(WaypointBehavior):
         another one or sets _is_lead to True if it is the formation lead.
         @return True if the formation was successfully set up
         '''
-        hi_to_lo = []
-        with self._swarm_lock:
-            for uav_id in self._subswarm_keys:
-                if uav_id == self._own_uav_id:
-                    hi_to_lo.append((uav_id, self._ap_intent.z))
-#                elif uav_id not in self._crashed_keys:    TODO: test & add this
-                else:
-                    hi_to_lo.append((uav_id, self._swarm[uav_id].\
-                                                  state.pose.pose.\
-                                                  position.rel_alt))
-        hi_to_lo = sorted(hi_to_lo, key = lambda tup: -tup[1])
-        self.log_dbug("determined high to low order: %s"%str(hi_to_lo))
-
+        hi_to_lo = self._sorter.decide_sort()
+        if not hi_to_lo: return None
+        hi_to_lo.reverse()
+            
         result = False
         if hi_to_lo[0][0] == self._own_uav_id:
             self.log_info("line formation initialized with this UAV as leader")
