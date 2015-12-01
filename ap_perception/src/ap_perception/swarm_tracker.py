@@ -37,7 +37,7 @@ NODE_BASENAME = 'swarm_tracker'
 CURRENT_POSE = 0
 DR_POSE = 1
 
-DEFAULT_CRASH_TIME = rospy.Duration(3.0)  # Default time for "crash detection"
+DEFAULT_CRASH_TIME = rospy.Duration(6.0)  # Default time for "crash detection"
 
 
 class SwarmElement(object):
