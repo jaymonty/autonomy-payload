@@ -120,7 +120,7 @@ class Behavior(nodeable.Nodeable):
         self._statusPublisher = \
             rospy.Publisher("swarm_control/behavior_status", \
                             apmsg.BehaviorState, tcp_nodelay=True, \
-                            latch=False, queue_size=1)
+                            latch=False, queue_size=3)
         self._behaviorDataPublisher = \
             rospy.Publisher("network/send_swarm_behavior_data", \
                             apmsg.BehaviorParameters, tcp_nodelay=True, \

@@ -39,7 +39,8 @@ class ConsensusSort(object):
       _short_list_parser: parser for received id-short value messages
       _needed_parser: parser for generating list of IDs with missing data
       _value_pair_parser: parser object for id_value pairs
-      _active: set to True when the object is active (False when done)
+      _info_bcast_time: ROS time of the last information broadcast
+      _rqst_bcast_time: ROS time of the last information request broadcast      
       _lock: re-entrant lock for enforcing thread safety
       rounds: number of rounds the algorithm has executed (for data collection)
       xmit_msgs: number of messages transmitted (for data collection)
@@ -51,6 +52,8 @@ class ConsensusSort(object):
       send_requested: broadcast requested data from this UAV to the network
       decide_sort: broadcast a request for any missing data or perform the sort
     '''
+
+    MIN_COMMS_DELAY = rospy.Duration(0.25) # Throttle comms to limit congestion
 
     def __init__(self, subswarm_keys, crashed_list, msg_publisher, lock):
         ''' Initializer for the class sets up class variables used for sorting
@@ -71,6 +74,8 @@ class ConsensusSort(object):
         self._value_pair_parser.source_id = self._own_id
         self._behavior_msg = apmsg.BehaviorParameters()
         self._lock = lock
+        self._info_bcast_time = rospy.Time(0.0)
+        self._rqst_bcast_time = rospy.Time(0.0)
         self.rounds = 0
         self.xmit_msgs = 0
         self.xmit_bytes = 0
@@ -114,6 +119,9 @@ class ConsensusSort(object):
         This method should be called once per loop even after decided
         so that UAVs that have not decided yet will still get the info
         '''
+        t = rospy.Time.now()
+        if (t - self._info_bcast_time) < ConsensusSort.MIN_COMMS_DELAY:
+            return
         with self._lock:
             self._value_pair_parser.pairs = list(self._to_send)
             if len(self._value_pair_parser.pairs) > 0:
@@ -123,6 +131,7 @@ class ConsensusSort(object):
                 self._to_send.clear()
                 self.xmit_msgs += 1
                 self.xmit_bytes += (len(self._behavior_msg.params) + 4)
+                self._info_bcast_time = t
 
 
     def decide_sort(self):
@@ -137,11 +146,14 @@ class ConsensusSort(object):
                     missing_ids.append(uav)
 
             if len(missing_ids) > 0:
-                self.rounds += 1
-                self._short_list_parser.number_list = missing_ids
-                self._behavior_msg.id = bytes.USHORT_LIST
-                self._behavior_msg.params = self._short_list_parser.pack()
-                self._msg_publisher.publish(self._behavior_msg)
+                t = rospy.Time.now()
+                if (t - self._rqst_bcast_time) >= ConsensusSort.MIN_COMMS_DELAY:
+                    self.rounds += 1
+                    self._short_list_parser.number_list = missing_ids
+                    self._behavior_msg.id = bytes.USHORT_LIST
+                    self._behavior_msg.params = self._short_list_parser.pack()
+                    self._msg_publisher.publish(self._behavior_msg)
+                    self._rqst_bcast_time = t
                 return None
 
             lo_to_hi = []
