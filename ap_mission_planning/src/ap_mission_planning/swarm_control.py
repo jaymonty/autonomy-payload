@@ -146,7 +146,7 @@ class SwarmController(nodeable.Nodeable):
 
     # Class-specific constants
     LAUNCH_ALT = 20000.0      # AGL (m * 1000) altitude used to detect "launch"
-    STALE_BHVR_TIME = rospy.Duration(2.0)
+    STALE_BHVR_TIME = rospy.Duration(6.0)
     BHVR_SWITCH_LOCKOUT = rospy.Duration(3.0) # Post-switch time to ignore errors
     BHVR_PUB_INTERVAL = 10   # Timed loops between behavior summary message pub
     NO_FLY_ASPD = 5.0  # Airspeed below which the UAV is assumed "on deck"
