@@ -433,7 +433,7 @@ class Heartbeat(Message):
 
 class SlaveSetup(Message):
     msg_type = 0x31
-    msg_fmt = '>B100p'
+    msg_fmt = '>B91s'
 
     def __init__(self):
         Message.__init__(self)
@@ -442,14 +442,7 @@ class SlaveSetup(Message):
         self.channel = None        # Pascal String
 
     def _pack(self):
-        # TODO Get rid of this ugly hack
-        try:
-            channel = bytes(self.channel, 'utf-8')  # Python3
-        except:
-            channel = str(self.channel)  # Python2
-
-        tupl = (int(self.enable),
-                _enc_str(channel))
+        tupl = (int(self.enable), _enc_str(self.channel))
         return struct.pack(type(self).msg_fmt, *tupl)
 
     def _unpack(self, data):
@@ -982,4 +975,3 @@ class WeatherData(Message):
         self.temperature = fields[1]
         self.wind_speed = fields[2]
         self.wind_direction = fields[3]
-
