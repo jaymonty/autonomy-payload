@@ -55,14 +55,17 @@ class ConsensusSort(object):
 
     MIN_COMMS_DELAY = rospy.Duration(0.25) # Throttle comms to limit congestion
 
-    def __init__(self, subswarm_keys, crashed_list, msg_publisher, lock):
+    def __init__(self, subswarm_keys, crashed_list, msg_publisher, lock, own_id=1):
         ''' Initializer for the class sets up class variables used for sorting
         @param subswarm_keys: Set object containing active subswarm IDs
         @param crashed_list: Set object containing IDs of possible crashed UAVs
         @param msg_publisher: ROS publisher to the swarm_data_msg topic
         @param lock: reentrant lock that will be used to enforce thread safety
         '''
-        self._own_id = int(rospy.get_param("aircraft_id"))
+        if rospy.has_param("aircraft_id"):
+            self._own_id = int(rospy.get_param("aircraft_id"))
+        else:
+            self._own_id = own_id
         self._subswarm = subswarm_keys
         self._crashed = crashed_list
         self._msg_publisher = msg_publisher
@@ -89,6 +92,9 @@ class ConsensusSort(object):
         self._sort_data[self._own_id] = (self._own_id, int(own_value))
         self._to_send.clear()
         self._to_send.add( self._sort_data[self._own_id] )
+        self.rounds = 0
+        self.xmit_msgs = 0
+        self.xmit_bytes = 0
 
 
     def process_message(self, msg):
@@ -100,15 +106,15 @@ class ConsensusSort(object):
         '''
         # UAV sent data pairs--if this UAV doesn't have them, add them
         if msg.id == bytes.ID_VALUE_PAIRS:
-            self._value_pair_parser.unpack(msg.params)
             with self._lock:
+                self._value_pair_parser.unpack(msg.params)
                 for pair in self._value_pair_parser.pairs:
                     self._sort_data[pair[0]] = pair
 
         # UAV needing data for specific UAVs--if this UAV has them, send them
         elif msg.id == bytes.USHORT_LIST:
-            self._short_list_parser.unpack(msg.params)
             with self._lock:
+                self._short_list_parser.unpack(msg.params)
                 for uav in self._short_list_parser.number_list:
                     if uav in self._sort_data:
                         self._to_send.add(self._sort_data[uav])
@@ -153,6 +159,8 @@ class ConsensusSort(object):
                     self._behavior_msg.id = bytes.USHORT_LIST
                     self._behavior_msg.params = self._short_list_parser.pack()
                     self._msg_publisher.publish(self._behavior_msg)
+                    self.xmit_msgs += 1
+                    self.xmit_bytes += (len(self._behavior_msg.params) + 4)
                     self._rqst_bcast_time = t
                 return None
 
@@ -179,15 +187,15 @@ class LazyConsensusSort(ConsensusSort):
         '''
         # UAV sent data pairs--if this UAV doesn't have them, add them
         if msg.id == bytes.ID_VALUE_PAIRS:
-            self._value_pair_parser.unpack(msg.params)
             with self._lock:
+                self._value_pair_parser.unpack(msg.params)
                 for pair in self._value_pair_parser.pairs:
                     self._sort_data[pair[0]] = pair
 
         # UAV needing data for specific UAVs--if this UAV has them, send them
         elif msg.id == bytes.USHORT_LIST:
-            self._short_list_parser.unpack(msg.params)
             with self._lock:
+                self._short_list_parser.unpack(msg.params)
                 if self._own_id in self._short_list_parser.number_list:
                     self._to_send.add(self._sort_data[self._own_id])
 

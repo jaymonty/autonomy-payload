@@ -68,7 +68,7 @@ class PassedValueParser(BitmappedBytes):
     ''' Abstract class for values passed from a particular source
         Can be extended as required to pass different value types
     '''
-    fmt_base = ">B3x"
+    fmt_base = ">H2x"
     fmt_base_sz = struct.calcsize(fmt_base)
     data_fmt = ''
 
@@ -101,7 +101,7 @@ class VariableLengthBitmappedBytes(BitmappedBytes):
     The format includes an unsigned byte field for the source of the message
     (optional, but the value always needs to be parsed) and number of elements.
     '''
-    fmt_base = ">BB2x"
+    fmt_base = ">HH"
     fmt_base_sz = struct.calcsize(fmt_base)
 
 
@@ -211,7 +211,7 @@ class FloatListParser(NumberListParser):
 class IdShortValuePairParser(VariableLengthBitmappedBytes):
     ''' Parser for a series of UAV/value pair tuples (unsigned short value)
     '''
-    fmt_pair = ">BxH"
+    fmt_pair = ">HH"
     fmt_pair_sz = struct.calcsize(fmt_pair)
 
     def __init__(self):
