@@ -9,8 +9,8 @@ INGRESS_CYLINDER_WP = 4 # Ingress loiter to altitude waypoint at calculated alt 
 SWARM_STANDBY_WP = 5 # Available for tasking
 SWARM_EGRESS_WP = 6  # Leaving swarm for recovery  NOTE:  Not used right now
 RACETRACK_WP = 7     # First racetrack waypoint
-LAND_A_WP = 12       # First WP in the east-to-west (RW27) landing sequence
-LAND_B_WP = 18       # First WP in the west-to-east (RW10) landing sequence
+LAND_A_WP = 19       # First WP in the east-to-west (RW27) landing sequence
+LAND_B_WP = 26       # First WP in the west-to-east (RW10) landing sequence
 
 # Default Values. These get updated on startup and again on flight ready
 MIN_REL_ALT = 70.0  # Minimum relative altitude that a controller can order
