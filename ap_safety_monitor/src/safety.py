@@ -127,7 +127,7 @@ class SafetyMonitor(object):
         self._ap_last_msg = msg
         self._ap_last_time = rospy.get_time()
 
-    def _srv_set_state(req):
+    def _srv_set_state(self, req):
         ''' Callback for setting explicit health state '''
         self._set_state = bool(req.enable)
         return 1
