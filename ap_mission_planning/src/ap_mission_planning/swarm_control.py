@@ -679,12 +679,12 @@ class SwarmController(nodeable.Nodeable):
             self._update_swarm_state(enums.AP_ERROR)
             self.log_warn("Autopilot not in AUTO: disabling swarming")
 
-        if self._swarm_state == enums.AP_ERROR and \
-           self._ap_mode == enums.AUTO:
-            self._update_swarm_state(enums.SWARM_READY)
-            self._deactivate_all_behaviors()
-            self._update_subswarm(0)
-            self.log_info("Autopilot reset to AUTO: swarming re-enabled")
+#        if self._swarm_state == enums.AP_ERROR and \
+#           self._ap_mode == enums.AUTO:
+#            self._update_swarm_state(enums.SWARM_READY)
+#            self._deactivate_all_behaviors()
+#            self._update_subswarm(0)
+#            self.log_info("Autopilot reset to AUTO: swarming re-enabled")
 
         if self._swarm_state in SwarmController.AIRBORNE_STATES and \
            self._ap_as_read < SwarmController.NO_FLY_ASPD:
