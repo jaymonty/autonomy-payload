@@ -165,6 +165,7 @@ class GreedyShooter(WaypointBehavior):
         '''
         self.subscribe_to_red_states()
         self._reds_shot.clear()
+        self._behavior_state = GreedyShooter.HUNT_TGT
         self._last_wp_id = int(rospy.get_param("last_mission_wp_id"))
         self.set_ready_state(True)
         self.log_info("initializing greedy shooter")
