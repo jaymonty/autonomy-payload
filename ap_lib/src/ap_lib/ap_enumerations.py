@@ -126,9 +126,9 @@ WP_TYPE_LAND_SEQUENCE = 189
 WP_TYPE_ENABLE_FENCE = 207
 
 # Air-to-air targeting envelope parameters (pretty large envelope for now)
-MAX_RANGE = 200.0
-FOV_WIDTH = 40.0   # 40 degree horizontal cutout in front of UAV
-FOV_HEIGHT = 80.0  # 80 degree vertical cutout in front of UAV
+MAX_RANGE = 150.0
+FOV_WIDTH = 20.0   # 20 degree horizontal cutout in front of UAV
+FOV_HEIGHT = 180.0  # 180 degree vertical cutout in front of UAV (2D solution)
 
 
 
