@@ -456,9 +456,9 @@ class SwarmController(nodeable.Nodeable):
         if state_srv.setting in SwarmController.MAN_RESET_STATES:
             self.log_warn("Manual reset to new swarm state: %s"\
                           %enums.STATE_STRINGS[state_srv.setting])
+            self._update_swarm_state(state_srv.setting)
             self._deactivate_all_behaviors()
             self._update_subswarm(0)
-            self._update_swarm_state(state_srv.setting)
             return apsrv.SetIntegerResponse(True)
 
         self.log_warn("Attempt to set swarm state to invalid value: %d"\
@@ -558,7 +558,8 @@ class SwarmController(nodeable.Nodeable):
                         self.log_warn("Exception deactivating behavior %d: %s" \
                                  %(behavior.id, str(ex)))
             self._update_swarm_behavior(enums.SWARM_STANDBY)
-        self._wp_goto_publisher.publish(stdmsg.UInt16(enums.SWARM_STANDBY_WP))
+        if self._swarm_state == enums.SWARM_READY:
+            self._wp_goto_publisher.publish(stdmsg.UInt16(enums.SWARM_STANDBY_WP))
 
 
     def _activate_new_behavior(self, behavior):
@@ -674,9 +675,9 @@ class SwarmController(nodeable.Nodeable):
         if self._swarm_state in SwarmController.AIRBORNE_STATES and \
            self._swarm_state != enums.AP_ERROR and \
            self._ap_mode != enums.AUTO:
+            self._update_swarm_state(enums.AP_ERROR)
             self._deactivate_all_behaviors()
             self._update_subswarm(0)
-            self._update_swarm_state(enums.AP_ERROR)
             self.log_warn("Autopilot not in AUTO: disabling swarming")
 
 #        if self._swarm_state == enums.AP_ERROR and \
@@ -688,9 +689,9 @@ class SwarmController(nodeable.Nodeable):
 
         if self._swarm_state in SwarmController.AIRBORNE_STATES and \
            self._ap_as_read < SwarmController.NO_FLY_ASPD:
+            self._update_swarm_state(enums.ON_DECK)
             self._deactivate_all_behaviors()
             self._update_subswarm(0)
-            self._update_swarm_state(enums.ON_DECK)
             self.log_warn("Unexpected low airspeed--not flying anymore!")
 
 
