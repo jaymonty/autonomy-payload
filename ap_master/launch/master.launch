@@ -8,7 +8,6 @@
   <arg name="id" default="0" />           <!-- Aircraft ID -->
   <arg name="name" default="foo" />       <!-- Aircraft Name -->
   <arg name="gps" default="1" />          <!-- Autopilot has GPS signal; sync clock -->
-  <arg name="do_ctlr" default="1" />      <!-- Run the controller nodes -->
   <arg name="do_bag" default="1" />       <!-- Enable rosbagging -->
   <arg name="do_verify" default="1" />    <!-- Enable param/fence/rally/wp verification -->
   <arg name="ap_dev" default="/dev/ttyUSB*" />  <!-- Device string -->
