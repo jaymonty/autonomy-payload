@@ -96,6 +96,7 @@ sudo chown root:root /etc/udev/rules.d/70-persistent-net.rules
 check_fail "chown (udev rules)"
 
 # Create network configuration
+SUBNET=$(($TEAM_ID + 1))
 cat > interfaces.tmp <<EOF
 auto lo
 iface lo inet loopback
@@ -107,9 +108,9 @@ iface eth0 inet static
 
 auto wlan0
 iface wlan0 inet static
-    address 192.168.2.$AIRCRAFT_ID
+    address 192.168.${SUBNET}.${AIRCRAFT_ID}
     netmask 255.255.255.0
-    gateway 192.168.2.1
+    gateway 192.168.${SUBNET}.1
     wireless-mode ad-hoc
     wireless-essid zephyr
     wireless-channel 6
@@ -447,6 +448,11 @@ if [ $INSTALL_CONF == true ]; then
   read -p "Please enter a unique numeric ID for this aircraft: " AIRCRAFT_ID
   if [ -z $AIRCRAFT_ID ]; then
     echo "No ID specified; aborting"
+    exit 1
+  fi
+  read -p "Please enter the team (1 or 2) for this aircraft: " TEAM_ID
+  if [ -z $TEAM_ID ]; then
+    echo "No team specified; aborting"
     exit 1
   fi
   read -p "Please enter a hostname for this aircraft (max 16 chars): " AIRCRAFT_NAME
