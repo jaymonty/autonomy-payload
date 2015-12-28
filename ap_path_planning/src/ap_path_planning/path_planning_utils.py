@@ -32,6 +32,9 @@ class InterceptCalculator(object):
       _alt: desired rel_alt (BASE_ALT_MODE) or altitude offset (ALT_SEP_MODE)
       _alt_mode: enumeration for BASE_ALT_MODE or ALT_SEP_MODE
       _is_set: set to True when the object is parameterized
+      l1_distance: distance ahead of intercept to steer towards (pseudo L1 ctrl)
+      lookahead: max time to use in computing the intercept point
+      max_time_late: max allowed time between leader pose updates
     '''
 
     # Class-specific enumerations and constants
@@ -42,13 +45,20 @@ class InterceptCalculator(object):
     OVERSHOOT = 250.0     # "ahead" distance to place waypoint to avoid capture
     MAX_LOOKAHEAD = 10.0  # max DR time for intercept point computation
     MAX_TIME_LATE = rospy.Duration(6.0) # Max time late of the leader's state
+    L1_DIST_STD = 125.0 # "Standard" L1 distance for implementing class use
 
 
-    def __init__(self, owner_behavior, own_id, swarm):
+    def __init__(self, owner_behavior, own_id, swarm, \
+                 l1_distance=L1_DIST_STD, \
+                 lookahead=MAX_LOOKAHEAD, \
+                 max_time_late=MAX_TIME_LATE):
         ''' Initializes the object
         @param owner_behavior: owning Behavior object
         @param own_id: ID (int) of this UAV
         @param swarm: container (dict) for swarm aircraft records
+        @param l1_distance: projected aim point distance forward of intercept
+        @param lookahead: maximum time to DR to an intercept point
+        @param max_time_late: maximum allowable time between leader updates
         '''
         if not isinstance(owner_behavior, behavior.Behavior):
             raise Exception("InterceptCalculator owner must be Behavior")
@@ -65,8 +75,9 @@ class InterceptCalculator(object):
         self._alt = 0.0
         self._alt_mode = 0
         self._is_set = False
-        self.lookahead = InterceptCalculator.MAX_LOOKAHEAD
-        self.max_time_late = InterceptCalculator.MAX_TIME_LATE
+        self.l1_distance = l1_distance
+        self.lookahead = lookahead
+        self.max_time_late = max_time_late
 
 
     def set_params(self, ldr_id, distance, angle, alt, alt_mode):
@@ -99,24 +110,33 @@ class InterceptCalculator(object):
         return self._is_set
 
 
-    def compute_intercept_waypoint(self, wpt=None):
-        ''' Computes an intercept waypoint for the UAV to steer to
-        @param wpt: waypoint object to use for computed values
-        @return waypoint object (LLA) with the intercept waypoint (or None)
+    def _pre_check(self):
+        ''' Determines whether or not a waypoint can be successfully generated
+        @return the record for the lead UAV or None
         '''
         if not self._is_set:
             self._owner.log_warn("Cannot compute waypoint--not set")
             return None
         if self.own_pose == None and self._own_id not in self._swarm:
-            self._is_set = False
+            self._is_set = None
             self._owner.log_warn("Cannot compute waypoint--own ID not in swarm")
             return None
-
         if self._own_id in self._swarm:
             self.own_pose = self._swarm[self._own_id].state
         lead_uav = self._swarm[self._lead_uav_id]
         if (rospy.Time.now() - lead_uav.state.header.stamp) > self.max_time_late:
             self._owner.log_warn("Cannot compute waypoint--lead UAV time late")
+            return None
+        return lead_uav
+
+
+    def compute_intercept_waypoint(self, wpt=None):
+        ''' Computes an intercept waypoint for the UAV to steer to
+        @param wpt: waypoint object to use for computed values
+        @return waypoint object (LLA) with the intercept waypoint (or None)
+        '''
+        lead_uav = self._pre_check()
+        if not lead_uav:
             return None
 
         # Grab & compute required own & leader state info
@@ -135,7 +155,7 @@ class InterceptCalculator(object):
         lead_spd = math.hypot(lead_uav.state.twist.twist.linear.x, \
                               lead_uav.state.twist.twist.linear.y)
 
-        # Compute tgt point & project it forward to intercept
+        # Compute tgt point & project it forward to intercept + l1_distance
         tgt_lat, tgt_lon = gps.gps_newpos(lead_lat, lead_lon, \
                                           (lead_crs + self._follow_angle), \
                                           self._follow_distance)
@@ -143,9 +163,8 @@ class InterceptCalculator(object):
         if own_spd > 0.1:
             time_to_intercept = \
                 gps.gps_distance(own_lat, own_lon, tgt_lat, tgt_lon) / own_spd
-        time_to_intercept = \
-            min(time_to_intercept, self.lookahead)
-        tgt_travel = lead_spd * time_to_intercept
+        time_to_intercept = min(time_to_intercept, self.lookahead)
+        tgt_travel = (lead_spd * time_to_intercept) + self.l1_distance
         tgt_lat, tgt_lon = \
             gps.gps_newpos(tgt_lat, tgt_lon, lead_crs, tgt_travel)
 
@@ -183,6 +202,96 @@ class InterceptCalculator(object):
         return (self._lead_uav_id, \
                 self._follow_distance, \
                 self._follow_angle)
+
+
+class PFInterceptCalculator(InterceptCalculator):
+    ''' Uses a potential field calculation to follow a designated swarm UAV
+
+    Member functions:
+      compute_intercept_waypoint: override of parent class method
+
+    Inherited from InterceptCalculator:
+      set_params: set the calculator's parameters
+      compute_intercept_waypoint: computes an intercept to ordered station
+      leader: returns the ID of the UAV being followed
+      params: returns a control parameter tuple (leader_id, distance, angle)
+
+    Member variables:
+      _dist_coefficient: potential coefficient for distance fm tgt pt
+      _align_coefficient: potential coefficient for alignment with lead course
+      _intercept_coefficient: potential coefficient for intercept lead
+    '''
+
+    def __init__(self, owner_behavior, own_id, swarm):
+        ''' Initializes the object
+        @param owner_behavior: owning Behavior object
+        @param own_id: ID (int) of this UAV
+        @param swarm: container (dict) for swarm aircraft records
+        '''
+        InterceptCalculator.__init__(self, owner_behavior, own_id, swarm)
+        self._dist_coefficient = 2.0
+        self._align_coefficient = 1.0
+        self._intercept_coefficient = 1.0
+
+
+    def compute_intercept_waypoint(self, wpt=None):
+        ''' Computes an intercept waypoint for the UAV to steer to
+        @param wpt: waypoint object to use for computed values
+        @return waypoint object (LLA) with the intercept waypoint (or None)
+        '''
+        lead_uav = self._pre_check()
+        if not lead_uav:
+            return None
+
+        # Convenience variables for state info
+        own_lat = self.own_pose.pose.pose.position.lat
+        own_lon = self.own_pose.pose.pose.position.lon
+        own_spd = math.hypot(self.own_pose.twist.twist.linear.x, \
+                             self.own_pose.twist.twist.linear.y)
+        lead_lat = lead_uav.state.pose.pose.position.lat
+        lead_lon = lead_uav.state.pose.pose.position.lon
+        lead_alt = lead_uav.state.pose.pose.position.rel_alt
+        lead_x_dot = lead_uav.state.twist.twist.linear.x
+        lead_y_dot = lead_uav.state.twist.twist.linear.y
+        lead_crs = math.atan2(lead_y_dot, lead_x_dot)
+        lead_spd = math.hypot(lead_y_dot, lead_x_dot)
+
+        # Compute tgt positions and distances for potential calculation
+        tgt_lat, tgt_lon = gps.gps_newpos(lead_lat, lead_lon, \
+                                          (lead_crs + self._follow_angle), \
+                                          self._follow_distance)
+        dist = gps.gps_distance(own_lat, own_lon, tgt_lat, tgt_lon)
+        print("Distance=%9.2f"%dist)
+        angle = gps.gps_bearing(own_lat, own_lon, tgt_lat, tgt_lon)
+        x_dist = dist * math.cos(angle)
+        y_dist = dist * math.sin(angle)
+        time_to_intercept = 0.0
+        if own_spd > 0.1:
+            time_to_intercept = \
+                gps.gps_distance(own_lat, own_lon, tgt_lat, tgt_lon) / own_spd
+        time_to_intercept = min(time_to_intercept, self.lookahead)
+        lead_travel = lead_spd * time_to_intercept
+        x_travel = lead_travel * lead_x_dot
+        y_travel = lead_travel * lead_y_dot
+
+        # Compute potential values and target waypoint
+        x_potential = self._dist_coefficient * x_dist + \
+                      self._align_coefficient * lead_x_dot/lead_spd + \
+                      self._intercept_coefficient * x_travel
+        y_potential = self._dist_coefficient * y_dist + \
+                      self._align_coefficient * lead_y_dot/lead_spd + \
+                      self._intercept_coefficient * y_travel
+        wpt.lat, wpt.lon = \
+            gps.gps_newpos(own_lat, own_lon, \
+                           math.atan2(y_potential, x_potential), \
+                           InterceptCalculator.OVERSHOOT)
+        if self._alt_mode == InterceptCalculator.BASE_ALT_MODE:
+            wpt.alt = self._alt
+        else:
+            wpt.alt = lead_uav.state.pose.pose.rel_alt + self._alt
+        self._owner.log_dbug("intercept waypoint (lat, lon, alt) = (%f, %f, %f)"
+                             %(wpt.lat, wpt.lon, wpt.alt))
+        return wpt
 
 
 class WaypointSequencer(object):
