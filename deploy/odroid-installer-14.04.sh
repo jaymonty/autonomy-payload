@@ -97,6 +97,15 @@ check_fail "chown (udev rules)"
 
 # Create network configuration
 SUBNET=$(($TEAM_ID + 1))
+if [ $TEAM_ID == 1 ]; then
+  ESSID="zephyr"
+  CHANNEL=6
+  AP="00:11:22:33:44:55"
+else  # Assumes team is either 1 or 2
+  ESSID="redzephyr"
+  CHANNEL=11
+  AP="00:55:44:33:22:11"
+fi
 cat > interfaces.tmp <<EOF
 auto lo
 iface lo inet loopback
@@ -112,9 +121,9 @@ iface wlan0 inet static
     netmask 255.255.255.0
     gateway 192.168.${SUBNET}.1
     wireless-mode ad-hoc
-    wireless-essid zephyr
-    wireless-channel 6
-    wireless-ap 00:11:22:33:44:55
+    wireless-essid ${ESSID}
+    wireless-channel ${CHANNEL}
+    wireless-ap ${AP}
     wireless-txpower 10
 EOF
 check_fail "cat (interfaces config)"
@@ -522,4 +531,3 @@ if [ $? == 0 ]; then
   echo "you may wish to clear these off before flight!"
   echo ""
 fi
-
