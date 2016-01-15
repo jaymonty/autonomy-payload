@@ -364,7 +364,7 @@ def net_swarm_behavior_data(message, bridge):
     behavior_msg = ap_msg.BehaviorParameters()
     behavior_msg.id = message.data_type
     behavior_msg.params = message.data
-    bridge.publish('recv_swarm_data', behavior_msg, latched=True)
+    bridge.publish('recv_swarm_data', behavior_msg, latched=True, queue_size=50)
 
 def net_swarm_state(message, bridge):
     bridge.callService('set_swarm_state', ap_srv.SetInteger,
