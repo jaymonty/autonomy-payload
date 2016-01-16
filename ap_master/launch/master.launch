@@ -115,13 +115,17 @@
     <remap from="swarm_searcher/wp_getrange" to="autopilot/wp_getrange" />
     <remap from="swarm_searcher/send_swarm_behavior_data" to="network/send_swarm_behavior_data" />
     <remap from="swarm_searcher/acs_pose" to="autopilot/acs_pose" />
+    <remap from="swarm_searcher/waypoint_goto" to="autopilot/waypoint_goto" />
   </node>
 
   <node name="greedy_shooter" pkg="ap_path_planning" type="greedy_shooter.py" output="screen" args="">
     <remap from="greedy_shooter/send_swarm_behavior_data" to="network/send_swarm_behavior_data" />
     <remap from="greedy_shooter/acs_pose" to="autopilot/acs_pose" />
+    <remap from="greedy_shooter/waypoint_goto" to="autopilot/waypoint_goto" />
     <remap from="greedy_shooter/firing_reports" to="air_to_air/firing_reports" />
   </node>
+
+  <node name="independent_transit" pkg="ap_path_planning" type="independent_transit.py" output="screen" args=""/>
 
   <node name="altitude_sort" pkg="ap_path_planning" type="altitude_sort.py" output="screen" args=""/>
 
