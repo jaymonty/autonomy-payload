@@ -14,7 +14,7 @@ import ap_lib.acs_messages as acsmsg
 # Enumeration for use in identifying message subtypes
 PASSED_SHORT = 0    # Data field contains an short from a specific UAV
 PASSED_USHORT = 1   # Data field contains an unsigned short from a specific UAV
-PPASSED_INT = 2     # Data field contains an int from a specific UAV
+PASSED_INT = 2      # Data field contains an int from a specific UAV
 PASSED_UINT = 3     # Data field contains an unsigned int from a specific UAV
 PASSED_FLOAT = 4    # Data field contains a float from a specific UAV
 SHORT_LIST = 5      # Data field contains a series of signed shorts
@@ -23,10 +23,12 @@ INT_LIST = 7        # Data field contains a series of ints
 UINT_LIST = 8       # Data field contains a series of unsigned ints
 FLOAT_LIST = 9      # Data field contains a series of floats
 
-SEARCH_WP = 10      # Data field represents a series of waypoints
-FIRING_REPORT = 11  # Data field represents an air-to-air firing report
-ID_VALUE_PAIRS = 12 # Data field represents a series of ID-value pairs
-CONSENSUS_SUMMARY = 13 # Data field represents a consensus algorithm summary
+LAT_LON = 10        # Data field contains a latitude/longitude
+
+SEARCH_WP = 11      # Data field represents a series of waypoints
+FIRING_REPORT = 12  # Data field represents an air-to-air firing report
+ID_VALUE_PAIRS = 13 # Data field represents a series of ID-value pairs
+CONSENSUS_SUMMARY = 14 # Data field represents a consensus algorithm summary
 
 class BitmappedBytes(object):
     ''' Abstract class template for customized parsing of byte arrays
@@ -249,6 +251,37 @@ class IdShortValuePairParser(VariableLengthBitmappedBytes):
 
 
 # Parsers corresponding to specific message types
+
+class LatitudeLongitudeParser(BitmappedBytes):
+    ''' Parser for latitude/longitude messages
+    '''
+    fmt = '>ll'
+
+
+    def __init__(self):
+        ''' Initializes parameters with default values
+        '''
+        self.latitude = 0.0
+        self.longitude = 0.0
+
+
+    def pack(self):
+        ''' Serializes parameter values into a bitmapped byte array
+        @return bitmapped bytes as a string
+        '''
+        tupl = (int(self.latitude * 1e07), \
+                int(self.longitude * 1e07))
+        return struct.pack(type(self).fmt, *tupl)
+
+
+    def unpack(self, bytes):
+        ''' Sets parameter values from a bitmapped byte array
+        @param bytes: bitmapped byte array
+        '''
+        fields = struct.unpack_from(type(self).fmt, bytes, 0)
+        self.latitude = fields[0] / 1e07
+        self.longitude = fields[1] / 1e07
+
 
 class SearchOrderParser(BitmappedBytes):
     ''' Parser swarm search orders

@@ -28,6 +28,7 @@ SWARM_SEARCH = 2           # Conduct a coordinated search of a specified area
 GREEDY_SHOOTER = 3         # Track and shoot the closest red UAVs
 ALTITUDE_SORT = 4          # Consensus algorithm to sort UAVs by rel_alt
 LAZY_ALTITUDE_SORT = 5     # Lazy consensus algorithm to sort UAVs by rel_alt
+INDEPENDENT_TRANSIT = 6    # Transit independently to a specified location
 SWARM_SEQUENCE_LAND = 98   # Land in order (low-to-high UAV)
 SWARM_EGRESS = 99          # Egress the swarm for recovery
 
@@ -36,17 +37,19 @@ SWARM_BHVRS = {  SWARM_STANDBY:          'Standby', \
                  SWARM_LINEAR_FORMATION: 'Line Formation', \
                  SWARM_SEARCH:           'Swarm Search', \
                  GREEDY_SHOOTER:         'Greedy Shooter', \
-                 ALTITUDE_SORT:          'Altitude Sort', \
-                 LAZY_ALTITUDE_SORT:     'Lazy Alt Sort', \
-                 SWARM_SEQUENCE_LAND:    'Sequence Land' }
+                 ALTITUDE_SORT:          'Eager Altitude Sort', \
+                 LAZY_ALTITUDE_SORT:     'Lazy Altitude Sort', \
+                 SWARM_SEQUENCE_LAND:    'Sequence Land', \
+                 INDEPENDENT_TRANSIT:    'Independent Transit' }
 
-SWARM_BHVR_VALUES = { 'Standby':        SWARM_STANDBY, \
-                      'Line Formation': SWARM_LINEAR_FORMATION, \
-                      'Swarm Search':   SWARM_SEARCH, \
-                      'Greedy Shooter': GREEDY_SHOOTER, \
-                      'Altitude Sort':  ALTITUDE_SORT, \
-                      'Lazy Alt Sort':  LAZY_ALTITUDE_SORT, \
-                      'Sequence Land':  SWARM_SEQUENCE_LAND }
+SWARM_BHVR_VALUES = { 'Standby':             SWARM_STANDBY, \
+                      'Line Formation':      SWARM_LINEAR_FORMATION, \
+                      'Swarm Search':        SWARM_SEARCH, \
+                      'Greedy Shooter':      GREEDY_SHOOTER, \
+                      'Eager Altitude Sort': ALTITUDE_SORT, \
+                      'Lazy Altitude Sort':  LAZY_ALTITUDE_SORT, \
+                      'Sequence Land':       SWARM_SEQUENCE_LAND, \
+                      'Independent Transit': INDEPENDENT_TRANSIT }
 
 # Enumeration for swarming states
 PRE_FLIGHT = 0    # Powered on, going through pre-fllight checks
