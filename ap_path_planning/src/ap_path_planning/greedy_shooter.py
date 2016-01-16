@@ -10,6 +10,7 @@ import math
 
 # ROS imports
 import rospy
+import std_msgs.msg as stdmsg
 
 # ACS imports
 import ap_msgs.msg as apmsg
@@ -69,6 +70,7 @@ class GreedyShooter(WaypointBehavior):
       is_paused: set to True when an active behavior is paused
       _uses_wp_control: set to True if the behavior drives by waypoint
       _statusPublisher: publisher object for behavior status
+      _to_wp_publisher: used to send the UAV to the standby waypoint when done
       _statusStamp: timestamp of the last status message publication
       _sequence: sequence number of the next status message
 
@@ -89,10 +91,11 @@ class GreedyShooter(WaypointBehavior):
     '''
     # Class-specific enumerations and constants
 
-    HUNT_TGT = 0    # Determine which red UAV to target
-    TRACK_TGT = 1   # Try to get into shooting position
-    SHOOT_TGT = 2   # Take the shot
-    NO_TGTS = 3     # Nothing to shoot--disable behavior
+    HUNT_TGT = 0       # Determine which red UAV to target
+    TRACK_TGT = 1      # Try to get into shooting position
+    SHOOT_TGT = 2      # Take the shot
+    NO_TGTS = 3        # Nothing to shoot--disable behavior
+    TERMINAL_STDBY = 4 # Done--orbit at the standby waypoint UFN
 
     MAX_TIME_LATE = rospy.Duration(3.0) # Max no-report time to still chase
     RQD_IN_ENVELOPE = 3   # The number of target tests in the envelope to shoot
@@ -127,6 +130,7 @@ class GreedyShooter(WaypointBehavior):
         self._firing_report_number = 0
         self._firing_report_publisher = None
         self._behavior_data_publisher = None
+        self._to_wp_publisher = None
 
 #        self.DBUG_PRINT = True
 #        self.INFO_PRINT = True
@@ -147,6 +151,8 @@ class GreedyShooter(WaypointBehavior):
         self._behavior_data_publisher = \
             self.createPublisher("send_swarm_behavior_data", \
                                  apmsg.BehaviorParameters, 1)
+        self._to_wp_publisher = \
+            self.createPublisher("waypoint_goto", stdmsg.UInt16, 1)
 
 
     def callbackSetup(self):
@@ -231,8 +237,14 @@ class GreedyShooter(WaypointBehavior):
                 self._behavior_state = GreedyShooter.HUNT_TGT
 
         elif self._behavior_state == GreedyShooter.NO_TGTS:
-            self.set_ready_state(False)
-            self.log_info("No targets available to greedy shooter--disabling")
+            stdby_wp_cmd = stdmsg.UInt16()
+            stdby_wp_cmd.data = enums.SWARM_STANDBY_WP
+            self._behavior_state = GreedyShooter.TERMINAL_STDBY
+            self._to_wp_publisher.publish(stdby_wp_cmd)
+            self.log_info("No targets available to greedy shooter--standby")
+
+        elif self._behavior_state == GreedyShooter.TERMINAL_STDBY:
+            pass # Don't actually do anything--just wait
 
         else:   # shouldn't get here, but just in case
             self.set_ready_state(False)
@@ -262,7 +274,8 @@ class GreedyShooter(WaypointBehavior):
         @return True if the behavior passes all safety checks (False otherwise)
         '''
         # Make sure the waypoint we're using is correct
-        if self._ap_wp != self._last_wp_id:
+        if self._behavior_state != GreedyShooter.TERMINAL_STDBY and \
+           self._ap_wp != self._last_wp_id:
             self.log_warn("using incorrect waypoint ID--deactivating")
             return False
 

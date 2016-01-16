@@ -33,12 +33,13 @@ NODENAME = 'swarm_searcher'
 
 # Global variables (constants)
 # Local Enumeration for swarming uav search states
-SEARCH_READY = 1   # Awaiting search area
-SEARCH_INGRESS = 2 # Received search area and transiting to it
-SEARCH_ACTIVE = 3  # Searching in search area
-SEARCH_EGRESS = 4  # search end/completed and transiting to staging area
-SEARCH_TRACKING = 5# search uav detected something is tasked to track it
-SEARCH_FAULT = 99  # search uav has shown a fault and kept out of the operation
+SEARCH_READY = 1    # Awaiting search area
+SEARCH_INGRESS = 2  # Received search area and transiting to it
+SEARCH_ACTIVE = 3   # Searching in search area
+SEARCH_EGRESS = 4   # search end/completed and transiting to staging area
+SEARCH_TRACKING = 5 # search uav detected something is tasked to track it
+SEARCH_COMPLETE = 6 # search is complete for all UAVs
+SEARCH_FAULT = 99   # search uav has shown a fault and kept out of the operation
 
 SEARCH_CELL_FULLY_VISITED = 0 # All cells visited
 SEARCH_CELL_FULLY_ASSIGNED = 1 # All cells assigned
@@ -164,6 +165,7 @@ class SwarmSearcher(wp_behavior.WaypointBehavior):
         self._getWpSrvProxy = None
 #        self.behaviorDataPublisher = None
         self._wps_to_send = bytes.SearchWaypointParser()
+        self._to_wp_publisher = None
 
 #        self.DBUG_PRINT = True
 #        self.INFO_PRINT = True
@@ -174,9 +176,9 @@ class SwarmSearcher(wp_behavior.WaypointBehavior):
     # Implementation of parent class virtual functions
     #-------------------------------------------------
 
-#    def publisherSetup(self):
-#        self.behaviorDataPublisher = \
-#            self.createPublisher("send_swarm_behavior_data", apmsg.BehaviorParameters, 1)
+    def publisherSetup(self):
+        self._to_wp_publisher = \
+            self.createPublisher("waypoint_goto", stdmsg.UInt16, 1)
 
 
     def serviceProxySetup(self):
@@ -347,7 +349,11 @@ class SwarmSearcher(wp_behavior.WaypointBehavior):
                     self.SEARCH_STATUS = SEARCH_READY
                     self.searchGrid = None
                     self.ExecuteMasterSearcherBehavior = False
-                    self.set_active(False)
+                    stdby_wp_cmd = stdmsg.UInt16()
+                    stdby_wp_cmd.data = enums.SWARM_STANDBY_WP
+                    self._to_wp_publisher.publish(stdby_wp_cmd)
+                    self.SEARCH_STATUS = SEARCH_COMPLETE
+
 
             if self.wpmsgQueued == True: #A new network waypoint cmd is triggered this tick
                 msg = apmsg.BehaviorParameters()
@@ -913,9 +919,11 @@ class SwarmSearcher(wp_behavior.WaypointBehavior):
         for wp in parser.wp_list:
             if self.ownID == wp[3]:
                 if wp[4] >= 254 and wp[5] >= 254:
-                    self.set_active(False)
+                    stdby_wp_cmd = stdmsg.UInt16()
+                    stdby_wp_cmd.data = enums.SWARM_STANDBY_WP
+                    self._to_wp_publisher.publish(stdby_wp_cmd)
                     self.log_info("Swarm Searcher [" + str(self.ownID)+ \
-                                  "] proceeding to deactivate")
+                                  "] proceeding to post-search standby")
 
                 else:
                     self.wp_msg.lat = wp[0]
