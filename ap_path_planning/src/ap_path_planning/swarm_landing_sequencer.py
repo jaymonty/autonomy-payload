@@ -112,10 +112,10 @@ class SwarmLandingSequencer(wp_behavior.WaypointBehavior):
         self._fpr_param_set_srv_proxy = None
         self._behavior_state = None
         self._stack_time = None
-        self._sorter = dist.LazyConsensusSort(self._subswarm_keys, \
-                                              self._crashed_keys, \
-                                              self._behaviorDataPublisher, \
-                                              self._swarm_lock)
+        self._sorter = dist.ConsensusSort(self._subswarm_keys, \
+                                          self._crashed_keys, \
+                                          self._behaviorDataPublisher, \
+                                          self._swarm_lock)
 
 #        self.DBUG_PRINT = True
 #        self.INFO_PRINT = True
