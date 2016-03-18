@@ -152,3 +152,36 @@ def hitable(lat, lon, alt, pose_quat, max_range, FOV_width, FOV_height,
     #all checks passed, target is 'shootable'
     return True
 
+
+# A couple of general-purpose mathematical utility functions
+
+def normalize(angle):
+    ''' Normalizes a radian angle to the range [ 0.0, 2*pi )
+    @param angle: angle being normalized
+    @return an equivalent angle on the range [ 0.0, 2*pi )
+    '''
+    while angle < 0.0:  angle += (2.0 * math.pi)
+    while angle >= (2.0 * math.pi):  angle -= (2.0 * math.pi)
+    return angle
+
+
+def normalize_pi(angle):
+    ''' Normalizes a radian angle to the range [ -pi, pi )
+    @param angle: angle being normalized
+    @return an equivalent angle on the range [ -pi, pi )
+    '''
+    while angle < -math.pi:  angle += (2.0 * math.pi)
+    while angle >= math.pi:  angle -= (2.0 * math.pi)
+    return angle
+
+
+def signum(number):
+    ''' Returns the "sign" of the argument
+    @param number: numerical argument being evaluated
+    @return -1 if number < 0, 1 if number > 0, or 1 if number == 0
+    '''
+    if number == 0: return 1
+    return cmp(number, 0)
+
+
+
