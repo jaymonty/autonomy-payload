@@ -12,23 +12,28 @@ import struct
 import ap_lib.acs_messages as acsmsg
 
 # Enumeration for use in identifying message subtypes
-PASSED_SHORT = 0    # Data field contains an short from a specific UAV
-PASSED_USHORT = 1   # Data field contains an unsigned short from a specific UAV
-PASSED_INT = 2      # Data field contains an int from a specific UAV
-PASSED_UINT = 3     # Data field contains an unsigned int from a specific UAV
-PASSED_FLOAT = 4    # Data field contains a float from a specific UAV
-SHORT_LIST = 5      # Data field contains a series of signed shorts
-USHORT_LIST = 6     # Data field contains a series of unsigned shorts
-INT_LIST = 7        # Data field contains a series of ints
-UINT_LIST = 8       # Data field contains a series of unsigned ints
-FLOAT_LIST = 9      # Data field contains a series of floats
+SHORT = 0           # Data field contains a single signed short value
+USHORT = 1          # Data field contains a single unsigned short value
+INT = 2             # Data field contains a single signed int value
+UINT = 3            # Data field contains a single unsigned int value
+FLOAT = 4           # Data field contains a single float value
+PASSED_SHORT = 5    # Data field contains an short from a specific UAV
+PASSED_USHORT = 6   # Data field contains an unsigned short from a specific UAV
+PASSED_INT = 7      # Data field contains an int from a specific UAV
+PASSED_UINT = 8     # Data field contains an unsigned int from a specific UAV
+PASSED_FLOAT = 9    # Data field contains a float from a specific UAV
+SHORT_LIST = 10     # Data field contains a series of signed shorts
+USHORT_LIST = 11    # Data field contains a series of unsigned shorts
+INT_LIST = 12       # Data field contains a series of ints
+UINT_LIST = 13      # Data field contains a series of unsigned ints
+FLOAT_LIST = 14     # Data field contains a series of floats
 
-LAT_LON = 10        # Data field contains a latitude/longitude
+LAT_LON = 15        # Data field contains a latitude/longitude
 
-SEARCH_WP = 11      # Data field represents a series of waypoints
-FIRING_REPORT = 12  # Data field represents an air-to-air firing report
-ID_VALUE_PAIRS = 13 # Data field represents a series of ID-value pairs
-CONSENSUS_SUMMARY = 14 # Data field represents a consensus algorithm summary
+SEARCH_WP = 16      # Data field represents a series of waypoints
+FIRING_REPORT = 17  # Data field represents an air-to-air firing report
+ID_VALUE_PAIRS = 18 # Data field represents a series of ID-value pairs
+CONSENSUS_SUMMARY = 19 # Data field represents a consensus algorithm summary
 
 class BitmappedBytes(object):
     ''' Abstract class template for customized parsing of byte arrays
@@ -148,6 +153,61 @@ class NumberListParser(VariableLengthBitmappedBytes):
 
 # A few generic parameter passing parsers that might be broadly useful
 
+class ShortParser(BitmappedBytes):
+    ''' Parser for a single signed short value
+    '''
+    fmt = '>h2x'
+
+    def __init__(self):
+        ''' Initialize the value field
+        '''
+        self.value = 0
+
+
+    def pack(self):
+        ''' Serializes parameter values into a bitmapped byte array
+        @return bitmapped bytes as a string
+        '''
+        tupl = (self.value,)
+        return struct.pack(type(self).fmt, *tupl)
+
+
+    def unpack(self, bytes):
+        ''' Sets parameter values from a bitmapped byte array
+        @param bytes: bitmapped byte array
+        '''
+        self.value, = struct.unpack_from(type(self).fmt, bytes, 0)
+
+
+class UShortParser(ShortParser):
+    ''' Parser for a single unsigned short value
+    '''
+    fmt = '>H2x'
+
+
+class IntParser(ShortParser):
+    ''' Parser for a single signed int value
+    '''
+    fmt = '>l'
+
+
+class UIntParser(ShortParser):
+    ''' Parser for a single unsigned int value
+    '''
+    fmt = '>L'
+
+
+class FloatParser(ShortParser):
+    ''' Parser for a single floating point (32-bit) value
+    '''
+    fmt = '>f'
+
+    def __init__(self):
+        ''' Initialize the value field
+        '''
+        self.value = 0.0
+
+
 class PassedShortParser(PassedValueParser):
     ''' Parser for a signed short value passed from a specific UAV
     '''
@@ -163,13 +223,13 @@ class PassedUShortParser(PassedValueParser):
 class PassedIntParser(PassedValueParser):
     ''' Parser for a signed int value passed from a specific UAV
     '''
-    data_fmt = 'i'
+    data_fmt = 'l'
 
 
 class PassedUIntParser(PassedValueParser):
     ''' Parser for an unsigned int value passed from a specific UAV
     '''
-    data_fmt = 'I'
+    data_fmt = 'L'
 
 
 class PassedFloatParser(PassedValueParser):
@@ -177,8 +237,6 @@ class PassedFloatParser(PassedValueParser):
     '''
     data_fmt = 'f'
 
-
-# A few generic variable length parsers that might be broadly useful
 
 class ShortListParser(NumberListParser):
     ''' Parser for data lines consisting of a series of signed short ints
@@ -195,13 +253,13 @@ class UShortListParser(NumberListParser):
 class IntListParser(NumberListParser):
     ''' Parser for data lines consisting of a series of signed ints
     '''
-    data_fmt = 'i'
+    data_fmt = 'l'
 
 
 class UIntListParser(NumberListParser):
     ''' Parser for data lines consisting of a series of unsigned ints
     '''
-    data_fmt = 'I'
+    data_fmt = 'L'
 
 
 class FloatListParser(NumberListParser):

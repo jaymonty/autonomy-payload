@@ -127,6 +127,8 @@
 
   <node name="independent_transit" pkg="ap_path_planning" type="independent_transit.py" output="screen" args=""/>
 
+  <node name="pn_interceptor" pkg="ap_path_planning" type="pn_interceptor.py" output="screen" args=""/>
+
   <node name="altitude_sort" pkg="ap_path_planning" type="altitude_sort.py" output="screen" args=""/>
 
   <node name="lazy_altitude_sort" pkg="ap_path_planning" type="lazy_altitude_sort.py" output="screen" args=""/>

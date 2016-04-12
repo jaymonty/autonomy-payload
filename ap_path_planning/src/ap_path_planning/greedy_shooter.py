@@ -125,8 +125,8 @@ class GreedyShooter(WaypointBehavior):
         self._target_lon = 0.0
         self._target_alt = 0.0
         self._wp_calc = \
-            pputils.InterceptCalculator(self, self._own_uav_id, self._reds, \
-                                        0.0, 0.0, GreedyShooter.MAX_TIME_LATE)
+            pputils.PNInterceptCalculator(self, self._own_uav_id, self._reds, \
+                                          max_time_late=GreedyShooter.MAX_TIME_LATE)
         self._firing_report_number = 0
         self._firing_report_publisher = None
         self._behavior_data_publisher = None

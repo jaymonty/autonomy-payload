@@ -261,7 +261,6 @@ class PFInterceptCalculator(InterceptCalculator):
                                           (lead_crs + self._follow_angle), \
                                           self._follow_distance)
         dist = gps.gps_distance(own_lat, own_lon, tgt_lat, tgt_lon)
-        print("Distance=%9.2f"%dist)
         angle = gps.gps_bearing(own_lat, own_lon, tgt_lat, tgt_lon)
         x_dist = dist * math.cos(angle)
         y_dist = dist * math.sin(angle)
@@ -281,10 +280,105 @@ class PFInterceptCalculator(InterceptCalculator):
         y_potential = self._dist_coefficient * y_dist + \
                       self._align_coefficient * lead_y_dot/lead_spd + \
                       self._intercept_coefficient * y_travel
+        if not wpt:  wpt = brdgmsg.LLA()
         wpt.lat, wpt.lon = \
             gps.gps_newpos(own_lat, own_lon, \
                            math.atan2(y_potential, x_potential), \
                            InterceptCalculator.OVERSHOOT)
+        if self._alt_mode == InterceptCalculator.BASE_ALT_MODE:
+            wpt.alt = self._alt
+        else:
+            wpt.alt = lead_uav.state.pose.pose.rel_alt + self._alt
+        self._owner.log_dbug("intercept waypoint (lat, lon, alt) = (%f, %f, %f)"
+                             %(wpt.lat, wpt.lon, wpt.alt))
+        return wpt
+
+
+class PNInterceptCalculator(InterceptCalculator):
+    ''' Uses a proportional navigation calculation to intercept a designated UAV
+
+    Member functions:
+      compute_intercept_waypoint: override of parent class method
+
+    Inherited from InterceptCalculator:
+      set_params: set the calculator's parameters
+      compute_intercept_waypoint: computes an intercept to ordered station
+      leader: returns the ID of the UAV being followed
+      params: returns a control parameter tuple (leader_id, distance, angle)
+
+    Member variables:
+      _theta: angle from the pursuer to the target (radians)
+      _theta_dot: instantaneous rate of change of theta (rad/sec)
+      _a_max: maximum commandable lateral acceleration
+      _gain: control gain to be used in the PN calculation
+      _bias: control bias to be used in the PN calculation
+      _L1: distance ahead of the UAV to set the waypoint
+    '''
+
+    def __init__(self, owner_behavior, own_id, swarm, \
+                 max_time_late=InterceptCalculator.MAX_TIME_LATE):
+        ''' Initializes the object
+        @param owner_behavior: owning Behavior object
+        @param own_id: ID (int) of this UAV
+        @param swarm: container (dict) for swarm aircraft records
+        '''
+        InterceptCalculator.__init__(self, owner_behavior, own_id, swarm, \
+                                     0.0, 0.0, max_time_late)
+        self._theta = 0.0
+        self._theta_dot = 0.0
+        self._a_max = 7.0
+        self._gain = 2.5
+        self._bias = 0.0
+        self._L1 = 150.0
+
+
+    def compute_intercept_waypoint(self, wpt=None):
+        ''' Computes an intercept waypoint for the UAV to steer to
+        @param wpt: waypoint object to use for computed values
+        @return waypoint object (LLA) with the intercept waypoint (or None)
+        '''
+        lead_uav = self._pre_check()
+        if not lead_uav:
+            return None
+
+        # Update pursuer and target position and velocity info
+        lead_lat, lead_lon = \
+            gps.gps_newpos(lead_uav.state.pose.pose.position.lat, \
+                           lead_uav.state.pose.pose.position.lon, \
+                           self._follow_distance,  self._follow_angle)
+        lead_spd = math.hypot(lead_uav.state.twist.twist.linear.x, \
+                              lead_uav.state.twist.twist.linear.y)
+        lead_crs = math.atan2(lead_uav.state.twist.twist.linear.y, \
+                              lead_uav.state.twist.twist.linear.x)
+        own_lat = self.own_pose.pose.pose.position.lat
+        own_lon = self.own_pose.pose.pose.position.lon
+        own_spd = math.hypot(self.own_pose.twist.twist.linear.x, \
+                             self.own_pose.twist.twist.linear.y)
+        if (own_spd - lead_spd) < 1.0: own_spd = lead_spd + 1.0
+        own_crs = math.atan2(self.own_pose.twist.twist.linear.y, \
+                             self.own_pose.twist.twist.linear.x)
+
+        # Compute the control parameters
+        self._theta = gps.gps_bearing(own_lat, own_lon, lead_lat, lead_lon)
+        tgt_distance = gps.gps_distance(own_lat, own_lon, lead_lat, lead_lon)
+        crossing_spd = own_spd * math.sin(self._theta - own_crs) + \
+                       lead_spd * math.sin(self._theta + math.pi - lead_crs)
+        self._theta_dot = crossing_spd / tgt_distance
+        theta_diff = gps.normalize_pi(self._theta - own_crs)
+        self._bias = min(gps.signum(theta_diff) * 2.5, theta_diff / 10.0)
+
+        # Use the PN calculation to compute the ordered acceleration
+        ordered_a = (self._gain * self._theta_dot + self._bias) * own_spd
+        a_max = min(self._a_max, ((2.0 * math.pow(own_spd, 2.0)) / self._L1))
+        if math.fabs(ordered_a) > a_max:
+            ordered_a = gps.signum(ordered_a) * a_max
+        nu = math.asin((ordered_a * self._L1) / (2.0 * math.pow(own_spd, 2.0)))
+
+        # Compute the waypoint command
+        if not wpt:  wpt = brdgmsg.LLA()
+        wpt.lat, wpt.lon = \
+            gps.gps_newpos(lead_lat, lead_lon, nu + own_crs, self._L1)
+
         if self._alt_mode == InterceptCalculator.BASE_ALT_MODE:
             wpt.alt = self._alt
         else:
@@ -374,4 +468,5 @@ class WaypointSequencer(object):
         if self._current == len(self._sequence):
             self._current = 0
         return self.get_next()
+
 
