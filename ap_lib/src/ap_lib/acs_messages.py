@@ -376,15 +376,15 @@ class ReqAPWaypoints(Message):
 #Message to request a list of waypoints from the autopilot.
 #The request is for waypoints starting at index start_index and ending at
 #index end_index.  
-class ReqAPWaypointsRange(Message):
+class ReqAPWaypointRange(Message):
     msg_type = 0x07
     msg_fmt = '>II'
 
-    def __init__(self, s_index, e_index):
+    def __init__(self):
         Message.__init__(self)
 
-        self.start_index = s_index
-        self.end_index = e_index
+        self.start_index = -1
+        self.end_index = -1
 
     def _pack(self):
         tupl = (int(self.start_index), int(self.end_index))
@@ -444,6 +444,43 @@ class WaypointMsg(Message):
         self.y = fields.pop(0)
         self.z = fields.pop(0)
 
+#Message to request a parameter from the autopilot
+class ReqParamAP(Message):
+    msg_type = 0x09
+    msg_fmt = '>24s'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.param_name = ""
+
+    def _pack(self):
+        tupl = (_enc_str(self.param_name),)
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.param_name = _dec_str(fields[0])
+
+#Message that is an expected response to a request for a parameter from the AP.
+class ParamAPMsg(Message):
+    msg_type = 0x0a
+    msg_fmt = '>24sf'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.param_name = None
+        self.param_value = None
+
+    def _pack(self):
+        tupl = (_enc_str(self.param_name), float(self.param_value))
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.param_name = _dec_str(fields[0])
+        self.param_value = fields[1]
 
 #Message to request the previous N autopilot messages.
 #A second field, since_seq, is intended to signal that the
