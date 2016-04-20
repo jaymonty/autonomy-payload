@@ -357,6 +357,93 @@ class Mode(Message):
         fields = struct.unpack_from(type(self).msg_fmt, data, 0)
         self.mode = int(fields[0])
 
+#Message to request all the waypoints from the autopilot.
+class ReqAPWaypoints(Message):
+    msg_type = 0x06
+    msg_fmt = ''
+
+    def __init__(self):
+        Message.__init__(self)
+
+        pass
+
+    def _pack(self):
+        return ''
+
+    def _unpack(self, data):
+        pass
+
+#Message to request a list of waypoints from the autopilot.
+#The request is for waypoints starting at index start_index and ending at
+#index end_index.  
+class ReqAPWaypointsRange(Message):
+    msg_type = 0x07
+    msg_fmt = '>II'
+
+    def __init__(self, s_index, e_index):
+        Message.__init__(self)
+
+        self.start_index = s_index
+        self.end_index = e_index
+
+    def _pack(self):
+        tupl = (int(self.start_index), int(self.end_index))
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = struct.unpack_from(type(self).msg_fmt, data, 0)
+        self.start_index = fields[0]
+        self.end_index = fields[1]
+
+#Message that is expected as a resopnse to a query for autopilot waypoint(s)
+class WaypointMsg(Message):
+    msg_type = 0x08
+    msg_fmt = '<HBHBfffffff'
+
+    def __init__self(self):
+        Message.__init__(self)
+
+        self.seq = None
+        self.frame = None
+        self.command = None
+        self.current = None
+        self.autocontinue = None 
+        self.param1 = None
+        self.param2 = None
+        self.param3 = None
+        self.param4 = None
+        self.x = None
+        self.y = None
+        self.z = None
+
+    def _pack(self):
+        flags = (0x0002 & _bool16(self.current)) \
+                |(0x0001 & _bool16(self.autocontinue)) \
+                    & 0xffff  # Zeroize any unused bits
+
+        tupl = (int(self.seq), int(self.frame), int(self.command),
+                flags,
+                float(self.param1), float(self.param2), float(self.param3),
+                float(self.param4), float(self.x), float(self.y), float(self.z))
+
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = list(struct.unpack_from(type(self).msg_fmt, data, 0))
+        self.seq = fields.pop(0)
+        self.frame = fields.pop(0)
+        self.command = fields.pop(0)
+        flags = fields.pop(0)
+        self.current = bool(flags & 0x0002)
+        self.autocontinue = bool(flags & 0x0001)
+        self.param1 = fields.pop(0)
+        self.param2 = fields.pop(0)
+        self.param3 = fields.pop(0)
+        self.param4 = fields.pop(0)
+        self.x = fields.pop(0)
+        self.y = fields.pop(0)
+        self.z = fields.pop(0)
+
 
 #Message to request the previous N autopilot messages.
 #A second field, since_seq, is intended to signal that the
