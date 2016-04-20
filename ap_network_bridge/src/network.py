@@ -256,6 +256,59 @@ def net_weather_update(message, bridge):
     msg.wind_direction = message.wind_direction
     bridge.publish('recv_weather', msg, latched=True)
 
+def net_req_all_ap_wps(message, bridge):
+    def wp_response_thread():
+        try:
+            ret = bridge.callService('wp_getall', pilot_srv.WPGetAll)
+        except Exception as e:
+            net_req_all_ap_wps.active = False
+            raise e
+            return
+
+        response = messages.WaypointMsg()
+        #probably would do better to respond directly to the GCS in the future,
+        #but I'm in a hurry:
+        response.msg_dst = Socket.ID_BCAST_ALL
+        response.msg_secs = 0
+        response.msg_nsecs = 0
+
+        for wp in ret.points:
+            response.seq = wp.seq
+            response.frame = wp.frame
+            response.command = wp.command
+            response.current = wp.current
+            response.autocontinue = wp.autocontinue
+            response.param1 = wp.param1
+            response.param2 = wp.param2
+            response.param3 = wp.param3
+            response.param4 = wp.param4
+            response.x = wp.x
+            response.y = wp.y
+            response.z = wp.z
+
+            try:
+                bridge.sendMessage(response)
+            except Exception as e:
+                net_req_all_ap_wps.active = False
+                raise e
+                return
+
+            #rate-limit this traffic
+            time.sleep(0.05)
+
+        net_req_all_ap_wps.active = False
+    def error():
+        net_req_all_ap_wps.active = False
+
+    #No need to throw exception if active, we actually expect multiple
+    #GCSs to attempt to request wp from the same plane in the near future.  
+    #Just assuming each GCS is after the same messages if the requests occur
+    #simultaneously.  The broadcast responses will get to all GCSs.
+    if net_req_all_ap_wps.active is False:
+        net_req_all_ap_wps.active = True
+        bridge.doInThread(wp_response_thread, error)
+net_req_all_ap_wps.active=False
+
 def net_req_prev_n_ap_msgs(message, bridge):
     def req_response_thread():
         try:
@@ -605,6 +658,7 @@ if __name__ == '__main__':
                              log_success=False)
         bridge.addNetHandler(messages.WeatherData, net_weather_update)
         bridge.addNetHandler(messages.ReqPrevNMsgsAP, net_req_prev_n_ap_msgs)
+        bridge.addNetHandler(messages.ReqAPWaypoints, net_req_all_ap_wps)
 
         # Run the loop (shouldn't stop until node is shut down)
         print "\nStarting network bridge loop...\n"
