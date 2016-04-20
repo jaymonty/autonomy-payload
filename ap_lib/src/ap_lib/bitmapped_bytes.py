@@ -32,8 +32,9 @@ LAT_LON = 15        # Data field contains a latitude/longitude
 
 SEARCH_WP = 16      # Data field represents a series of waypoints
 FIRING_REPORT = 17  # Data field represents an air-to-air firing report
-ID_VALUE_PAIRS = 18 # Data field represents a series of ID-value pairs
-CONSENSUS_SUMMARY = 19 # Data field represents a consensus algorithm summary
+HIT_REPORT = 18     # Data field represents an air-to-air hit report
+ID_VALUE_PAIRS = 19 # Data field represents a series of ID-value pairs
+CONSENSUS_SUMMARY = 20 # Data field represents a consensus algorithm summary
 
 class BitmappedBytes(object):
     ''' Abstract class template for customized parsing of byte arrays
