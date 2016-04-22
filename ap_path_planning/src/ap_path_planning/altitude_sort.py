@@ -64,10 +64,10 @@ class AltitudeSort(Behavior):
         '''
         Behavior.__init__(self, nodename, enums.ALTITUDE_SORT)
         self._own_uav_id = rospy.get_param("aircraft_id")
-        self._sorter = dist.ConsensusSort(self._subswarm_keys, \
-                                          self._crashed_keys, \
-                                          self._behaviorDataPublisher, \
-                                          self._swarm_lock)
+        self._sorter = dist.EagerConsensusSort(self._subswarm_keys, \
+                                               self._crashed_keys, \
+                                               self._behaviorDataPublisher, \
+                                               self._swarm_lock)
         self._done = False
         self._algorithm = enums.ALTITUDE_SORT
 #        self.DBUG_PRINT = True
