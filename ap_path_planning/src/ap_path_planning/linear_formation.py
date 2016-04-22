@@ -93,10 +93,10 @@ class LinearFormation(WaypointBehavior):
         self._behavior_state = LinearFormation.SETUP
         self._wpt_calc = \
             pputils.InterceptCalculator(self, self._own_uav_id, self._swarm)
-        self._sorter = dist.ConsensusSort(self._subswarm_keys, \
-                                          self._crashed_keys, \
-                                          self._behaviorDataPublisher, \
-                                          self._swarm_lock)
+        self._sorter = dist.EagerConsensusSort(self._subswarm_keys, \
+                                               self._crashed_keys, \
+                                               self._behaviorDataPublisher, \
+                                               self._swarm_lock)
         self._wp_goto_publisher = None
         self._activate_time = None
 
