@@ -482,6 +482,48 @@ class ParamAPMsg(Message):
         self.param_name = _dec_str(fields[0])
         self.param_value = fields[1]
 
+#Message to request the fence from the autopilot
+class ReqAPFence(Message):
+    msg_type = 0x0b
+    msg_fmt = ''
+
+    def __init__(self):
+        Message.__init__(self)
+
+        pass
+
+    def _pack(self):
+        return ''
+
+    def _unpack(self, data):
+        pass
+
+#Response message to a request for a fence (just a single point)
+class FencePoint(Message):
+    msg_type = 0x0c
+    msg_fmt = '>HHff'
+
+    def __init__(self):
+        Message.__init__(self)
+
+        self.fen_size = None  #how many fence points to expect?
+        self.index = None     #which point is this?
+        self.lat = None
+        self.lon = None
+
+    def _pack(self):
+        tupl = (int(self.fen_size), int(self.index),
+                float(self.lat), float(self.lon))
+
+        return struct.pack(type(self).msg_fmt, *tupl)
+
+    def _unpack(self, data):
+        fields = list(struct.unpack_from(type(self).msg_fmt, data, 0))
+        self.fen_size = fields.pop(0)
+        self.index = fields.pop(0)
+        self.lat = fields.pop(0)
+        self.lon = fields.pop(0)
+
 #Message to request the previous N autopilot messages.
 #A second field, since_seq, is intended to signal that the
 #requestor already has up to that sequence number.  If that
