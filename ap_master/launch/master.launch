@@ -74,6 +74,7 @@
     <remap from="network/wp_getall" to="autopilot/wp_getall" />
     <remap from="network/wp_getrange" to="autopilot/wp_getrange" />
     <remap from="network/fpr_param_get" to="autopilot/fpr_param_get" />
+    <remap from="network/fpr_fence_getall" to="autopilot/fpr_fence_getall" />
   </node>
 
   <node name="swarm_tracker" pkg="ap_perception" type="swarm_tracker_node.py" output="screen" args="" >

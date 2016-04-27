@@ -281,7 +281,57 @@ def net_req_param_ap(message, bridge):
         net_req_all_ap_wps.active = False
         raise e
         return
+
+def net_req_ap_fence(message, bridge):
+    def fence_response_thread():
+        try:
+            ret = bridge.callService('fpr_fence_getall', pilot_srv.FenceGetAll)
+        except Exception as e:
+            net_req_ap_fence.active=False
+            raise e
+            return
+
+        response = messages.FencePoint()
+        #probably would do better to respond directly to the GCS in the future,
+        #but I'm in a hurry:
+        response.msg_dst = Socket.ID_BCAST_ALL
+        response.msg_secs = 0
+        response.msg_nsecs = 0
+
+        response.fen_size = len(ret.points)
+
+        i = 0
+        for fp in ret.points:
+            response.index = i
+            response.lat = fp.lat
+            response.lon = fp.lon
         
+            try:
+                bridge.sendMessage(response)
+            except Exception as e:
+                net_req_ap_fence.active=False
+                raise e
+                return
+
+            #rate-limit this traffic
+            time.sleep(0.05)
+
+            i = i + 1
+        
+        net_req_ap_fence.active=False
+    
+    def error():
+        pass
+
+    #No need to throw exception if active, we actually expect multiple
+    #GCSs to attempt to request fence from the same plane in the near future.  
+    #Just assuming each GCS is after the same messages if the requests occur
+    #simultaneously.  The broadcast responses will get to all GCSs.
+    if net_req_ap_fence.active is False:
+        net_req_ap_fence.active = True
+        bridge.doInThread(fence_response_thread, error)
+net_req_ap_fence.active=False
+
 def send_waypoints(points):
     response = messages.WaypointMsg()
         
@@ -716,6 +766,7 @@ if __name__ == '__main__':
         bridge.addNetHandler(messages.ReqAPWaypoints, net_req_all_ap_wps)
         bridge.addNetHandler(messages.ReqAPWaypointRange, net_req_ap_wp_range)
         bridge.addNetHandler(messages.ReqParamAP, net_req_param_ap)
+        bridge.addNetHandler(messages.ReqAPFence, net_req_ap_fence)
 
         # Run the loop (shouldn't stop until node is shut down)
         print "\nStarting network bridge loop...\n"
